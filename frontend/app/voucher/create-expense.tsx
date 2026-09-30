@@ -63,9 +63,11 @@ export default function CreateExpenseVoucher() {
   const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  useEffect(() => {
+  const [prevEntryType, setPrevEntryType] = useState(entryType);
+  if (prevEntryType !== entryType) {
+    setPrevEntryType(entryType);
     if (entryType === 'regular') setDate(todayStr());
-  }, [entryType]);
+  }
 
   const [expenseLedgers, setExpenseLedgers] = useState<BSSOption[]>([]);
   const [paidFromOptions, setPaidFromOptions] = useState<BSSOption[]>([]);
@@ -83,15 +85,15 @@ export default function CreateExpenseVoucher() {
   } | null>(null);
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!company?.guid) return;
-    setLoading(true);
-    try {
-      const [ledgersRes, partiesRes, banksRes]: any[] = await Promise.all([
-        getLedgers(company.guid, { limit: 500 }),
-        getParties(company.guid, { type: 'expense' }),
-        getBankLedgers(company.guid, 'all'),
-      ]);
+  const companyGuid = company?.guid;
+
+  const loadData = useCallback(() => {
+    if (!companyGuid) return;
+    Promise.all([
+      getLedgers(companyGuid, { limit: 500 }),
+      getParties(companyGuid, { type: 'expense' }),
+      getBankLedgers(companyGuid, 'all'),
+    ]).then(([ledgersRes, partiesRes, banksRes]: any[]) => {
       const byName = new Map<string, BSSOption>();
       const addRow = (l: any) => {
         if (!l?.name) return;
@@ -118,13 +120,19 @@ export default function CreateExpenseVoucher() {
           data: l,
         })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label)),
       );
-    } catch {
+    }).catch(() => {
       setExpenseLedgers([]);
       setPaidFromOptions([]);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
-  }, [company?.guid, scopeParties]);
+    });
+  }, [companyGuid, scopeParties]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== companyGuid || loadDeps[1] !== scopeParties) {
+    setLoadDeps([companyGuid, scopeParties]);
+    if (companyGuid) setLoading(true);
+  }
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -167,7 +175,7 @@ export default function CreateExpenseVoucher() {
       });
       setShowSuccess(true);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.voucherCreateExpense.submitFailed'), text2: e?.message || t('screens.voucherCreateExpense.checkTally') });
     } finally {
       setSubmitting(false);
     }
@@ -209,7 +217,7 @@ export default function CreateExpenseVoucher() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.fLabel}>{t('voucher.expenseNo')}</Text>
                   <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
+                    <Text style={s.autoTxt}>{t('screens.voucherCreateExpense.auto')}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
@@ -223,7 +231,7 @@ export default function CreateExpenseVoucher() {
                   ) : (
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                       <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
+                        {date || t('screens.voucherCreateExpense.selectDate')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -251,7 +259,7 @@ export default function CreateExpenseVoucher() {
                       onSelect={(opt) => { setExpenseLedger(opt.value); setExpenseData(opt.data || null); }}
                       onClear={() => { setExpenseLedger(''); setExpenseData(null); }}
                       sheetTitle={t('voucher.expenseLedger')}
-                      searchPlaceholder="Search expense ledgers…"
+                      searchPlaceholder={t('screens.voucherCreateExpense.searchExpenseLedgers')}
                       icon="wallet-outline"
                     />
                     {!!expenseData?.parent && (
@@ -274,7 +282,7 @@ export default function CreateExpenseVoucher() {
                       onSelect={(opt) => { setPaidFrom(opt.value); setPaidFromData(opt.data || null); }}
                       onClear={() => { setPaidFrom(''); setPaidFromData(null); }}
                       sheetTitle={t('voucher.paidFrom')}
-                      searchPlaceholder="Search cash / bank…"
+                      searchPlaceholder={t('screens.voucherCreateExpense.searchCashBank')}
                       icon="card-outline"
                     />
                   </View>
@@ -285,7 +293,7 @@ export default function CreateExpenseVoucher() {
                       <Text style={s.rupee}>{currencySymbol || '₹'}</Text>
                       <TextInput
                         style={s.input}
-                        placeholder="Enter amount"
+                        placeholder={t('voucher.enterAmount')}
                         placeholderTextColor={COLORS.textTertiary}
                         value={amount}
                         onChangeText={setAmount}
@@ -307,7 +315,7 @@ export default function CreateExpenseVoucher() {
               <View style={s.field}>
                 <TextInput
                   style={s.textarea}
-                  placeholder="Notes (optional)"
+                  placeholder={t('screens.voucherCreateExpense.notesOptional')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={narration}
                   onChangeText={setNarration}
@@ -369,8 +377,8 @@ export default function CreateExpenseVoucher() {
             </Text>
             <Text style={s.successSub}>
               {submitResult?.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Expense recorded as payment voucher.'}
+                ? t('screens.voucherCreateExpense.queuedSub')
+                : t('screens.voucherCreateExpense.savedSub')}
             </Text>
             {!!submitResult?.tdkRef && <Text style={s.successRef}>{submitResult.tdkRef}</Text>}
             <TouchableOpacity
@@ -385,7 +393,7 @@ export default function CreateExpenseVoucher() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={s.btnPriTxt}>View Preview</Text>
+              <Text style={s.btnPriTxt}>{t('screens.voucherCreateExpense.viewPreview')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
@@ -399,11 +407,11 @@ export default function CreateExpenseVoucher() {
                     documentType: 'expense_voucher',
                     onBeforeShare: () => setSharePdfLoading(false),
                     fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                      Toast.show({ type: 'info', text1: t('screens.voucherCreateExpense.sharingNotAvailable') });
                     },
                   });
                 } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                  Toast.show({ type: 'error', text1: t('screens.voucherCreateExpense.pdfError'), text2: err?.message || t('screens.voucherCreateExpense.couldNotGeneratePdf') });
                 } finally {
                   setSharePdfLoading(false);
                 }
@@ -412,10 +420,10 @@ export default function CreateExpenseVoucher() {
               {sharePdfLoading
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={s.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+              <Text style={s.pdfBtnTxt}>{sharePdfLoading ? t('screens.voucherCreateExpense.pdfCreating') : t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { setShowSuccess(false); router.back(); }} style={{ paddingVertical: 10 }}>
-              <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Done</Text>
+              <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -52,14 +52,6 @@ const KPI_SENSITIVE: Record<string, string> = {
   bank: 'bank_balance',
 };
 
-const MODULE_CARDS = [
-  { id: 'sales',    labelKey: 'home.moduleSales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
-  { id: 'purchase', labelKey: 'home.modulePurchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
-  { id: 'voucher',  labelKey: 'home.moduleVouchers', icon: 'card',          route: '/voucher',  color: '#7C3AED', bg: '#F5F3FF' },
-  { id: 'expenses', labelKey: 'home.moduleExpenses', icon: 'receipt-outline', route: '/expenses', color: '#DC2626', bg: '#FDECEA' },
-  { id: 'settings', labelKey: 'home.moduleSettings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
-] as const;
-
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -128,14 +120,20 @@ export default function HomeScreen() {
     );
   }, [searchQuery, activity]);
 
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 2 || !dataReady || !companyGuid) {
+  const [searchDeps, setSearchDeps] = useState<unknown[] | null>(null);
+  if (!searchDeps || searchDeps[0] !== searchQuery || searchDeps[1] !== dataReady || searchDeps[2] !== companyGuid) {
+    setSearchDeps([searchQuery, dataReady, companyGuid]);
+    if (searchQuery.trim().length < 2 || !dataReady || !companyGuid) {
       setSearchResults([]);
       setSearchLoading(false);
-      return;
+    } else {
+      setSearchLoading(true);
     }
-    setSearchLoading(true);
+  }
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2 || !dataReady || !companyGuid) return;
     const timer = setTimeout(() => {
       searchDashboard(q, companyGuid)
         .then((res) => setSearchResults(Array.isArray(res?.data) ? res.data : []))
@@ -171,9 +169,11 @@ export default function HomeScreen() {
   const prevFyRef = useRef<string | undefined>(selectedFY?.startDate);
 
   // Keep header FY label in sync with AuthContext (Header owns the picker)
-  useEffect(() => {
+  const [prevFyLabel, setPrevFyLabel] = useState<[string | undefined] | null>(null);
+  if (!prevFyLabel || prevFyLabel[0] !== selectedFY?.label) {
+    setPrevFyLabel([selectedFY?.label]);
     if (selectedFY?.label) setActiveFY(selectedFY.label);
-  }, [selectedFY?.label]);
+  }
 
   const handleFYChange = useCallback((fy: string) => {
     setActiveFY(fy);
@@ -198,6 +198,8 @@ export default function HomeScreen() {
   }, [companyGuid]);
 
   type LoadOpts = { soft?: boolean; skipActivity?: boolean };
+  const fyStart = selectedFY?.startDate;
+  const fyEnd = selectedFY?.endDate;
 
   const formatAsOf = useCallback((d: Date | null) => {
     if (!d) return t('home.earlier', 'earlier');
@@ -239,8 +241,8 @@ export default function HomeScreen() {
 
     try {
       const { from, to } = resolvePeriodDates(activeFilter as DashboardPeriod, {
-        from: selectedFY?.startDate,
-        to: selectedFY?.endDate,
+        from: fyStart,
+        to: fyEnd,
       });
 
       const skipActivity = !!opts?.skipActivity;
@@ -371,7 +373,7 @@ export default function HomeScreen() {
       if (gen === requestGenRef.current) setIsLoading(false);
     }
   }, [
-    dataReady, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate,
+    dataReady, activeFilter, companyGuid, fyStart, fyEnd,
     t, formatAsOf,
   ]);
 
@@ -402,9 +404,8 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, [lastSyncAt, dataReady, companyGuid, loadData]);
 
-  const readStoredPeriod = useCallback(async () => {
-    try {
-      const saved = await AsyncStorage.getItem(CASHFLOW_PERIOD_KEY);
+  const readStoredPeriod = useCallback(() => {
+    AsyncStorage.getItem(CASHFLOW_PERIOD_KEY).then((saved) => {
       // Migrate sticky 7D → 1M: short windows often show ₹0 when last invoice is >7 days ago.
       if (saved === '7D') {
         setActiveFilter('1M');
@@ -412,7 +413,7 @@ export default function HomeScreen() {
         return;
       }
       if (isSyncPeriod(saved)) setActiveFilter(saved);
-    } catch { /* ignore */ }
+    }).catch(() => { /* ignore */ });
   }, []);
 
   useEffect(() => { readStoredPeriod(); }, [readStoredPeriod]);
@@ -524,7 +525,7 @@ export default function HomeScreen() {
   const isSearching = searchQuery.trim().length > 0;
 
   // First load: all primary failed → full-page ErrorState (not empty zeros + banner)
-  if (fatalError && !hasDashboardDataRef.current && !isLoading) {
+  if (fatalError && !isLoading) {
     return (
       <SafeAreaView testID="home-screen" style={styles.safe}>
         <Header

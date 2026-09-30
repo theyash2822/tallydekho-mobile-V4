@@ -51,7 +51,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const handleTabPress = (route: Route, idx: number) => {
     const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (def?.capability && !hasCapability(def.capability)) {
-      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'You do not have access to this module' });
+      Toast.show({ type: 'error', text1: t('screens.tabsLayout.notAllowed'), text2: t('screens.tabsLayout.noAccess') });
       return;
     }
     const isFocused = state.index === idx;

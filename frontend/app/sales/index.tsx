@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -45,14 +46,16 @@ export default function SalesScreen() {
   const [apiError, setApiError]       = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasSalesDataRef = useRef(false);
+  const fyStart = selectedFY?.startDate;
+  const fyEnd = selectedFY?.endDate;
 
   const load = useCallback((opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
     const soft = opts?.soft ?? hasSalesDataRef.current;
     if (!soft) setIsLoading(true);
     if (!soft) setApiError(null);
-    const fyParams = selectedFY?.startDate && selectedFY?.endDate
-      ? { from: selectedFY.startDate, to: selectedFY.endDate }
+    const fyParams = fyStart && fyEnd
+      ? { from: fyStart, to: fyEnd }
       : {};
     Promise.allSettled([
       getSalesInvoices(companyGuid, { limit: '50', ...fyParams } as any),
@@ -65,6 +68,7 @@ export default function SalesScreen() {
         if (rows.length) {
           setLiveRecent(rows.slice(0, 5).map((r: any, i: number) => ({
             id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
+            guid: r.guid || '',
             voucher: r.voucher_number || '',
             party: r.party_name || '',
             date: r.date || '',
@@ -119,7 +123,7 @@ export default function SalesScreen() {
         }
       }
     }).finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount, t]);
+  }, [companyGuid, fyStart, fyEnd, formatAmount, t]);
 
   useEffect(() => { load({ soft: hasSalesDataRef.current }); }, [load]);
 
@@ -257,7 +261,7 @@ export default function SalesScreen() {
                   key={inv.id}
                   onPress={() => {
                     const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
-                    safePush(router, `/document/${inv.id}?type=${routeType}` as any);
+                    openVoucherPreview(router, { guid: inv.guid, docType: routeType });
                   }}
                 >
                   <VoucherListTile
@@ -287,7 +291,7 @@ export default function SalesScreen() {
             {displayTopParties.length === 0 ? (
               <View style={s.emptyBox}>
                 <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No party sales yet</Text>
+                <Text style={s.emptyTxt}>{t('screens.sales.noPartySales')}</Text>
               </View>
             ) : displayTopParties.map((p, idx) => (
               <EntityListTile

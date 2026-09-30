@@ -2,7 +2,8 @@
  * Single entry point for "tap a voucher → preview". Rules (locked, same as My Entries):
  *  1. Tally voucher id known  → /document/<id> (optional ?type=, else the voucher's own type)
  *  2. App TDK reference only  → the app-copy preview screen for that TDK prefix
- *  3. Neither                 → "Not yet synced" alert (never a silent no-op)
+ *  3. Neither                 → "Older financial year" alert for bills before the synced range,
+ *                                else "Not yet synced" (never a silent no-op)
  */
 import { Alert } from 'react-native';
 import { safePush } from './safeNavigation';
@@ -10,13 +11,15 @@ import { safePush } from './safeNavigation';
 type RouterLike = { push: (href: any) => void };
 
 export interface VoucherPreviewTarget {
-  /** vouchers.guid (or Tally voucher number where a screen has no guid) */
+  /** vouchers.guid only — never a voucher number or list index */
   guid?: string | null;
   tdkRef?: string | null;
   /** DocumentType for /document ?type= — omit to let the preview use the voucher's own type */
   docType?: string | null;
   /** Display type (e.g. "Sales Order", "Purchase") — disambiguates TDK refs */
   entryType?: string | null;
+  /** Bill dated before the earliest synced voucher (only the last 2 FYs are synced) */
+  olderYear?: boolean;
 }
 
 /** TDK-ADV-* is an advance bill-allocation name, not a voucher of its own. */
@@ -50,14 +53,24 @@ export function tdkPreviewRoute(tdkRef: string, entryType?: string | null): stri
   return `/sales/invoice-preview?tdkRef=${ref}`;
 }
 
+/** A bare number is a list index or voucher number, never a Tally voucher GUID. */
+function isVoucherGuid(guid: string | null | undefined): guid is string {
+  const g = String(guid ?? '').trim();
+  return g.length > 0 && !/^\d+$/.test(g);
+}
+
 export function openVoucherPreview(router: RouterLike, target: VoucherPreviewTarget): boolean {
-  const { guid, tdkRef, docType, entryType } = target;
-  if (guid) {
+  const { guid, tdkRef, docType, entryType, olderYear } = target;
+  if (isVoucherGuid(guid)) {
     const id = encodeURIComponent(String(guid));
     return safePush(router, docType ? `/document/${id}?type=${encodeURIComponent(docType)}` : `/document/${id}`);
   }
   if (tdkRef && isVoucherTdkRef(tdkRef)) {
     return safePush(router, tdkPreviewRoute(tdkRef, entryType));
+  }
+  if (olderYear) {
+    Alert.alert('Older financial year', 'This voucher is from an older financial year and is not synced.', [{ text: 'OK' }]);
+    return false;
   }
   Alert.alert('Not yet synced', 'Preview is not available yet. Check again after Tally syncs.', [{ text: 'OK' }]);
   return false;

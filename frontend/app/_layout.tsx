@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { SettingsProvider } from '../src/context/SettingsContext';
 import { WorkspaceProvider } from '../src/context/WorkspaceContext';
@@ -20,6 +21,9 @@ import { toastConfig } from '../src/utils/toastConfig';
 import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
 import { ONBOARDING_COMPLETED_KEY } from '../src/utils/onboardingNav';
 import { COLORS } from '../src/constants/colors';
+import ServerReachabilityBanner from '../src/components/ServerReachabilityBanner';
+import { ErrorState } from '../src/components/ApiStateViews';
+import { initMonitoring, reportError } from '../src/services/monitoring';
 // Initialize i18n before anything renders
 import '../src/i18n';
 
@@ -32,8 +36,27 @@ if (__DEV__) {
   ]);
 }
 
+initMonitoring();
+
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** Expo Router renders this instead of a crashed screen tree. */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  const { t } = useTranslation();
+  useEffect(() => {
+    reportError(error, { boundary: 'root' });
+  }, [error]);
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
+      <ErrorState
+        title={t('common.somethingWentWrong')}
+        message={t('screens.layout.unexpectedProblem')}
+        onRetry={() => { retry().catch(() => {}); }}
+      />
+    </View>
+  );
+}
 
 function StatusBarCover() {
   const insets = useSafeAreaInsets();
@@ -131,6 +154,7 @@ export default function RootLayout() {
                 <StatusBar style="dark" />
                 <RootNavigation />
                 <StatusBarCover />
+                <ServerReachabilityBanner />
               </WorkspaceProvider>
             </AuthProvider>
           </SettingsProvider>

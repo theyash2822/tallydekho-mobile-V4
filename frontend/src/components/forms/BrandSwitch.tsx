@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import { COLORS } from '../../constants/colors';
 
@@ -17,7 +17,7 @@ interface BrandSwitchProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function BrandSwitch({ value, onValueChange, disabled = false }: BrandSwitchProps) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
 
   useEffect(() => {
     Animated.timing(anim, {

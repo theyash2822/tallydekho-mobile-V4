@@ -6,6 +6,7 @@ import {
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -31,6 +32,7 @@ async function resolvePersonalWorkspaceId(): Promise<string | null> {
 
 export default function TallySyncScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { signIn, setCompany } = useAuth();
   const [step, setStep] = useState<SyncStep>('prompt');
   const [pairKey, setPairKey] = useState('');
@@ -49,13 +51,13 @@ export default function TallySyncScreen() {
       if (__DEV__) console.log('[TallySync] Token present:', !!storedToken);
       if (!storedToken) {
         setStep('input');
-        setError('Session expired. Please login again.');
+        setError(t('screens.authTallySync.sessionExpired'));
         return;
       }
       const workspaceId = await resolvePersonalWorkspaceId();
       if (!workspaceId) {
         setStep('input');
-        setError('No Workspace found. Please restart signup.');
+        setError(t('screens.authTallySync.noWorkspace'));
         return;
       }
       const res = await pairWorkspaceTally(workspaceId, pairKey.trim());
@@ -73,17 +75,17 @@ export default function TallySyncScreen() {
         await navigateAfterAuth(router);
       } else {
         setStep('input');
-        setError(res?.error?.message || 'Pairing failed. Please check the code and try again.');
+        setError(res?.error?.message || t('screens.authTallySync.pairingFailed'));
       }
     } catch (err: any) {
       setStep('input');
       const code = err?.code || err?.error?.code;
       if (code === 'WORKSPACE_ALREADY_HAS_DESKTOP') {
-        setError(err?.message || 'This Workspace already has a connected Tally Desktop. If the old computer is unavailable, use Restore / Replace Computer.');
+        setError(err?.message || t('screens.authTallySync.workspaceHasDesktop'));
       } else if (code === 'DEVICE_ALREADY_PAIRED') {
-        setError(err?.message || 'This Tally Desktop is already connected to another TallyDekho workspace.');
+        setError(err?.message || t('screens.authTallySync.deviceAlreadyPaired'));
       } else {
-        setError(err?.message || 'Could not connect to Tally. Check your code.');
+        setError(err?.message || t('screens.authTallySync.couldNotConnect'));
       }
     }
   };
@@ -112,9 +114,9 @@ export default function TallySyncScreen() {
                   <Ionicons name="sync" size={32} color={COLORS.positive} />
                 </View>
               </View>
-              <Text style={styles.heading}>Would you like to{'\n'}sync with Tally?</Text>
+              <Text style={styles.heading}>{t('screens.authTallySync.promptHeading')}</Text>
               <Text style={styles.subText}>
-                Syncing with Tally ensures accurate, real-time financial data integration, keeping records up-to-date and business operations smooth.
+                {t('screens.authTallySync.promptSub')}
               </Text>
               <TouchableOpacity
                 testID="sync-tally-btn"
@@ -123,7 +125,7 @@ export default function TallySyncScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="sync" size={18} color={COLORS.white} />
-                <Text style={styles.primaryBtnText}>Sync with Tally</Text>
+                <Text style={styles.primaryBtnText}>{t('screens.authTallySync.syncWithTally')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 testID="skip-sync-btn"
@@ -131,19 +133,19 @@ export default function TallySyncScreen() {
                 onPress={handleSkip}
                 activeOpacity={0.7}
               >
-                <Text style={styles.skipBtnText}>Skip</Text>
+                <Text style={styles.skipBtnText}>{t('common.skip')}</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {step === 'input' && (
             <View style={styles.card}>
-              <Text style={styles.heading}>Input Your Tally{'\n'}Pair Key</Text>
-              <Text style={styles.subText}>Please check your tally application to see pair key</Text>
+              <Text style={styles.heading}>{t('screens.authTallySync.inputHeading')}</Text>
+              <Text style={styles.subText}>{t('screens.authTallySync.inputSub')}</Text>
               <TextInput
                 testID="pair-key-input"
                 style={styles.input}
-                placeholder="Enter pair key"
+                placeholder={t('screens.authTallySync.pairKeyPlaceholder')}
                 placeholderTextColor={COLORS.textTertiary}
                 value={pairKey}
                 onChangeText={setPairKey}
@@ -156,11 +158,11 @@ export default function TallySyncScreen() {
                 disabled={!pairKey.trim()}
                 activeOpacity={0.8}
               >
-                <Text style={styles.primaryBtnText}>Submit</Text>
+                <Text style={styles.primaryBtnText}>{t('common.submit')}</Text>
               </TouchableOpacity>
               {!!error && <Text style={{ color: COLORS.negative, fontSize: 13, marginBottom: 8, textAlign: 'center' }}>{error}</Text>}
               <TouchableOpacity testID="back-from-input-btn" style={styles.skipBtn} onPress={() => { setStep('prompt'); setError(''); }} activeOpacity={0.7}>
-                <Text style={styles.skipBtnText}>Back</Text>
+                <Text style={styles.skipBtnText}>{t('common.back')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -170,8 +172,8 @@ export default function TallySyncScreen() {
               <View style={styles.iconRow}>
                 <ActivityIndicator size="large" color={COLORS.brandPrimary} />
               </View>
-              <Text style={styles.heading}>Pairing with Tally...</Text>
-              <Text style={styles.subText}>This might take a few minutes...</Text>
+              <Text style={styles.heading}>{t('screens.authTallySync.pairingHeading')}</Text>
+              <Text style={styles.subText}>{t('screens.authTallySync.pairingSub')}</Text>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressBar, { width: `${progress}%` as any }]} />
               </View>

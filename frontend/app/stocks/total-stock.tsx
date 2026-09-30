@@ -77,6 +77,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   item: StockItem; isMultiSelectMode: boolean; isSelected: boolean;
   onPress: () => void; onLongPress: () => void; onEditStock: () => void; onTransfer: () => void; onAdjust: () => void;
 }) {
+  const { t } = useTranslation();
   const swipeRef = useRef<any>(null);
   const renderLeftActions = () => (
     <View style={sw.actionsRow}>
@@ -86,7 +87,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
         activeOpacity={0.85}
       >
         <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
-        <Text style={sw.actionTxt}>Transfer</Text>
+        <Text style={sw.actionTxt}>{t('screens.stocksTotalStock.transfer')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[sw.action, sw.adjustBg]}
@@ -94,7 +95,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
         activeOpacity={0.85}
       >
         <Ionicons name="options-outline" size={22} color={COLORS.white} />
-        <Text style={sw.actionTxt}>Adjust</Text>
+        <Text style={sw.actionTxt}>{t('screens.stocksTotalStock.adjust')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -105,7 +106,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
       activeOpacity={0.85}
     >
       <Ionicons name="create-outline" size={22} color={COLORS.white} />
-      <Text style={sw.actionTxt}>Edit Stock</Text>
+      <Text style={sw.actionTxt}>{t('screens.stocksTotalStock.editStock')}</Text>
     </TouchableOpacity>
   );
   const cardInner = (
@@ -132,7 +133,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
       </View>
       <View style={sc.right}>
         <Text style={sc.value}>{item.value}</Text>
-        <View style={sc.qtyBadge}><Text style={sc.qtyTxt}>{item.qty} units</Text></View>
+        <View style={sc.qtyBadge}><Text style={sc.qtyTxt}>{t('screens.stocksTotalStock.qtyUnits', { qty: item.qty })}</Text></View>
       </View>
       {!isMultiSelectMode && <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: 4 }} />}
     </TouchableOpacity>
@@ -164,6 +165,7 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
   whOptions: { id: string; label: string }[];
   grpOptions: { id: string; label: string }[];
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'Warehouse' | 'Group'>('Warehouse');
   const [selWh, setSelWh] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
@@ -176,13 +178,15 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
   useMultiFilterHydration(visible, initWh, whIds, setSelWh);
   useMultiFilterHydration(visible, initGrp, grpIds, setSelGrp);
 
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
     if (visible) {
       setWhSearch('');
       setGrpSearch('');
       setTab('Warehouse');
     }
-  }, [visible]);
+  }
 
   const isAllWh = isFilterAllSelected(selWh, whIds);
   const isAllGrp = isFilterAllSelected(selGrp, grpIds);
@@ -215,13 +219,13 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
     onApply(nextWh, nextGrp);
     onClose();
     const toastParts = [
-      ...(nextWh.length ? [`${nextWh.length} warehouse${nextWh.length !== 1 ? 's' : ''}`] : []),
-      ...(nextGrp.length ? [`${nextGrp.length} group${nextGrp.length !== 1 ? 's' : ''}`] : []),
+      ...(nextWh.length ? [t(nextWh.length !== 1 ? 'screens.stocksTotalStock.warehouseCountOther' : 'screens.stocksTotalStock.warehouseCountOne', { count: nextWh.length })] : []),
+      ...(nextGrp.length ? [t(nextGrp.length !== 1 ? 'screens.stocksTotalStock.groupCountOther' : 'screens.stocksTotalStock.groupCountOne', { count: nextGrp.length })] : []),
     ];
     Toast.show({
       type: 'success',
-      text1: toastParts.length ? 'Filters applied' : 'Filters cleared',
-      text2: toastParts.length ? toastParts.join(' · ') : 'Showing all items',
+      text1: toastParts.length ? t('screens.stocksTotalStock.filtersApplied') : t('screens.stocksTotalStock.filtersCleared'),
+      text2: toastParts.length ? toastParts.join(' · ') : t('screens.stocksTotalStock.showingAllItems'),
       visibilityTime: 2000,
     });
   };
@@ -230,11 +234,11 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Items"
+      title={t('screens.stocksTotalStock.filterItems')}
       activeCount={total}
       onClear={() => { setSelWh([...whIds]); setSelGrp([...grpIds]); }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.stocksTotalStock.applyFilters')}
       applyDisabled={!canApply}
     >
       <View style={fm.tabs}>
@@ -245,7 +249,7 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
             onPress={() => setTab(cat)}
             activeOpacity={0.7}
           >
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Warehouse' ? t('screens.stocksTotalStock.tabWarehouse') : t('screens.stocksTotalStock.tabGroup')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -256,21 +260,21 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search Warehouse..."
+              placeholder={t('screens.stocksTotalStock.searchWarehouse')}
               placeholderTextColor={COLORS.textTertiary}
               value={whSearch}
               onChangeText={setWhSearch}
             />
           </View>
           <FilterCheckRow
-            label="All warehouses"
+            label={t('screens.stocksTotalStock.allWarehouses')}
             selected={isAllWh}
             onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))}
           />
           {whOptions.length === 0 ? (
-            <Text style={fm.hint}>No warehouses available. Sync Tally first.</Text>
+            <Text style={fm.hint}>{t('screens.stocksTotalStock.noWarehousesAvailable')}</Text>
           ) : filteredWh.length === 0 ? (
-            <Text style={fm.hint}>No warehouses match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksTotalStock.noWarehousesMatch')}</Text>
           ) : (
             filteredWh.map(w => (
               <FilterCheckRow
@@ -288,21 +292,21 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search Group..."
+              placeholder={t('screens.stocksTotalStock.searchGroup')}
               placeholderTextColor={COLORS.textTertiary}
               value={grpSearch}
               onChangeText={setGrpSearch}
             />
           </View>
           <FilterCheckRow
-            label="All groups"
+            label={t('screens.stocksTotalStock.allGroups')}
             selected={isAllGrp}
             onPress={() => setSelGrp(prev => toggleFilterAll(prev, grpIds))}
           />
           {grpOptions.length === 0 ? (
-            <Text style={fm.hint}>No groups available. Sync Tally first.</Text>
+            <Text style={fm.hint}>{t('screens.stocksTotalStock.noGroupsAvailable')}</Text>
           ) : filteredGrp.length === 0 ? (
-            <Text style={fm.hint}>No groups match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksTotalStock.noGroupsMatch')}</Text>
           ) : (
             filteredGrp.map(g => (
               <FilterCheckRow
@@ -394,62 +398,96 @@ export default function TotalStockScreen() {
         .filter((w: any) => w.id);
       setWhOptions(wh);
     }).catch(() => {});
-    // Groups: trim whitespace to prevent mismatch with Tally-stored values
-    const cats = [...new Set(liveStocks.map(s => s.category?.trim()).filter(Boolean))];
-    const grps = [...new Set(liveStocks.map(s => s.group?.trim()).filter(Boolean))];
-    setCatOptions(cats.map(c => ({ id: c, label: c })));
-    setGrpOptions(grps.map(g => ({ id: g, label: g })));
   }, [companyGuid, liveStocks.length]);
 
-  const fetchFilteredStocks = useCallback(async (warehouses: string[], groups: string[]) => {
+  const [optionDeps, setOptionDeps] = useState<unknown[] | null>(null);
+  if (!optionDeps || optionDeps[0] !== companyGuid || optionDeps[1] !== liveStocks.length) {
+    setOptionDeps([companyGuid, liveStocks.length]);
+    if (companyGuid && liveStocks.length) {
+      // Groups: trim whitespace to prevent mismatch with Tally-stored values
+      const cats = [...new Set(liveStocks.map(s => s.category?.trim()).filter(Boolean))];
+      const grps = [...new Set(liveStocks.map(s => s.group?.trim()).filter(Boolean))];
+      setCatOptions(cats.map(c => ({ id: c, label: c })));
+      setGrpOptions(grps.map(g => ({ id: g, label: g })));
+    }
+  }
+
+  // Warehouse-filtered stocks (re-fetched from backend when warehouse filter applied)
+  const [whFilteredStocks, setWhFilteredStocks] = useState<StockItem[] | null>(null);
+  const [whFilterLoading, setWhFilterLoading] = useState(false);
+
+  const requestFilteredStocks = useCallback((warehouses: string[], groups: string[]) => {
+    if (!companyGuid) return;
+    const params: Record<string, string> = { limit: '1000' };
+    if (warehouses.length) params.warehouse = warehouses.join(',');
+    if (groups.length) params.group = groups.join(',');
+    getStocks(companyGuid, params)
+      .then((res: any) => {
+        const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
+        const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
+        setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit));
+      })
+      .catch(() => {
+        setWhFilteredStocks([]);
+      })
+      .finally(() => {
+        setWhFilterLoading(false);
+      });
+  }, [companyGuid, formatAmount]);
+
+  const fetchFilteredStocks = useCallback((warehouses: string[], groups: string[]) => {
     if (!companyGuid || (warehouses.length === 0 && groups.length === 0)) {
       setWhFilteredStocks(null);
       return;
     }
     setWhFilterLoading(true);
-    try {
-      const params: Record<string, string> = { limit: '1000' };
-      if (warehouses.length) params.warehouse = warehouses.join(',');
-      if (groups.length) params.group = groups.join(',');
-      const res: any = await getStocks(companyGuid, params);
-      const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
-      const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
-      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit));
-    } catch {
-      setWhFilteredStocks([]);
-    } finally {
-      setWhFilterLoading(false);
-    }
-  }, [companyGuid, formatAmount]);
+    requestFilteredStocks(warehouses, groups);
+  }, [companyGuid, requestFilteredStocks]);
 
   // If navigated from warehouse-detail with pre-filter, auto-apply warehouse filter on mount
+  const [preFilterDeps, setPreFilterDeps] = useState<unknown[] | null>(null);
+  if (
+    !preFilterDeps || preFilterDeps[0] !== preWarehouse || preFilterDeps[1] !== companyGuid ||
+    preFilterDeps[2] !== requestFilteredStocks
+  ) {
+    setPreFilterDeps([preWarehouse, companyGuid, requestFilteredStocks]);
+    if (preWarehouse && companyGuid) setWhFilterLoading(true);
+  }
+
   useEffect(() => {
     if (!preWarehouse || !companyGuid) return;
-    fetchFilteredStocks([preWarehouse], []);
-  }, [preWarehouse, companyGuid, fetchFilteredStocks]);
+    requestFilteredStocks([preWarehouse], []);
+  }, [preWarehouse, companyGuid, requestFilteredStocks]);
 
   useEffect(() => {
     if (!companyGuid) return;
+    let cancelled = false;
 
     // ── Module-level cache: 5-min TTL, invalidated on every Tally sync ──
     const cacheKey = stockCacheKey(companyGuid, lastSyncAt);
     const _stockCache = getStockListCache();
     const cached = _stockCache[cacheKey];
-    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
-      setLiveStocks(cached.data);
-      setIsLoading(false);
-      return;
-    }
+    const cacheFresh = !!cached && Date.now() - cached.ts < 5 * 60 * 1000;
 
-    setIsLoading(true);
-    getStocks(companyGuid, { limit: '5000' }).then((res: any) => {
-      const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
-      const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
-      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit);
-      const _stockCache = getStockListCache();
-      _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
-      if (mapped.length) setLiveStocks(mapped);
-    }).catch(() => {}).finally(() => setIsLoading(false));
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      if (cacheFresh) {
+        setLiveStocks(cached.data);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      getStocks(companyGuid, { limit: '5000' }).then((res: any) => {
+        const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
+        const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
+        const mapped = mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit);
+        const _stockCache = getStockListCache();
+        _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
+        if (mapped.length) setLiveStocks(mapped);
+      }).catch(() => {}).finally(() => setIsLoading(false));
+    });
+    return () => { cancelled = true; };
   }, [companyGuid, lastSyncAt, formatAmount]);
 
   // Search & filters
@@ -458,9 +496,6 @@ export default function TotalStockScreen() {
   const [selWh,  setSelWh]  = useState<string[]>(preWarehouse ? [preWarehouse] : []);
   const [selCat, setSelCat] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
-  // Warehouse-filtered stocks (re-fetched from backend when warehouse filter applied)
-  const [whFilteredStocks, setWhFilteredStocks] = useState<StockItem[] | null>(null);
-  const [whFilterLoading, setWhFilterLoading] = useState(false);
   const [onhandOnly, setOnhandOnly] = useState(preOnhand);
 
   // Use API-filtered stocks when warehouse/group filter active, else full loaded list
@@ -530,7 +565,7 @@ export default function TotalStockScreen() {
     if (multiSelectMode) {
       setSelectedIds(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
     } else {
-      safePush(router, `/stocks/item-detail?id=${item.id}` as any);
+      safePush(router, `/stocks/item-detail?id=${encodeURIComponent(String(item.id))}` as any);
     }
   }, [multiSelectMode, router]);
 
@@ -538,7 +573,7 @@ export default function TotalStockScreen() {
 
   const handleSharePDF = useCallback(async () => {
     if (!selectedIds.length) {
-      Toast.show({ type: 'error', text1: 'No Items', text2: 'Select items first.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksTotalStock.noItems'), text2: t('screens.stocksTotalStock.selectItemsFirst') });
       return;
     }
     if (isSharing) return;
@@ -547,7 +582,7 @@ export default function TotalStockScreen() {
     try {
       await shareStockRegisterPdf({
         company: companyFromAuth(company),
-        title: 'Total Stock',
+        title: t('stocks.totalStock'),
         period: undefined,
         rows: items.map(item => ({
           date: '',
@@ -560,11 +595,11 @@ export default function TotalStockScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       exitMultiSelect();
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Share failed', text2: err?.message || 'Could not generate PDF.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksTotalStock.shareFailed'), text2: err?.message || t('screens.stocksTotalStock.couldNotGeneratePdf') });
     } finally {
       setIsSharing(false);
     }
-  }, [selectedIds, sourceItems, company, isSharing, exitMultiSelect]);
+  }, [selectedIds, sourceItems, company, isSharing, exitMultiSelect, t]);
 
   const openBulkFromMultiselect = useCallback(() => {
     if (!selectedIds.length) return;
@@ -597,15 +632,15 @@ export default function TotalStockScreen() {
           <TouchableOpacity onPress={exitMultiSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={20} color={COLORS.white} />
           </TouchableOpacity>
-          <Text style={styles.multiCount}>{selectedIds.length} selected</Text>
+          <Text style={styles.multiCount}>{t('common.selected', { count: selectedIds.length })}</Text>
           <View style={styles.multiActions}>
             <TouchableOpacity style={[styles.multiBtn, styles.multiBtnAmber]} onPress={handleSharePDF} activeOpacity={0.8} disabled={isSharing}>
               <Ionicons name="share-outline" size={15} color={COLORS.white} />
-              <Text style={styles.multiBtnTxt}>{isSharing ? '…' : 'Share PDF'}</Text>
+              <Text style={styles.multiBtnTxt}>{isSharing ? '…' : t('screens.stocksTotalStock.sharePdf')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.multiBtn, styles.multiBtnGray]} onPress={openBulkFromMultiselect} activeOpacity={0.8}>
               <Ionicons name="swap-horizontal-outline" size={15} color={COLORS.white} />
-              <Text style={styles.multiBtnTxt}>Transfer</Text>
+              <Text style={styles.multiBtnTxt}>{t('screens.stocksTotalStock.transfer')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -642,16 +677,16 @@ export default function TotalStockScreen() {
       {/* ── Warehouse filter loading indicator ── */}
       {whFilterLoading && (
         <View style={{ paddingVertical: 6, alignItems: 'center', backgroundColor: COLORS.cardBg }}>
-          <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>Filtering by warehouse…</Text>
+          <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>{t('screens.stocksTotalStock.filteringByWarehouse')}</Text>
         </View>
       )}
 
       {/* ── Summary KPI strip ── */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${filtered.length}` },
-          { label: 'Total Qty',   value: totalQty.toLocaleString('en-IN') },
-          { label: 'Value (INR)', value: totalValueLabel },
+          { label: t('screens.stocksTotalStock.noOfSkus'), value: `${filtered.length}` },
+          { label: t('screens.stocksTotalStock.totalQty'),   value: totalQty.toLocaleString('en-IN') },
+          { label: t('screens.stocksTotalStock.valueInr'), value: totalValueLabel },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
             <Text style={styles.summaryVal}>{s.value}</Text>
@@ -661,7 +696,7 @@ export default function TotalStockScreen() {
       </View>
 
       {/* ── Search bar ── */}
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." />
+      <SearchBar value={query} onChangeText={setQuery} placeholder={t('screens.stocksTotalStock.searchItems')} />
 
       {/* ── Item list ── */}
       <FlatList
@@ -672,10 +707,10 @@ export default function TotalStockScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <Text style={styles.sectionLabel}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.sectionLabel}>{t(filtered.length !== 1 ? 'screens.stocksTotalStock.itemCountOther' : 'screens.stocksTotalStock.itemCountOne', { count: filtered.length })}</Text>
             {multiSelectMode ? (
               <TouchableOpacity onPress={() => setSelectedIds(allSelected ? [] : filtered.map(i => i.id))} activeOpacity={0.7}>
-                <Text style={styles.selectAllTxt}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
+                <Text style={styles.selectAllTxt}>{allSelected ? t('screens.stocksTotalStock.deselectAll') : t('screens.stocksTotalStock.selectAll')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.sortBtns}>
@@ -720,9 +755,9 @@ export default function TotalStockScreen() {
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={styles.emptyTxt}>No items match your filters</Text>
+            <Text style={styles.emptyTxt}>{t('screens.stocksTotalStock.noItemsMatch')}</Text>
             <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); fetchFilteredStocks([], []); setQuery(''); }} activeOpacity={0.7}>
-              <Text style={styles.emptyAction}>Clear all filters</Text>
+              <Text style={styles.emptyAction}>{t('screens.stocksTotalStock.clearAllFilters')}</Text>
             </TouchableOpacity>
           </View>
         )}

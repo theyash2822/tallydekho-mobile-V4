@@ -10,6 +10,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlerts } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -68,23 +69,22 @@ interface ProgressBarProps {
 function ProgressBar({ pct, tooltipText }: ProgressBarProps) {
   const [touchX,   setTouchX]   = useState<number | null>(null);
   const [barWidth, setBarWidth]  = useState(1);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const pan = useRef(
-    PanResponder.create({
+  const [pan] = useState(() => {
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+    return PanResponder.create({
       onStartShouldSetPanResponder:     () => true,
       onMoveShouldSetPanResponder:      () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => {
-        if (hideTimer.current) clearTimeout(hideTimer.current);
+        if (hideTimer) clearTimeout(hideTimer);
         setTouchX(e.nativeEvent.locationX);
       },
       onPanResponderMove:    (e) => setTouchX(e.nativeEvent.locationX),
       onPanResponderRelease: () => {
-        hideTimer.current = setTimeout(() => setTouchX(null), 2000);
+        hideTimer = setTimeout(() => setTouchX(null), 2000);
       },
-    })
-  ).current;
+    });
+  });
 
   return (
     <View>
@@ -131,12 +131,14 @@ const CXY = DS / 2;
 function ff(n: number) { return n.toFixed(2); }
 
 function DonutChart({ segments }: { segments: { pct: number; color: string }[] }) {
-  let angle = -Math.PI / 2;
+  const startAngles = segments.reduce<number[]>((acc, seg, i) => {
+    acc.push(i === 0 ? -Math.PI / 2 : acc[i - 1] + (segments[i - 1].pct / 100) * 2 * Math.PI);
+    return acc;
+  }, []);
   const paths = segments.map((seg, i) => {
     const sweep  = (seg.pct / 100) * 2 * Math.PI;
-    const startA = angle;
-    angle       += sweep;
-    const endA   = angle;
+    const startA = startAngles[i];
+    const endA   = startA + sweep;
     const large  = sweep > Math.PI ? 1 : 0;
     const o1 = { x: CXY + R_O * Math.cos(startA), y: CXY + R_O * Math.sin(startA) };
     const o2 = { x: CXY + R_O * Math.cos(endA),   y: CXY + R_O * Math.sin(endA)   };
@@ -190,14 +192,19 @@ export default function ComplianceHubScreen() {
 
   // Real alert counts from backend — re-fetch when FY changes
   const [alerts, setAlerts] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchAlerts = useCallback(() => {
-    if (!company?.guid) return;
+    const guid = company?.guid;
+    if (!guid) return;
     const fyParam = fyInfoToParam(selectedFY);
-    getAlerts(company.guid, fyParam ? { fy: fyParam } : undefined)
-      .then((res: any) => { if (res?.data) setAlerts(res.data); })
-      .catch(() => {});
-  }, [company?.guid, selectedFY]);
+    getAlerts(guid, fyParam ? { fy: fyParam } : undefined)
+      .then((res: any) => {
+        if (res?.data) { setAlerts(res.data); setLoadError(null); }
+        else setLoadError(t('screens.reportsCompliance.loadFailed'));
+      })
+      .catch((err: any) => setLoadError(err?.message || t('screens.reportsCompliance.loadFailed')));
+  }, [company?.guid, selectedFY, t]);
 
   // Re-fetch when FY or company changes
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
@@ -237,9 +244,9 @@ export default function ComplianceHubScreen() {
 
   // Always 3 pill rows regardless of data
   const ewbPillRows = [
-    { color: '#2D7D46', label: 'Generated',  value: ewbGenerated > 0 ? `${ewbGenerated}` : '0', count: `${ewbGenerated} bills generated` },
-    { color: '#D97706', label: 'Pending',    value: pendingEWB   > 0 ? `${pendingEWB}`   : '0', count: `${pendingEWB} bills pending` },
-    { color: '#DC2626', label: 'Expired',    value: expiredEWB   > 0 ? `${expiredEWB}`   : '0', count: `${expiredEWB} bills expired` },
+    { color: '#2D7D46', label: t('screens.reportsCompliance.generated'),  value: ewbGenerated > 0 ? `${ewbGenerated}` : '0', count: t('screens.reportsCompliance.billsGenerated', { count: ewbGenerated }) },
+    { color: '#D97706', label: t('screens.reportsCompliance.pending'),    value: pendingEWB   > 0 ? `${pendingEWB}`   : '0', count: t('screens.reportsCompliance.billsPending', { count: pendingEWB }) },
+    { color: '#DC2626', label: t('screens.reportsCompliance.expired'),    value: expiredEWB   > 0 ? `${expiredEWB}`   : '0', count: t('screens.reportsCompliance.billsExpired', { count: expiredEWB }) },
   ];
 
   // GST tooltips
@@ -274,10 +281,11 @@ export default function ComplianceHubScreen() {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        {loadError && <ErrorBanner message={loadError} onRetry={fetchAlerts} />}
 
         {/* ── 1. GST ────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="document-text-outline" title="GST" onPress={() => safePush(router, '/reports/gst' as any)} />
+          <CardHeader icon="document-text-outline" title={t('reports.gst')} onPress={() => safePush(router, '/reports/gst' as any)} />
           <Divider />
 
           <View style={s.gstOuter}>
@@ -285,7 +293,7 @@ export default function ComplianceHubScreen() {
 
               {/* Filing Status — static label */}
               <View style={s.gstCell}>
-                <Text style={s.gstMuted}>Filing Status</Text>
+                <Text style={s.gstMuted}>{t('screens.reportsCompliance.filingStatus')}</Text>
               </View>
 
               <View style={s.gstSep} />
@@ -293,7 +301,7 @@ export default function ComplianceHubScreen() {
               {/* Filing status badge — N/A until GST portal integration is live */}
               <View style={s.gstCell}>
                 <View style={[s.pendingBadge, s.pendingBadgeNA]}>
-                  <Text style={s.pendingTxt}>N/A</Text>
+                  <Text style={s.pendingTxt}>{t('screens.reportsCompliance.na')}</Text>
                 </View>
               </View>
 
@@ -305,7 +313,7 @@ export default function ComplianceHubScreen() {
                 onPress={() => safePush(router, '/reports/unmatched-list' as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={s.gstMuted}>Unmatched</Text>
+                <Text style={s.gstMuted}>{t('reports.unmatched')}</Text>
               </Pressable>
 
               <View style={s.gstSep} />
@@ -322,7 +330,7 @@ export default function ComplianceHubScreen() {
             {/* Pending tooltip */}
             {pendingTip.visible && (
               <View style={s.gstTooltipRow}>
-                <TooltipChip text={`${pendingIRN} invoice${pendingIRN !== 1 ? 's' : ''} pending for IRN / GSTR-1 filing`} />
+                <TooltipChip text={t(pendingIRN !== 1 ? 'screens.reportsCompliance.pendingInvoicesMany' : 'screens.reportsCompliance.pendingInvoicesOne', { count: pendingIRN })} />
               </View>
             )}
           </View>
@@ -330,7 +338,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 2. E-Way Bill ─────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="car-outline" title="E-Way Bill" onPress={() => safePush(router, '/reports/ewb-compliance' as any)} />
+          <CardHeader icon="car-outline" title={t('screens.reportsCompliance.ewayBill')} onPress={() => safePush(router, '/reports/ewb-compliance' as any)} />
           <Divider />
 
           <View style={s.ewbBody}>
@@ -366,12 +374,12 @@ export default function ComplianceHubScreen() {
 
         {/* ── 3. E-Invoicing ────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="receipt-outline" title="E-Invoicing" onPress={() => safePush(router, '/reports/einvoice-compliance' as any)} />
+          <CardHeader icon="receipt-outline" title={t('screens.reportsCompliance.eInvoicing')} onPress={() => safePush(router, '/reports/einvoice-compliance' as any)} />
           <Divider />
 
           <View style={s.progressBody}>
             <View style={s.progressRow}>
-              <Text style={s.progressLbl}>Pending IRN</Text>
+              <Text style={s.progressLbl}>{t('screens.reportsCompliance.pendingIrn')}</Text>
               <Pressable
                 onPress={einvTip.visible ? einvTip.hide : einvTip.show}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -381,25 +389,25 @@ export default function ComplianceHubScreen() {
             </View>
 
             {einvTip.visible && (
-              <TooltipChip text={irnTotal > 0 ? `${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated` : 'No eligible invoices (≥₹50K) in this period'} />
+              <TooltipChip text={irnTotal > 0 ? t('screens.reportsCompliance.irnProgress', { generated: irnGenerated, total: irnTotal, pct: irnProgressPct }) : t('screens.reportsCompliance.noEligible')} />
             )}
 
             <ProgressBar
               pct={irnProgressPct}
-              tooltipText={`${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated`}
+              tooltipText={t('screens.reportsCompliance.irnProgress', { generated: irnGenerated, total: irnTotal, pct: irnProgressPct })}
             />
           </View>
         </View>
 
         {/* ── 4. Other Taxes ────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="calculator-outline" title="Other Taxes" onPress={() => safePush(router, '/reports/other-taxes' as any)} />
+          <CardHeader icon="calculator-outline" title={t('reports.otherTaxes')} onPress={() => safePush(router, '/reports/other-taxes' as any)} />
           <Divider />
 
           <View style={s.progressBody}>
             <View style={s.progressRow}>
               <Text style={s.progressLbl}>
-                {otherTaxTopType ? `${otherTaxTopType} Transactions` : 'Tax Transactions'}
+                {otherTaxTopType ? t('screens.reportsCompliance.typeTransactions', { type: otherTaxTopType }) : t('screens.reportsCompliance.taxTransactions')}
               </Text>
               <Pressable
                 onPress={otherTip.visible ? otherTip.hide : otherTip.show}
@@ -412,14 +420,14 @@ export default function ComplianceHubScreen() {
             {otherTip.visible && (
               <TooltipChip text={
                 otherTaxCount > 0
-                  ? `${otherTaxCount} ${otherTaxTopType || 'tax'} transaction${otherTaxCount !== 1 ? 's' : ''} · ₹${Math.round(otherTaxTotal).toLocaleString('en-IN')}`
-                  : 'No other tax data in synced Tally vouchers'
+                  ? t(otherTaxCount !== 1 ? 'screens.reportsCompliance.otherTxMany' : 'screens.reportsCompliance.otherTxOne', { count: otherTaxCount, type: otherTaxTopType || t('screens.reportsCompliance.tax'), amount: Math.round(otherTaxTotal).toLocaleString('en-IN') })
+                  : t('screens.reportsCompliance.noOtherTax')
               } />
             )}
 
             <ProgressBar
               pct={otherTaxCount > 0 ? 100 : 0}
-              tooltipText={otherTaxCount > 0 ? `₹${Math.round(otherTaxTotal).toLocaleString('en-IN')} total ${otherTaxTopType || 'tax'}` : 'No tax data'}
+              tooltipText={otherTaxCount > 0 ? t('screens.reportsCompliance.totalTax', { amount: Math.round(otherTaxTotal).toLocaleString('en-IN'), type: otherTaxTopType || t('screens.reportsCompliance.tax') }) : t('screens.reportsCompliance.noTaxData')}
             />
           </View>
         </View>

@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useTranslation } from 'react-i18next';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 
 export default function InvitationsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { invitations, acceptInvite, declineInvite, switchWorkspace, refreshInvitations } = useWorkspace();
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -19,7 +21,7 @@ export default function InvitationsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Invitations</Text>
+        <Text style={s.headerTitle}>{t('screens.settingsInvitations.title')}</Text>
         <TouchableOpacity onPress={() => refreshInvitations()} style={s.backBtn}>
           <Ionicons name="refresh" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
@@ -27,20 +29,20 @@ export default function InvitationsScreen() {
 
       <ScrollView contentContainerStyle={{ padding: SPACING.md }}>
         {invitations.length === 0 ? (
-          <Text style={s.empty}>No pending invitations.</Text>
+          <Text style={s.empty}>{t('screens.settingsInvitations.noPending')}</Text>
         ) : (
           invitations.map((inv: any) => {
             const id = String(inv?.id || '');
             if (!id) return null;
-            const wsName = String(inv.workspace_name || inv.workspaceName || inv.workspace?.name || 'Workspace');
+            const wsName = String(inv.workspace_name || inv.workspaceName || inv.workspace?.name || t('screens.settingsInvitations.workspaceFallback'));
             const roleName = String(
               inv.role_display_name || inv.role_name || inv.roleName
-              || inv.role?.display_name || inv.role?.displayName || 'Member'
+              || inv.role?.display_name || inv.role?.displayName || t('screens.settingsInvitations.memberFallback')
             );
             return (
               <View key={id} style={s.card}>
-                <Text style={s.title}>{wsName} invited you</Text>
-                <Text style={s.meta}>Role: {roleName}</Text>
+                <Text style={s.title}>{t('screens.settingsInvitations.invitedYou', { name: wsName })}</Text>
+                <Text style={s.meta}>{t('screens.settingsInvitations.role', { role: roleName })}</Text>
                 <View style={s.row}>
                   <TouchableOpacity
                     style={[s.btn, s.decline]}
@@ -50,13 +52,13 @@ export default function InvitationsScreen() {
                       try {
                         await declineInvite(id);
                       } catch (e: any) {
-                        Alert.alert('Decline failed', e?.message || 'Try again');
+                        Alert.alert(t('screens.settingsInvitations.declineFailed'), e?.message || t('screens.settingsInvitations.tryAgain'));
                       } finally {
                         setBusy(null);
                       }
                     }}
                   >
-                    {busy === id ? <ActivityIndicator color="#E53935" /> : <Text style={s.declineTxt}>Decline</Text>}
+                    {busy === id ? <ActivityIndicator color="#E53935" /> : <Text style={s.declineTxt}>{t('screens.settingsInvitations.decline')}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.btn, s.accept]}
@@ -67,26 +69,26 @@ export default function InvitationsScreen() {
                         const data = await acceptInvite(id);
                         const newWsId = data?.workspaceId || data?.workspace_id || data?.workspace?.id;
                         Alert.alert(
-                          'Invitation accepted',
-                          newWsId ? `Switch to ${wsName}?` : 'Accepted.',
+                          t('screens.settingsInvitations.accepted'),
+                          newWsId ? t('screens.settingsInvitations.switchToQ', { name: wsName }) : t('screens.settingsInvitations.acceptedShort'),
                           newWsId
                             ? [
-                                { text: 'Stay', style: 'cancel' },
+                                { text: t('screens.settingsInvitations.stay'), style: 'cancel' },
                                 {
-                                  text: `Switch to ${wsName}`,
+                                  text: t('screens.settingsInvitations.switchTo', { name: wsName }),
                                   onPress: () => switchWorkspace(String(newWsId)),
                                 },
                               ]
-                            : [{ text: 'OK' }]
+                            : [{ text: t('common.ok') }]
                         );
                       } catch (e: any) {
-                        Alert.alert('Accept failed', e?.message || 'Try again');
+                        Alert.alert(t('screens.settingsInvitations.acceptFailed'), e?.message || t('screens.settingsInvitations.tryAgain'));
                       } finally {
                         setBusy(null);
                       }
                     }}
                   >
-                    {busy === id ? <ActivityIndicator color="#fff" /> : <Text style={s.acceptTxt}>Accept</Text>}
+                    {busy === id ? <ActivityIndicator color="#fff" /> : <Text style={s.acceptTxt}>{t('screens.settingsInvitations.accept')}</Text>}
                   </TouchableOpacity>
                 </View>
               </View>

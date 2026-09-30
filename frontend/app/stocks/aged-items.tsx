@@ -11,6 +11,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { getAgedItems } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AgedItem {
@@ -22,28 +23,28 @@ interface AgedItem {
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const BUCKET_TABS = [
-  { key: '30',  label: '30 Day'  },
-  { key: '60',  label: '60 Day'  },
-  { key: '90',  label: '90 Day'  },
-  { key: '120', label: '120+ Day'},
+  { key: '30',  labelKey: 'screens.stocksAgedItems.day30'  },
+  { key: '60',  labelKey: 'screens.stocksAgedItems.day60'  },
+  { key: '90',  labelKey: 'screens.stocksAgedItems.day90'  },
+  { key: '120', labelKey: 'screens.stocksAgedItems.day120'},
 ] as const;
 type Bucket = '30' | '60' | '90' | '120';
 
 const MODE_TABS = [
-  { key: 'sold',     label: 'By Value'  },  // items not sold — sorted by value
-  { key: 'received', label: 'By Age'    },  // items not received — sorted by days
+  { key: 'sold',     labelKey: 'screens.stocksAgedItems.byValue'  },  // items not sold — sorted by value
+  { key: 'received', labelKey: 'screens.stocksAgedItems.byAge'    },  // items not received — sorted by days
 ] as const;
 type Mode = 'sold' | 'received';
 
 const AGE_CONFIG = (days: number) => {
-  if (days >= 120) return { label: '120d+', color: '#DC2626', bg: '#FEF2F2' };
-  if (days >= 90)  return { label: '90-120d', color: '#D97706', bg: '#FFFBEB' };
-  if (days >= 60)  return { label: '60-90d', color: '#2563EB', bg: '#EFF6FF' };
-  return               { label: '30-60d', color: '#6B7280', bg: '#F3F4F6' };
+  if (days >= 120) return { labelKey: 'screens.stocksAgedItems.age120', color: '#DC2626', bg: '#FEF2F2' };
+  if (days >= 90)  return { labelKey: 'screens.stocksAgedItems.age90', color: '#D97706', bg: '#FFFBEB' };
+  if (days >= 60)  return { labelKey: 'screens.stocksAgedItems.age60', color: '#2563EB', bg: '#EFF6FF' };
+  return               { labelKey: 'screens.stocksAgedItems.age30', color: '#6B7280', bg: '#F3F4F6' };
 };
 
-const fmtDate = (d: string | null) => {
-  if (!d) return 'Never';
+const fmtDate = (d: string | null, neverLabel: string) => {
+  if (!d) return neverLabel;
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
 };
 
@@ -54,6 +55,7 @@ function ItemCard({
   item: AgedItem; mode: Mode; maxValue: number;
   formatAmount: (n: number) => string; formatAmountCompact: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const isNew = mode === 'received' && item.days_since_received < 30;
   const ageDays = mode === 'sold' ? item.days_since_sold : item.days_since_received;
   const ac = AGE_CONFIG(ageDays);
@@ -70,20 +72,20 @@ function ItemCard({
           </Text>
           <Text style={s.itemDate}>
             {mode === 'sold'
-              ? `Last sold: ${fmtDate(item.last_sold_date)}`
-              : `Last received: ${fmtDate(item.last_received_date)}`}
+              ? t('screens.stocksAgedItems.lastSold', { date: fmtDate(item.last_sold_date, t('screens.stocksAgedItems.never')) })
+              : t('screens.stocksAgedItems.lastReceived', { date: fmtDate(item.last_received_date, t('screens.stocksAgedItems.never')) })}
           </Text>
         </View>
         {/* Right: value + age tag */}
         <View style={s.cardRight}>
           <Text style={s.itemValue}>{formatAmountCompact(item.total_value)}</Text>
-          <Text style={s.itemRate}>₹{item.closing_rate.toLocaleString('en-IN')}/unit</Text>
+          <Text style={s.itemRate}>{t('screens.stocksAgedItems.perUnit', { rate: item.closing_rate.toLocaleString('en-IN') })}</Text>
           {isNew
             ? <View style={[s.ageTag, { backgroundColor: '#E7F9ED' }]}>
-                <Text style={[s.ageTagTxt, { color: '#2D7D46' }]}>New</Text>
+                <Text style={[s.ageTagTxt, { color: '#2D7D46' }]}>{t('screens.stocksAgedItems.new')}</Text>
               </View>
             : <View style={[s.ageTag, { backgroundColor: ac.bg }]}>
-                <Text style={[s.ageTagTxt, { color: ac.color }]}>{ac.label}</Text>
+                <Text style={[s.ageTagTxt, { color: ac.color }]}>{t(ac.labelKey)}</Text>
               </View>
           }
         </View>
@@ -96,13 +98,13 @@ function ItemCard({
 
       {/* Bottom: qty + days */}
       <View style={s.cardBottom}>
-        <Text style={s.cardBottomTxt}>Qty: {item.closing_qty.toLocaleString('en-IN')}</Text>
+        <Text style={s.cardBottomTxt}>{t('screens.stocksAgedItems.qty', { qty: item.closing_qty.toLocaleString('en-IN') })}</Text>
         <Text style={s.cardBottomTxt}>
           {mode === 'sold'
-            ? `${ageDays} days since last sale`
+            ? t('screens.stocksAgedItems.daysSinceSale', { days: ageDays })
             : isNew
-              ? `Received ${ageDays} days ago`
-              : `${ageDays} days in inventory`}
+              ? t('screens.stocksAgedItems.receivedDaysAgo', { days: ageDays })
+              : t('screens.stocksAgedItems.daysInInventory', { days: ageDays })}
         </Text>
       </View>
     </View>
@@ -112,6 +114,7 @@ function ItemCard({
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function AgedItemsScreen() {
   const router   = useRouter();
+  const { t } = useTranslation();
   const params   = useLocalSearchParams<{ days?: string }>();
   const insets   = useSafeAreaInsets();
   const { company } = useAuth();
@@ -129,20 +132,35 @@ export default function AgedItemsScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError,  setApiError]  = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const fetchItems = useCallback(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     getAgedItems(companyGuid, { mode, days: bucket })
       .then((res: any) => {
         setItems(res?.data ?? []);
         setSummary(res?.summary ?? null);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load aged items'))
+      .catch((e: any) => setApiError(e?.message || t('screens.stocksAgedItems.failedToLoad')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, mode, bucket]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = () => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    fetchItems();
+  };
+
+  const loadKey = `${companyGuid}|${mode}|${bucket}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (loadedKey !== loadKey) {
+    setLoadedKey(loadKey);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const maxValue = items.length > 0 ? Math.max(...items.map(i => i.total_value)) : 1;
 
@@ -153,7 +171,7 @@ export default function AgedItemsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Aged Inventory</Text>
+        <Text style={s.headerTitle}>{t('screens.stocksAgedItems.title')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -162,40 +180,40 @@ export default function AgedItemsScreen() {
         <View style={s.summaryRow}>
           <View style={s.summaryCard}>
             <Text style={s.summaryVal}>{summary.total_skus}</Text>
-            <Text style={s.summaryLbl}>SKUs Affected</Text>
+            <Text style={s.summaryLbl}>{t('screens.stocksAgedItems.skusAffected')}</Text>
           </View>
           <View style={s.summaryDiv} />
           <View style={s.summaryCard}>
             <Text style={s.summaryVal}>{formatAmountCompact(summary.total_value)}</Text>
-            <Text style={s.summaryLbl}>Aged Stock Value</Text>
+            <Text style={s.summaryLbl}>{t('screens.stocksAgedItems.agedStockValue')}</Text>
           </View>
         </View>
       )}
 
       {/* Top tabs: age buckets */}
       <View style={s.tabRow}>
-        {BUCKET_TABS.map(t => (
+        {BUCKET_TABS.map(tab => (
           <TouchableOpacity
-            key={t.key}
-            style={[s.tab, bucket === t.key && s.tabActive]}
-            onPress={() => setBucket(t.key as Bucket)}
+            key={tab.key}
+            style={[s.tab, bucket === tab.key && s.tabActive]}
+            onPress={() => setBucket(tab.key as Bucket)}
             activeOpacity={0.7}
           >
-            <Text style={[s.tabTxt, bucket === t.key && s.tabTxtActive]}>{t.label}</Text>
+            <Text style={[s.tabTxt, bucket === tab.key && s.tabTxtActive]}>{t(tab.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {/* Secondary tabs: mode */}
       <View style={s.modeRow}>
-        {MODE_TABS.map(t => (
+        {MODE_TABS.map(tab => (
           <TouchableOpacity
-            key={t.key}
-            style={[s.modeTab, mode === t.key && s.modeTabActive]}
-            onPress={() => setMode(t.key as Mode)}
+            key={tab.key}
+            style={[s.modeTab, mode === tab.key && s.modeTabActive]}
+            onPress={() => setMode(tab.key as Mode)}
             activeOpacity={0.7}
           >
-            <Text style={[s.modeTabTxt, mode === t.key && s.modeTabTxtActive]}>{t.label}</Text>
+            <Text style={[s.modeTabTxt, mode === tab.key && s.modeTabTxtActive]}>{t(tab.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -225,11 +243,11 @@ export default function AgedItemsScreen() {
               <View style={s.emptyIcon}>
                 <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
               </View>
-              <Text style={s.emptyTitle}>No Aged Items</Text>
+              <Text style={s.emptyTitle}>{t('screens.stocksAgedItems.noAgedItems')}</Text>
               <Text style={s.emptyDesc}>
                 {bucket === '30'
-                  ? 'No items in the 30-day bucket. Try 90 Day or 120+ Day tabs.'
-                  : 'No items match the selected age bucket and mode.'}
+                  ? t('screens.stocksAgedItems.empty30')
+                  : t('screens.stocksAgedItems.emptyNoMatch')}
               </Text>
             </View>
           }

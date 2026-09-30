@@ -64,13 +64,13 @@ const fmtINR = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 const PAYMENT_METHODS = ['Cash', 'Bank', 'Cheque', 'NEFT', 'RTGS', 'UPI'] as const;
 type PaymentMethod = typeof PAYMENT_METHODS[number];
 
-const REF_LABELS: Record<PaymentMethod, string> = {
+const REF_LABEL_KEYS: Record<PaymentMethod, string> = {
   Cash: '',
-  Bank: 'Reference No.',
-  Cheque: 'Cheque No.',
-  NEFT: 'NEFT UTR',
-  RTGS: 'RTGS UTR',
-  UPI: 'UPI Ref ID',
+  Bank: 'screens.voucherCreateReceipt.referenceNo',
+  Cheque: 'screens.voucherCreateReceipt.chequeNo',
+  NEFT: 'screens.voucherCreateReceipt.neftUtr',
+  RTGS: 'screens.voucherCreateReceipt.rtgsUtr',
+  UPI: 'screens.voucherCreateReceipt.upiRefId',
 };
 
 type LeftoverType = 'On Account' | 'Advance';
@@ -109,10 +109,12 @@ export default function CreateReceiptVoucher() {
   // ── Date (mirrors Sales Invoice pattern) ──────────────────────────────────
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  useEffect(() => {
+  const [prevEntryType, setPrevEntryType] = useState(entryType);
+  if (entryType !== prevEntryType) {
+    setPrevEntryType(entryType);
     // If user flips to Regular, snap date back to today.
     if (entryType === 'regular') setDate(todayStr());
-  }, [entryType]);
+  }
 
   // ── Party picker (Debtors → Incomes → All) ────────────────────────────────
   type PartyFilter = 'customer' | 'income' | 'all';
@@ -122,9 +124,9 @@ export default function CreateReceiptVoucher() {
   const [partyData, setPartyData] = useState<any>(null);
 
   const partyFilterLabel =
-    partyFilter === 'customer' ? 'Sundry Debtors ▾'
-      : partyFilter === 'income' ? '★ Incomes ▾'
-        : '★ All ledgers ▾';
+    partyFilter === 'customer' ? t('screens.voucherCreateReceipt.filterDebtors')
+      : partyFilter === 'income' ? t('screens.voucherCreateReceipt.filterIncomes')
+        : t('screens.voucherCreateReceipt.filterAll');
 
   const cyclePartyFilter = () => {
     setPartyFilter(prev => (prev === 'customer' ? 'income' : prev === 'income' ? 'all' : 'customer'));
@@ -132,23 +134,25 @@ export default function CreateReceiptVoucher() {
     setPartyData(null);
   };
 
-  const loadParties = useCallback(async () => {
-    if (!company?.guid) return;
-    try {
-      const params =
-        partyFilter === 'customer' ? { type: 'customer' }
-          : partyFilter === 'income' ? { type: 'income' }
-            : undefined;
-      const res: any = await getParties(company.guid, params);
-      const list = scopeParties(res?.data || []).map((p: any) => ({
-        label: p.name,
-        value: p.name,
-        subtitle: p.parent || undefined,
-        data: p,
-      }));
-      setParties(list);
-    } catch (e) { /* silent */ }
-  }, [company?.guid, partyFilter, scopeParties]);
+  const companyGuid = company?.guid;
+  const loadParties = useCallback(() => {
+    if (!companyGuid) return;
+    const params =
+      partyFilter === 'customer' ? { type: 'customer' }
+        : partyFilter === 'income' ? { type: 'income' }
+          : undefined;
+    getParties(companyGuid, params)
+      .then((res: any) => {
+        const list = scopeParties(res?.data || []).map((p: any) => ({
+          label: p.name,
+          value: p.name,
+          subtitle: p.parent || undefined,
+          data: p,
+        }));
+        setParties(list);
+      })
+      .catch(() => { /* silent */ });
+  }, [companyGuid, partyFilter, scopeParties]);
   useEffect(() => { loadParties(); }, [loadParties]);
 
   // ── Outstanding bills for selected party ──────────────────────────────────
@@ -207,7 +211,9 @@ export default function CreateReceiptVoucher() {
   const [narration, setNarration] = useState('');
 
   // Clear bill allocations when receipt amount is cleared / zero
-  useEffect(() => {
+  const [prevAmount, setPrevAmount] = useState<string | null>(null);
+  if (amount !== prevAmount) {
+    setPrevAmount(amount);
     const n = parseFloat(amount);
     if (!amount || !Number.isFinite(n) || n <= 0) {
       setBills(prev => {
@@ -215,28 +221,42 @@ export default function CreateReceiptVoucher() {
         return prev.map(b => ({ ...b, selected: false, payAmount: '' }));
       });
     }
-  }, [amount]);
+  }
 
   // Load ledger dropdown per payment method (Cash → cash, else → bank)
-  const fetchLedgers = useCallback(async () => {
-    if (!company?.guid) return;
-    setLedgerLoading(true);
-    setLedgerAccount('');
-    try {
-      const type: 'cash' | 'bank' = paymentMethod === 'Cash' ? 'cash' : 'bank';
-      const res: any = await getBankLedgers(company.guid, type);
-      const list = scopeParties(res?.data || []).map((l: any) => ({
-        label: l.closing_balance != null
-          ? `${l.name} — ${fmtINR(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
-          : l.name,
-        value: l.name,
-        data: l,
-      }));
-      setLedgerOptions(list);
-    } catch (e) {
-      setLedgerOptions([]);
-    } finally { setLedgerLoading(false); }
-  }, [company?.guid, paymentMethod, scopeParties]);
+  const [ledgerLoadKey, setLedgerLoadKey] = useState<{
+    companyGuid?: string; paymentMethod: PaymentMethod; scopeParties: typeof scopeParties;
+  } | null>(null);
+  if (
+    !ledgerLoadKey || ledgerLoadKey.companyGuid !== companyGuid
+    || ledgerLoadKey.paymentMethod !== paymentMethod || ledgerLoadKey.scopeParties !== scopeParties
+  ) {
+    setLedgerLoadKey({ companyGuid, paymentMethod, scopeParties });
+    if (companyGuid) {
+      setLedgerLoading(true);
+      setLedgerAccount('');
+    }
+  }
+
+  const fetchLedgers = useCallback(() => {
+    if (!companyGuid) return;
+    const type: 'cash' | 'bank' = paymentMethod === 'Cash' ? 'cash' : 'bank';
+    getBankLedgers(companyGuid, type)
+      .then((res: any) => {
+        const list = scopeParties(res?.data || []).map((l: any) => ({
+          label: l.closing_balance != null
+            ? `${l.name} — ${fmtINR(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
+            : l.name,
+          value: l.name,
+          data: l,
+        }));
+        setLedgerOptions(list);
+      })
+      .catch(() => {
+        setLedgerOptions([]);
+      })
+      .finally(() => { setLedgerLoading(false); });
+  }, [companyGuid, paymentMethod, scopeParties]);
   useEffect(() => { fetchLedgers(); }, [fetchLedgers]);
 
   // ── Leftover disposition ──────────────────────────────────────────────────
@@ -274,13 +294,13 @@ export default function CreateReceiptVoucher() {
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
   const canSubmit = useMemo(() => {
-    if (!party) return 'Select a party';
-    if (!receiptAmt || receiptAmt <= 0) return 'Enter a valid amount';
-    if (!ledgerAccount) return paymentMethod === 'Cash' ? 'Select a Cash ledger' : 'Select a Bank ledger';
-    if (overAllocated) return 'Allocated amount exceeds receipt amount';
-    if (paymentMethod !== 'Cash' && paymentMethod !== 'UPI' && paymentMethod !== 'Bank' && !instrumentDate) return 'Instrument date required';
+    if (!party) return t('screens.voucherCreateReceipt.errSelectParty');
+    if (!receiptAmt || receiptAmt <= 0) return t('screens.voucherCreateReceipt.errValidAmount');
+    if (!ledgerAccount) return paymentMethod === 'Cash' ? t('screens.voucherCreateReceipt.errSelectCashLedger') : t('screens.voucherCreateReceipt.errSelectBankLedger');
+    if (overAllocated) return t('screens.voucherCreateReceipt.errOverAllocated');
+    if (paymentMethod !== 'Cash' && paymentMethod !== 'UPI' && paymentMethod !== 'Bank' && !instrumentDate) return t('screens.voucherCreateReceipt.errInstrumentDate');
     return null;
-  }, [party, receiptAmt, ledgerAccount, paymentMethod, overAllocated, instrumentDate]);
+  }, [party, receiptAmt, ledgerAccount, paymentMethod, overAllocated, instrumentDate, t]);
 
   const buildBillAllocations = () => {
     const blocks: { billRefName?: string; billType: string; amount: number }[] = [];
@@ -337,7 +357,7 @@ export default function CreateReceiptVoucher() {
       setSubmitResult({ tdkRef, isQueued, voucherNumber: res?.voucherNumber || undefined, numberingPolicy: res?.numberingPolicy || numberingPolicy });
       setShowSuccess(true);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.voucherCreateReceipt.submitFailed'), text2: e?.message || t('screens.voucherCreateReceipt.checkTallyConnection') });
     } finally {
       setSubmitting(false);
     }
@@ -377,14 +397,14 @@ export default function CreateReceiptVoucher() {
             <View style={[s.fieldBlock, { padding: SPACING.md }]}>
               <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Receipt No.</Text>
+                  <Text style={s.fLabel}>{t('voucher.receiptNo')}</Text>
                   <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
+                    <Text style={s.autoTxt}>{t('screens.voucherCreateReceipt.auto')}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.req}>*</Text></Text>
                   {entryType === 'regular' ? (
                     <View style={[s.autoBox, { opacity: 0.55 }]}>
                       <Text style={s.autoTxt}>{date}</Text>
@@ -393,7 +413,7 @@ export default function CreateReceiptVoucher() {
                   ) : (
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                       <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
+                        {date || t('screens.voucherCreateReceipt.selectDate')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -405,18 +425,18 @@ export default function CreateReceiptVoucher() {
           {/* ── Party ────────────────────────────────────────────────── */}
           <View style={s.section}>
             <View style={s.sectionHead}>
-              <Text style={s.sectionTitle}>Party / Ledger</Text>
+              <Text style={s.sectionTitle}>{t('screens.voucherCreateReceipt.partyLedgerSection')}</Text>
               <TouchableOpacity onPress={cyclePartyFilter} activeOpacity={0.8}>
                 <Text style={s.linkTxt}>{partyFilterLabel}</Text>
               </TouchableOpacity>
             </View>
             <BottomSheetSearch
-              label={partyFilter === 'income' ? 'Income Ledger' : 'Party Ledger'}
+              label={partyFilter === 'income' ? t('screens.voucherCreateReceipt.incomeLedger') : t('screens.voucherCreateReceipt.partyLedger')}
               required
               placeholder={
-                partyFilter === 'income' ? 'Search income ledger…'
-                  : partyFilter === 'all' ? 'Search any ledger…'
-                    : 'Search party...'
+                partyFilter === 'income' ? t('screens.voucherCreateReceipt.searchIncomeLedger')
+                  : partyFilter === 'all' ? t('screens.voucherCreateReceipt.searchAnyLedger')
+                    : t('screens.voucherCreateReceipt.searchParty')
               }
               options={parties}
               value={party}
@@ -425,7 +445,7 @@ export default function CreateReceiptVoucher() {
             />
             {partyFilter === 'income' && !party && (
               <Text style={s.hintTxt}>
-                Showing Direct / Indirect Incomes — tap the filter to switch back to Debtors.
+                {t('screens.voucherCreateReceipt.incomeHint')}
               </Text>
             )}
             {!!party && (
@@ -433,10 +453,10 @@ export default function CreateReceiptVoucher() {
                 {!!partyData?.parent && (
                   <View style={s.chip}><Text style={s.chipTxt}>{partyData.parent}</Text></View>
                 )}
-                {!!partyData?.gstin && <View style={s.chip}><Text style={s.chipTxt}>GSTIN: {partyData.gstin}</Text></View>}
+                {!!partyData?.gstin && <View style={s.chip}><Text style={s.chipTxt}>{t('screens.voucherCreateReceipt.gstinChip', { gstin: partyData.gstin })}</Text></View>}
                 {totalPending > 0 && (
                   <View style={[s.chip, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B44' }]}>
-                    <Text style={[s.chipTxt, { color: '#92400E' }]}>Outstanding: {fmtINR(totalPending)}</Text>
+                    <Text style={[s.chipTxt, { color: '#92400E' }]}>{t('screens.voucherCreateReceipt.outstandingChip', { amount: fmtINR(totalPending) })}</Text>
                   </View>
                 )}
               </View>
@@ -445,14 +465,14 @@ export default function CreateReceiptVoucher() {
 
           {/* ── Amount ──────────────────────────────────────────────── */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Receipt Amount</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreateReceipt.receiptAmount')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <View style={s.inputWrap}>
                   <Text style={s.rupee}>₹</Text>
                   <TextInput
                     style={s.input}
-                    placeholder="Enter amount"
+                    placeholder={t('voucher.enterAmount')}
                     placeholderTextColor={COLORS.textTertiary}
                     value={amount}
                     onChangeText={setAmount}
@@ -467,10 +487,10 @@ export default function CreateReceiptVoucher() {
           {!!party && (
             <View style={s.section}>
               <View style={s.sectionHead}>
-                <Text style={s.sectionTitle}>Bill Allocation</Text>
+                <Text style={s.sectionTitle}>{t('screens.voucherCreateReceipt.billAllocation')}</Text>
                 {bills.length > 0 && (
                   <TouchableOpacity onPress={fifoAutoAllocate} activeOpacity={0.7}>
-                    <Text style={s.linkTxt}>⚡ Auto FIFO</Text>
+                    <Text style={s.linkTxt}>{t('screens.voucherCreateReceipt.autoFifo')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -480,8 +500,8 @@ export default function CreateReceiptVoucher() {
               ) : bills.length === 0 ? (
                 <View style={s.emptyBlock}>
                   <Ionicons name="information-circle-outline" size={20} color={COLORS.textTertiary} />
-                  <Text style={s.emptyTxt}>No receivable outstanding bills for this party.</Text>
-                  <Text style={s.emptySub}>Only Dr (dues) bills are listed. Receipt will post as an advance / on-account entry.</Text>
+                  <Text style={s.emptyTxt}>{t('screens.voucherCreateReceipt.noBills')}</Text>
+                  <Text style={s.emptySub}>{t('screens.voucherCreateReceipt.noBillsSub')}</Text>
                 </View>
               ) : (
                 <View style={s.fieldBlock}>
@@ -498,8 +518,8 @@ export default function CreateReceiptVoucher() {
                         <Text style={s.billName}>{b.bill_name}</Text>
                         <Text style={s.billMeta}>
                           {b.bill_date ? new Date(b.bill_date).toLocaleDateString('en-IN') : '—'}
-                          {b.due_date ? ` · Due ${new Date(b.due_date).toLocaleDateString('en-IN')}` : ''}
-                          {' · Pending '}{fmtINR(b.pending_amount)}
+                          {b.due_date ? t('screens.voucherCreateReceipt.dueSuffix', { date: new Date(b.due_date).toLocaleDateString('en-IN') }) : ''}
+                          {t('screens.voucherCreateReceipt.pendingSuffix', { amount: fmtINR(b.pending_amount) })}
                         </Text>
                       </View>
                       <View style={s.billPay}>
@@ -522,16 +542,16 @@ export default function CreateReceiptVoucher() {
               {receiptAmt > 0 && (
                 <View style={s.allocFooter}>
                   <View style={s.allocRow}>
-                    <Text style={s.allocLbl}>Receipt Amount:</Text>
+                    <Text style={s.allocLbl}>{t('screens.voucherCreateReceipt.receiptAmountColon')}</Text>
                     <Text style={s.allocVal}>{fmtINR(receiptAmt)}</Text>
                   </View>
                   <View style={s.allocRow}>
-                    <Text style={s.allocLbl}>Allocated:</Text>
+                    <Text style={s.allocLbl}>{t('screens.voucherCreateReceipt.allocatedColon')}</Text>
                     <Text style={[s.allocVal, overAllocated && { color: COLORS.negative }]}>{fmtINR(allocated)}</Text>
                   </View>
                   {remaining > 0.01 && (
                     <View style={s.allocRow}>
-                      <Text style={s.allocLbl}>Remaining:</Text>
+                      <Text style={s.allocLbl}>{t('screens.voucherCreateReceipt.remainingColon')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={s.allocVal}>{fmtINR(remaining)}</Text>
                         <TouchableOpacity style={s.leftoverPill} onPress={() => setShowLeftoverPicker(true)} activeOpacity={0.7}>
@@ -542,7 +562,7 @@ export default function CreateReceiptVoucher() {
                     </View>
                   )}
                   {overAllocated && (
-                    <Text style={s.errTxt}>⚠ Allocated exceeds receipt amount — reduce bill amounts.</Text>
+                    <Text style={s.errTxt}>{t('screens.voucherCreateReceipt.overAllocatedWarn')}</Text>
                   )}
                 </View>
               )}
@@ -551,7 +571,7 @@ export default function CreateReceiptVoucher() {
 
           {/* ── Payment Method ──────────────────────────────────────── */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Payment Method</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreateReceipt.paymentMethod')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }} contentContainerStyle={s.pillRowScroll}>
@@ -569,10 +589,10 @@ export default function CreateReceiptVoucher() {
               </View>
               <View style={s.div} />
               <View style={s.field}>
-                <Text style={s.label}>{paymentMethod === 'Cash' ? 'Cash Ledger' : 'Bank Ledger'} <Text style={s.req}>*</Text></Text>
+                <Text style={s.label}>{paymentMethod === 'Cash' ? t('screens.voucherCreateReceipt.cashLedger') : t('screens.voucherCreateReceipt.bankLedger')} <Text style={s.req}>*</Text></Text>
                 <BottomSheetSearch
-                  label={paymentMethod === 'Cash' ? 'Cash Ledger' : 'Bank Ledger'}
-                  placeholder={ledgerLoading ? 'Loading...' : `Search ${paymentMethod === 'Cash' ? 'cash' : 'bank'} ledger...`}
+                  label={paymentMethod === 'Cash' ? t('screens.voucherCreateReceipt.cashLedger') : t('screens.voucherCreateReceipt.bankLedger')}
+                  placeholder={ledgerLoading ? t('common.loading') : paymentMethod === 'Cash' ? t('screens.voucherCreateReceipt.searchCashLedger') : t('screens.voucherCreateReceipt.searchBankLedger')}
                   options={ledgerOptions}
                   value={ledgerAccount}
                   onSelect={(opt) => setLedgerAccount(opt.value)}
@@ -584,12 +604,12 @@ export default function CreateReceiptVoucher() {
                 <>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>{REF_LABELS[paymentMethod]}</Text>
+                    <Text style={s.label}>{t(REF_LABEL_KEYS[paymentMethod])}</Text>
                     <View style={s.inputWrap}>
                       <Ionicons name="keypad-outline" size={16} color={COLORS.textTertiary} />
                       <TextInput
                         style={s.input}
-                        placeholder={`Enter ${REF_LABELS[paymentMethod].toLowerCase()}`}
+                        placeholder={t('screens.voucherCreateReceipt.enterRef', { label: t(REF_LABEL_KEYS[paymentMethod]).toLowerCase() })}
                         placeholderTextColor={COLORS.textTertiary}
                         value={refNo}
                         onChangeText={setRefNo}
@@ -603,20 +623,20 @@ export default function CreateReceiptVoucher() {
                 <>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>Instrument Date</Text>
+                    <Text style={s.label}>{t('screens.voucherCreateReceipt.instrumentDate')}</Text>
                     <TouchableOpacity style={s.inputWrap} onPress={() => setShowInstrumentDatePicker(true)}>
                       <Ionicons name="calendar-outline" size={16} color={COLORS.textTertiary} />
-                      <Text style={{ flex: 1, color: instrumentDate ? COLORS.textPrimary : COLORS.textTertiary }}>{instrumentDate || 'Select instrument date'}</Text>
+                      <Text style={{ flex: 1, color: instrumentDate ? COLORS.textPrimary : COLORS.textTertiary }}>{instrumentDate || t('screens.voucherCreateReceipt.selectInstrumentDate')}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>Bank Name</Text>
+                    <Text style={s.label}>{t('screens.voucherCreateReceipt.bankName')}</Text>
                     <View style={s.inputWrap}>
                       <Ionicons name="business-outline" size={16} color={COLORS.textTertiary} />
                       <TextInput
                         style={s.input}
-                        placeholder="e.g. HDFC Bank"
+                        placeholder={t('screens.voucherCreateReceipt.bankNamePlaceholder')}
                         placeholderTextColor={COLORS.textTertiary}
                         value={bankName}
                         onChangeText={setBankName}
@@ -633,12 +653,12 @@ export default function CreateReceiptVoucher() {
             style={s.section}
             onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
           >
-            <Text style={s.sectionTitle}>Narration</Text>
+            <Text style={s.sectionTitle}>{t('voucher.narration')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <TextInput
                   style={s.textarea}
-                  placeholder="Notes (optional)"
+                  placeholder={t('screens.voucherCreateReceipt.notesPlaceholder')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={narration}
                   onChangeText={setNarration}
@@ -661,7 +681,7 @@ export default function CreateReceiptVoucher() {
             {submitting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="send" size={16} color={COLORS.white} />}
-            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt Voucher'}</Text>
+            <Text style={s.btnPriTxt}>{submitting ? t('voucher.submitting') : t('screens.voucherCreateReceipt.submitButton')}</Text>
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </ScrollView>
@@ -671,9 +691,9 @@ export default function CreateReceiptVoucher() {
       <Modal visible={showLeftoverPicker} transparent animationType="fade" onRequestClose={() => setShowLeftoverPicker(false)}>
         <TouchableOpacity style={ss.overlay} activeOpacity={1} onPress={() => setShowLeftoverPicker(false)}>
           <View style={ss.sheetCard}>
-            <Text style={ss.sheetTitle}>Remaining amount will post as</Text>
+            <Text style={ss.sheetTitle}>{t('screens.voucherCreateReceipt.leftoverTitle')}</Text>
             <Text style={{ fontSize: 12, color: COLORS.textTertiary, marginBottom: 4, lineHeight: 16 }}>
-              On Account needs no name. Advance gets an auto ref name (Tally requirement).
+              {t('screens.voucherCreateReceipt.leftoverHint')}
             </Text>
             {(['On Account', 'Advance'] as LeftoverType[]).map(opt => (
               <TouchableOpacity
@@ -700,75 +720,77 @@ export default function CreateReceiptVoucher() {
         onRequestClose={() => { setShowSuccess(false); router.back(); }}
       >
         <View style={ss.overlay2}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
+          {submitResult && (
+            <View style={ss.card}>
+              <View style={ss.iconWrap}>
+                <Ionicons
+                  name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                  size={56}
+                  color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                />
+              </View>
+              <Text style={ss.title}>{submitResult.isQueued ? t('voucher.journalQueued') : t('screens.voucherCreateReceipt.submitted')}</Text>
+              <Text style={ss.sub}>
+                {submitResult.isQueued
+                  ? t('screens.voucherCreateReceipt.queuedSub')
+                  : t('screens.voucherCreateReceipt.pushedSub')}
+              </Text>
+              {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+                <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreateReceipt.voucherNo')}</Text>
+                  <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <View style={ss.refBadge}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreateReceipt.referenceNo')}</Text>
+                  <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={ss.previewBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (!submitResult?.tdkRef) return;
+                  setShowSuccess(false);
+                  router.replace(`/voucher/receipt-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                }}
+              >
+                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={ss.previewBtnTxt}>{t('screens.voucherCreateReceipt.preview')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+                activeOpacity={0.85}
+                disabled={sharePdfLoading}
+                onPress={async () => {
+                  if (!submitResult.tdkRef || !company?.guid) return;
+                  setSharePdfLoading(true);
+                  try {
+                    await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                      documentType: 'receipt_voucher',
+                      onBeforeShare: () => setSharePdfLoading(false),
+                      fallback: async () => {
+                        Toast.show({ type: 'info', text1: t('screens.voucherCreateReceipt.sharingUnavailable') });
+                      },
+                    });
+                  } catch (err: any) {
+                    Toast.show({ type: 'error', text1: t('screens.voucherCreateReceipt.pdfError'), text2: err?.message || t('screens.voucherCreateReceipt.couldNotGeneratePdf') });
+                  } finally {
+                    setSharePdfLoading(false);
+                  }
+                }}
+              >
+                {sharePdfLoading
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+                <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? t('screens.voucherCreateReceipt.pdfCreating') : t('pdf.sharePdf')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+                <Text style={ss.closeBtnTxt}>{t('common.close')}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Receipt Submitted!'}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Receipt pushed to Tally successfully.'}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Voucher No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult?.tdkRef) return;
-                setShowSuccess(false);
-                router.replace(`/voucher/receipt-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
-                setSharePdfLoading(true);
-                try {
-                  await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
-                    documentType: 'receipt_voucher',
-                    onBeforeShare: () => setSharePdfLoading(false),
-                    fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                    },
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
-              <Text style={ss.closeBtnTxt}>Close</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
       </Modal>
 

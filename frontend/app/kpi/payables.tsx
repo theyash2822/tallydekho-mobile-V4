@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -21,9 +20,12 @@ import {
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ListTileShell } from '../../src/components/ListTileShell';
 import { VoucherListTile } from '../../src/components/VoucherListTile';
+import { OverduePartyTile } from '../../src/components/OverduePartyTile';
+import { safePush } from '../../src/utils/safeNavigation';
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import ArApFilterSheet, { ArApView, arApActiveFilterCount } from '../../src/components/ArApFilterSheet';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 function fmtDate(iso?: string) {
   if (!iso) return '';
@@ -34,15 +36,15 @@ function fmtDate(iso?: string) {
 
 function openCall(phone?: string) {
   const digits = String(phone || '').replace(/[^0-9+]/g, '');
-  if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
-  Linking.openURL(`tel:${digits}`).catch(() => Alert.alert('Error', 'Could not open phone app'));
+  if (!digits) { Alert.alert(i18n.t('screens.kpiPayables.noPhone'), i18n.t('screens.kpiPayables.phoneUnavailable')); return; }
+  Linking.openURL(`tel:${digits}`).catch(() => Alert.alert(i18n.t('common.error'), i18n.t('screens.kpiPayables.phoneAppFailed')));
 }
 
 function openWhatsApp(phone?: string) {
   const digits = String(phone || '').replace(/[^0-9]/g, '');
-  if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
+  if (!digits) { Alert.alert(i18n.t('screens.kpiPayables.noPhone'), i18n.t('screens.kpiPayables.phoneUnavailable')); return; }
   const num = digits.startsWith('91') && digits.length > 10 ? digits : `91${digits}`;
-  Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
+  Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert(i18n.t('common.error'), i18n.t('screens.kpiPayables.whatsappFailed')));
 }
 
 export default function PayablesScreen() {
@@ -70,12 +72,14 @@ export default function PayablesScreen() {
   const hasDataRef = useRef(false);
   const dataAsOfRef = useRef<Date | null>(null);
 
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ fyFrom, fyTo });
+  if (prevFy.fyFrom !== fyFrom || prevFy.fyTo !== fyTo) {
+    setPrevFy({ fyFrom, fyTo });
     if (fyFrom && fyTo) {
       setDateFrom(fyFrom);
       setDateTo(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const paymentsOn = view === 'settlements';
 
@@ -101,15 +105,15 @@ export default function PayablesScreen() {
       if (hasDataRef.current) {
         const ts = dataAsOfRef.current
           ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-          : 'earlier';
-        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+          : t('home.earlier');
+        setApiError(t('home.refreshFailed', { time: ts }));
       } else {
-        setApiError(err?.message || 'Failed to load payables');
+        setApiError(err?.message || t('screens.kpiPayables.loadFailed'));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, dateFrom, dateTo, fyFrom, fyTo, overdueOn, lastSyncAt]);
+  }, [companyGuid, dateFrom, dateTo, fyFrom, fyTo, overdueOn, lastSyncAt, t]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -129,7 +133,7 @@ export default function PayablesScreen() {
       {
         id: 'total',
         icon: 'documents-outline',
-        label: 'Total Due',
+        label: t('screens.kpiPayables.totalDue'),
         amount: formatAmountCompact(Math.round(total)),
         ...totalT,
       },
@@ -137,23 +141,23 @@ export default function PayablesScreen() {
         ? [{
             id: 'due_today',
             icon: 'today-outline' as const,
-            label: due.label || 'Due Today',
+            label: due.label || t('screens.kpiPayables.dueToday'),
             amount: formatAmountCompact(Math.round(Number(due.amount) || 0)),
             ...fmtTrend(due.trend ?? due.trend_pct),
           }]
         : []),
       ...rows.map((a: any) => {
-        const t = fmtTrend(a.trend ?? a.trend_pct);
+        const trend = fmtTrend(a.trend ?? a.trend_pct);
         return {
           id: a.bucket,
           icon: 'calendar-outline' as const,
           label: a.label || a.bucket,
           amount: formatAmountCompact(Math.round(Number(a.amount) || 0)),
-          ...t,
+          ...trend,
         };
       }),
     ];
-  }, [apiData, formatAmountCompact]);
+  }, [apiData, formatAmountCompact, t]);
 
   const bills = useMemo(() => {
     const rows = Array.isArray(apiData?.bills) ? apiData.bills : [];
@@ -165,8 +169,11 @@ export default function PayablesScreen() {
       amount: Math.abs(Number(b.amount) || 0),
       voucherGuid: b.voucherGuid || b.voucher_guid || null,
       tdkRef: b.tdkRef || null,
+      olderYear: b.olderYear === true,
     }));
   }, [apiData]);
+
+  const olderYearCount = Number(apiData?.olderYearBillCount) || 0;
 
   const overdueParties = useMemo(() => {
     const rows = Array.isArray(apiData?.parties) ? apiData.parties : [];
@@ -178,6 +185,7 @@ export default function PayablesScreen() {
         days: Number(p.days_overdue) || Number(p.oldestOverdueDays) || 0,
         amount: Math.abs(Number(p.overdueOutstanding) || Number(p.amount) || 0),
         phone: p.phone || '',
+        ledgerGuid: p.ledgerGuid || null,
       }));
   }, [apiData]);
 
@@ -276,9 +284,9 @@ export default function PayablesScreen() {
             <View style={s.tabCard}>
               {paymentsOn ? (
                 <View style={s.listWrap}>
-                  <Text style={s.sectionHint}>Live payments (party settlements)</Text>
+                  <Text style={s.sectionHint}>{t('screens.kpiPayables.livePayments')}</Text>
                   {payments.length === 0 ? (
-                    <View style={s.empty}><Text style={s.emptyTxt}>No payments in range</Text></View>
+                    <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiPayables.noPayments')}</Text></View>
                   ) : (
                     <View style={s.cardList}>
                       {payments.map((item: any) => (
@@ -289,7 +297,7 @@ export default function PayablesScreen() {
                           <VoucherListTile
                             party={item.party}
                             voucherNo={item.ref}
-                            date={`${fmtDate(item.date)} · ${item.type || 'Payment'}`}
+                            date={`${fmtDate(item.date)} · ${item.type || t('voucher.payment')}`}
                             amount={`−${formatAmount(Math.round(item.amount))}`}
                           />
                         </ListTileShell>
@@ -317,13 +325,13 @@ export default function PayablesScreen() {
                   {activeTab === 'recent' ? (
                     <View style={s.listWrap}>
                       {bills.length === 0 ? (
-                        <View style={s.empty}><Text style={s.emptyTxt}>No outstanding bills</Text></View>
+                        <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiPayables.noBills')}</Text></View>
                       ) : (
                         <View style={s.cardList}>
                           {bills.map((item: any) => (
                             <ListTileShell
                               key={item.id}
-                              onPress={() => openVoucherPreview(router, { guid: item.voucherGuid, tdkRef: item.tdkRef })}
+                              onPress={() => openVoucherPreview(router, { guid: item.voucherGuid, tdkRef: item.tdkRef, olderYear: item.olderYear })}
                             >
                               <VoucherListTile
                                 party={item.party}
@@ -335,38 +343,32 @@ export default function PayablesScreen() {
                           ))}
                         </View>
                       )}
+                      {olderYearCount > 0 && (
+                        <Text style={s.olderNote}>
+                          {t(olderYearCount === 1 ? 'screens.kpiPayables.olderBillsOne' : 'screens.kpiPayables.olderBillsMany', { count: olderYearCount })}
+                        </Text>
+                      )}
                     </View>
                   ) : (
                     <View style={s.listWrap}>
                       {overdueParties.length === 0 ? (
-                        <View style={s.empty}><Text style={s.emptyTxt}>No overdue parties</Text></View>
-                      ) : overdueParties.map((item: any, idx: number) => (
-                        <View
-                          key={item.id}
-                          style={[s.listRow, idx < overdueParties.length - 1 && s.listRowBorder]}
-                        >
-                          <View style={s.partyIconBox}>
-                            <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
-                          </View>
-                          <View style={s.listInfo}>
-                            <Text style={s.listParty} numberOfLines={1}>{item.party}</Text>
-                            <Text style={[s.listDate, { color: COLORS.negative }]}>{item.days}d overdue</Text>
-                          </View>
-                          <Text style={[s.listAmount, { color: COLORS.negative, marginRight: 6 }]}>
-                            {formatAmount(Math.round(item.amount))}
-                          </Text>
-                          {!!item.phone && (
-                            <View style={s.contactRow}>
-                              <TouchableOpacity style={s.contactBtn} onPress={() => openCall(item.phone)} activeOpacity={0.7}>
-                                <Ionicons name="call" size={14} color="#fff" />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={[s.contactBtn, s.waBtn]} onPress={() => openWhatsApp(item.phone)} activeOpacity={0.7}>
-                                <FontAwesome5 name="whatsapp" size={14} color="#fff" />
-                              </TouchableOpacity>
-                            </View>
-                          )}
+                        <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiPayables.noOverdue')}</Text></View>
+                      ) : (
+                        <View style={s.cardList}>
+                          {overdueParties.map((item: any) => (
+                            <OverduePartyTile
+                              key={item.id}
+                              party={item.party}
+                              overdueLabel={t('screens.kpiPayables.daysOverdue', { days: item.days })}
+                              amount={formatAmount(Math.round(item.amount))}
+                              phone={item.phone}
+                              onPress={item.ledgerGuid ? () => safePush(router, `/ledger/${encodeURIComponent(item.ledgerGuid)}` as any) : undefined}
+                              onCall={openCall}
+                              onWhatsApp={openWhatsApp}
+                            />
+                          ))}
                         </View>
-                      ))}
+                      )}
                     </View>
                   )}
                 </>
@@ -420,17 +422,8 @@ const s = StyleSheet.create({
   sectionHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 4, marginTop: 8 },
 
   listWrap: { paddingHorizontal: SPACING.md, paddingBottom: 8 },
-  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
-  listRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  partyIconBox: { width: 42, height: 42, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  listInfo: { flex: 1 },
-  listParty: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
   cardList: { paddingTop: 4, gap: 8 },
-  listDate: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  listAmount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 0 },
-  contactRow: { flexDirection: 'row', gap: 6 },
-  contactBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.textPrimary, alignItems: 'center', justifyContent: 'center' },
-  waBtn: { backgroundColor: '#25D366' },
   empty: { padding: 24, alignItems: 'center' },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  olderNote: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, textAlign: 'center', marginTop: 10 },
 });

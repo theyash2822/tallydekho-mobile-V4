@@ -17,6 +17,7 @@ import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
+import i18n from '../../src/i18n';
 
 const { width: SW } = Dimensions.get('window');
 const PAGE_SIZE = 20;
@@ -80,7 +81,7 @@ export default function FastSlowMovingScreen() {
     try {
       await shareStockRegisterPdf({
         company: companyFromAuth(company),
-        title: 'Fast / Slow Moving',
+        title: t('stocks.fastSlow'),
         rows: items.map(item => ({
           date: '',
           particulars: item.displayName || item.name,
@@ -92,38 +93,54 @@ export default function FastSlowMovingScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       cancelSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksFastSlow.shareFailed'));
     } finally {
       setIsSharing(false);
     }
   };
 
-  const loadData = async () => {
+  const fetchData = () => {
+    if (!companyGuid) return;
+    const params: any = {};
+    if (fyParam) params.fy = fyParam;
+    getStockFastSlow(companyGuid, params)
+      .then((res) => {
+        const d = res?.data;
+        setFastItems(d?.fast   ?? []);
+        setSlowItems(d?.slow   ?? []);
+        setDeadItems(d?.dead   ?? []);
+        setSummary({
+          total:    d?.total_items    ?? 0,
+          active:   d?.active_items   ?? 0,
+          inactive: d?.inactive_items ?? 0,
+          fy:       d?.financial_year ?? '',
+        });
+      })
+      .catch((err: any) => {
+        setApiError(err?.message ?? i18n.t('screens.stocksFastSlow.loadFailed'));
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
+
+  const loadData = () => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    try {
-      const params: any = {};
-      if (fyParam) params.fy = fyParam;
-      const res = await getStockFastSlow(companyGuid, params);
-      const d = res?.data;
-      setFastItems(d?.fast   ?? []);
-      setSlowItems(d?.slow   ?? []);
-      setDeadItems(d?.dead   ?? []);
-      setSummary({
-        total:    d?.total_items    ?? 0,
-        active:   d?.active_items   ?? 0,
-        inactive: d?.inactive_items ?? 0,
-        fy:       d?.financial_year ?? '',
-      });
-    } catch (err: any) {
-      setApiError(err?.message ?? 'Failed to load fast/slow data');
-    } finally {
-      setIsLoading(false);
-    }
+    fetchData();
   };
 
-  useEffect(() => { loadData(); }, [companyGuid, fyParam]);
+  const [prevLoadDeps, setPrevLoadDeps] = useState<unknown[] | null>(null);
+  if (prevLoadDeps === null || prevLoadDeps[0] !== companyGuid || prevLoadDeps[1] !== fyParam) {
+    setPrevLoadDeps([companyGuid, fyParam]);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchData(); }, [companyGuid, fyParam]);
 
   // Chart: top 7 fast items by total_outward_qty
   const chartItems = useMemo(() => fastItems.slice(0, 7), [fastItems]);
@@ -179,7 +196,7 @@ export default function FastSlowMovingScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
-      <ScreenHeader title="Fast / Slow Moving Items" onBack={() => router.back()} />
+      <ScreenHeader title={t('screens.stocksFastSlow.title')} onBack={() => router.back()} />
 
       {/* ── Error Banner ────────────────────────────────────────────────── */}
       {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
@@ -189,11 +206,11 @@ export default function FastSlowMovingScreen() {
         <View style={s.selBanner}>
           <TouchableOpacity onPress={cancelSelection} activeOpacity={0.7} style={s.selBannerBtn}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selBannerCancel}>Cancel</Text>
+            <Text style={s.selBannerCancel}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
-            <Text style={s.selBannerAll}>All</Text>
+            <Text style={s.selBannerAll}>{t('common.all')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -217,7 +234,7 @@ export default function FastSlowMovingScreen() {
             <View style={s.summaryCard}>
               <View style={s.summaryItem}>
                 <Text style={s.summaryVal}>{summary.total}</Text>
-                <Text style={s.summaryLbl}>Total SKUs</Text>
+                <Text style={s.summaryLbl}>{t('screens.stocksFastSlow.totalSkus')}</Text>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
@@ -227,12 +244,12 @@ export default function FastSlowMovingScreen() {
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
                 <Text style={[s.summaryVal, { color: COLORS.warning }]}>{slowItems.length}</Text>
-                <Text style={s.summaryLbl}>Slow Moving</Text>
+                <Text style={s.summaryLbl}>{t('screens.stocksFastSlow.slowMoving')}</Text>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
                 <Text style={[s.summaryVal, { color: COLORS.negative }]}>{deadItems.length}</Text>
-                <Text style={s.summaryLbl}>Dead Stock</Text>
+                <Text style={s.summaryLbl}>{t('screens.stocksFastSlow.deadStock')}</Text>
               </View>
             </View>
           )}
@@ -240,7 +257,7 @@ export default function FastSlowMovingScreen() {
           {/* ── Bar Chart: Top fast movers by outward qty ─────────────── */}
           {chartItems.length > 0 && (
             <View style={s.chartCard}>
-              <Text style={s.chartTitle}>Top Fast Movers — Outward Quantity ({summary?.fy ?? 'FY'})</Text>
+              <Text style={s.chartTitle}>{t('screens.stocksFastSlow.chartTitle', { fy: summary?.fy ?? 'FY' })}</Text>
               <View style={s.chartArea}>
                 <BarChart
                   data={barData}
@@ -262,7 +279,7 @@ export default function FastSlowMovingScreen() {
                   animationDuration={600}
                 />
               </View>
-              <Text style={s.chartHint}>Tap a bar for details</Text>
+              <Text style={s.chartHint}>{t('screens.stocksFastSlow.chartHint')}</Text>
 
               {focusedBar !== null && chartItems[focusedBar] && (() => {
                 const it = chartItems[focusedBar];
@@ -277,17 +294,17 @@ export default function FastSlowMovingScreen() {
                     </View>
                     <View style={s.tooltipBody}>
                       <View style={s.tooltipCol}>
-                        <Text style={s.tooltipLbl}>Outward Qty</Text>
+                        <Text style={s.tooltipLbl}>{t('screens.stocksFastSlow.outwardQty')}</Text>
                         <Text style={s.tooltipVal}>{fmtQty(it.total_outward_qty)}</Text>
                       </View>
                       <View style={s.tooltipDiv} />
                       <View style={s.tooltipCol}>
-                        <Text style={s.tooltipLbl}>Txn Count</Text>
+                        <Text style={s.tooltipLbl}>{t('screens.stocksFastSlow.txnCount')}</Text>
                         <Text style={s.tooltipVal}>{it.outward_txn_count}</Text>
                       </View>
                       <View style={s.tooltipDiv} />
                       <View style={s.tooltipCol}>
-                        <Text style={s.tooltipLbl}>Closing Stock</Text>
+                        <Text style={s.tooltipLbl}>{t('screens.stocksFastSlow.closingStock')}</Text>
                         <Text style={[s.tooltipVal, { color: COLORS.textPrimary }]}>{fmtVal(it.closing_value)}</Text>
                       </View>
                     </View>
@@ -298,7 +315,7 @@ export default function FastSlowMovingScreen() {
               <View style={s.legendRow}>
                 <View style={s.legendItem}>
                   <View style={[s.legendSwatch, { backgroundColor: '#A89060' }]} />
-                  <Text style={s.legendTxt}>Total Outward Quantity (FY)</Text>
+                  <Text style={s.legendTxt}>{t('screens.stocksFastSlow.legend')}</Text>
                 </View>
               </View>
             </View>
@@ -317,7 +334,7 @@ export default function FastSlowMovingScreen() {
                 color={activeTab === 'fast' ? '#fff' : COLORS.textSecondary}
               />
               <Text style={[s.pillTxt, activeTab === 'fast' && s.pillTxtFastActive]}>
-                Fast ({fastItems.length})
+                {t('screens.stocksFastSlow.fastCount', { count: fastItems.length })}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -331,7 +348,7 @@ export default function FastSlowMovingScreen() {
                 color={activeTab === 'slow' ? '#fff' : COLORS.textSecondary}
               />
               <Text style={[s.pillTxt, activeTab === 'slow' && s.pillTxtSlowActive]}>
-                Slow ({slowItems.length})
+                {t('screens.stocksFastSlow.slowCount', { count: slowItems.length })}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -345,7 +362,7 @@ export default function FastSlowMovingScreen() {
                 color={activeTab === 'dead' ? '#fff' : COLORS.textSecondary}
               />
               <Text style={[s.pillTxt, activeTab === 'dead' && s.pillTxtDeadActive]}>
-                Dead ({deadItems.length})
+                {t('screens.stocksFastSlow.deadCount', { count: deadItems.length })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -355,10 +372,10 @@ export default function FastSlowMovingScreen() {
             <Ionicons name="information-circle-outline" size={14} color={COLORS.textTertiary} />
             <Text style={s.noteTxt}>
               {activeTab === 'fast'
-                ? 'Top movers by outward qty in the current FY'
+                ? t('screens.stocksFastSlow.noteFast')
                 : activeTab === 'dead'
-                  ? 'On-hand items with no outward movement for the Dead threshold'
-                  : 'Items below Fast cut or quiet for the Slow threshold'}
+                  ? t('screens.stocksFastSlow.noteDead')
+                  : t('screens.stocksFastSlow.noteSlow')}
             </Text>
           </View>
 
@@ -366,7 +383,7 @@ export default function FastSlowMovingScreen() {
           {!isSelectionMode && visibleItems.length > 0 && (
             <View style={s.hintRow}>
               <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
-              <Text style={s.hintTxt}>Long press to select items</Text>
+              <Text style={s.hintTxt}>{t('screens.stocksFastSlow.longPressHint')}</Text>
             </View>
           )}
 
@@ -374,7 +391,7 @@ export default function FastSlowMovingScreen() {
           {visibleItems.length === 0 && !apiError && !isLoading && (
             <View style={s.empty}>
               <Ionicons name="bar-chart-outline" size={48} color={COLORS.borderDefault} />
-              <Text style={s.emptyTxt}>No items in this category</Text>
+              <Text style={s.emptyTxt}>{t('screens.stocksFastSlow.empty')}</Text>
             </View>
           )}
 
@@ -409,7 +426,7 @@ export default function FastSlowMovingScreen() {
                       color={isFast ? COLORS.textPrimary : COLORS.textSecondary}
                     />
                     <Text style={[s.badgeTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
-                      {isFast ? 'Fast' : 'Slow'} #{item.rank}
+                      {isFast ? t('screens.stocksFastSlow.fastRank', { rank: item.rank }) : t('screens.stocksFastSlow.slowRank', { rank: item.rank })}
                     </Text>
                   </View>
                 )}
@@ -418,23 +435,23 @@ export default function FastSlowMovingScreen() {
                     <View style={s.cardDivider} />
                     <View style={s.statsGrid}>
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>Outward Qty</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksFastSlow.outwardQty')}</Text>
                         <Text style={[s.statVal, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
                           {fmtQty(item.total_outward_qty)}{item.unit ? ` ${item.unit}` : ''}
                         </Text>
                       </View>
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>Txn Count</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksFastSlow.txnCount')}</Text>
                         <Text style={s.statVal}>{item.outward_txn_count}</Text>
                       </View>
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>Closing Stock</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksFastSlow.closingStock')}</Text>
                         <Text style={[s.statVal, { color: item.closing_qty < 0 ? COLORS.negative : COLORS.textPrimary }]}>
                           {fmtQty(item.closing_qty)}{item.unit ? ` ${item.unit}` : ''}
                         </Text>
                       </View>
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>Stock Value</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksFastSlow.stockValue')}</Text>
                         <Text style={s.statVal}>{fmtVal(item.closing_value)}</Text>
                       </View>
                     </View>
@@ -442,7 +459,7 @@ export default function FastSlowMovingScreen() {
                       <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
                         <Ionicons name="time-outline" size={12} color={isFast ? COLORS.textPrimary : COLORS.textSecondary} />
                         <Text style={[s.daysTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
-                          ~{item.days_remaining} days stock remaining at current rate
+                          {t('screens.stocksFastSlow.daysRemaining', { days: item.days_remaining })}
                         </Text>
                       </View>
                     )}
@@ -456,7 +473,7 @@ export default function FastSlowMovingScreen() {
           {hasMore && (
             <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} activeOpacity={0.8}>
               <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              <Text style={s.loadMoreTxt}>Load More ({allVisible.length - visibleItems.length} remaining)</Text>
+              <Text style={s.loadMoreTxt}>{t('screens.stocksFastSlow.loadMore', { count: allVisible.length - visibleItems.length })}</Text>
             </TouchableOpacity>
           )}
 
@@ -469,9 +486,9 @@ export default function FastSlowMovingScreen() {
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-            <Text style={s.cancelSelTxt}>Deselect</Text>
+            <Text style={s.cancelSelTxt}>{t('screens.stocksFastSlow.deselect')}</Text>
           </TouchableOpacity>
-          <Text style={s.shareBarCount}>{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}</Text>
+          <Text style={s.shareBarCount}>{selectedIds.size !== 1 ? t('screens.stocksFastSlow.itemsCountOther', { n: selectedIds.size }) : t('screens.stocksFastSlow.itemsCountOne', { n: selectedIds.size })}</Text>
           <TouchableOpacity
             style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
             activeOpacity={0.8}
@@ -482,7 +499,7 @@ export default function FastSlowMovingScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareTxt}>{isSharing ? t('screens.stocksFastSlow.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

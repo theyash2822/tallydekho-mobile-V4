@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { createBankLedger, getBankLedgers } from '../../src/services/api';
@@ -114,21 +115,24 @@ function BankFormSheet({
   onSave: (data: BankFormData) => void;
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   const [form, setForm]           = useState<BankFormData>(initialData || EMPTY_FORM);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
 
-  React.useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) { setForm(initialData || EMPTY_FORM); setSaveState('idle'); }
-  }, [visible]);
+  }
 
   const setField = (field: keyof BankFormData, value: string | AccountType) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
   const handleSave = () => {
     if (!form.accountNumber.trim() || !form.ifsc.trim() || !form.bankName.trim() || !form.branch.trim()) {
-      Toast.show({ type: 'error', text1: 'Incomplete', text2: 'Please fill all required fields.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsBankFeeds.incomplete'), text2: t('screens.settingsBankFeeds.incompleteMsg') });
       return;
     }
     setSaveState('saving');
@@ -150,7 +154,7 @@ function BankFormSheet({
 
           {/* Header */}
           <View style={bfs.hdr}>
-            <Text style={bfs.title}>{mode === 'add' ? 'Add Bank' : 'Edit Bank'}</Text>
+            <Text style={bfs.title}>{mode === 'add' ? t('screens.settingsBankFeeds.addBank') : t('screens.settingsBankFeeds.editBank')}</Text>
             <View style={bfs.hdrRight}>
               {mode === 'edit' && onDelete && (
                 <TouchableOpacity onPress={onDelete} style={bfs.iconBtn} activeOpacity={0.7}>
@@ -168,13 +172,13 @@ function BankFormSheet({
             <LinearGradient colors={gradColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={bfs.previewCard}>
               <View style={bfs.previewTop}>
                 <View style={bfs.bankPill}>
-                  <Text style={bfs.bankPillTxt} numberOfLines={1}>{form.bankName || 'Bank Name'}</Text>
+                  <Text style={bfs.bankPillTxt} numberOfLines={1}>{form.bankName || t('screens.settingsBankFeeds.bankName')}</Text>
                 </View>
-                <Text style={bfs.previewAcNo}>A/c {maskAccountNo(form.accountNumber || '0000')}</Text>
+                <Text style={bfs.previewAcNo}>{t('screens.settingsBankFeeds.acNo', { number: maskAccountNo(form.accountNumber || '0000') })}</Text>
               </View>
               <Text style={bfs.previewIfsc}>{form.ifsc || '— —'}</Text>
               <View style={bfs.previewBottom}>
-                <Text style={bfs.previewBranch}>{form.branch || 'Branch'}</Text>
+                <Text style={bfs.previewBranch}>{form.branch || t('screens.settingsBankFeeds.branch')}</Text>
                 <Text style={bfs.previewType}>{form.accountType}</Text>
               </View>
             </LinearGradient>
@@ -183,22 +187,22 @@ function BankFormSheet({
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Account Number */}
             <View style={bfs.field}>
-              <Text style={bfs.label}>Account Number</Text>
+              <Text style={bfs.label}>{t('screens.settingsBankFeeds.accountNumber')}</Text>
               <TextInput
                 style={bfs.input} value={form.accountNumber}
-                onChangeText={t => setField('accountNumber', t)}
-                placeholder="Enter account number" placeholderTextColor={COLORS.textTertiary}
+                onChangeText={v => setField('accountNumber', v)}
+                placeholder={t('screens.settingsBankFeeds.accountNumberPh')} placeholderTextColor={COLORS.textTertiary}
                 keyboardType="number-pad"
               />
             </View>
 
             {/* IFSC */}
             <View style={bfs.field}>
-              <Text style={bfs.label}>IFSC</Text>
+              <Text style={bfs.label}>{t('screens.settingsBankFeeds.ifsc')}</Text>
               <TextInput
                 style={bfs.input} value={form.ifsc}
-                onChangeText={t => setField('ifsc', t.toUpperCase())}
-                placeholder="Enter IFSC" placeholderTextColor={COLORS.textTertiary}
+                onChangeText={v => setField('ifsc', v.toUpperCase())}
+                placeholder={t('screens.settingsBankFeeds.ifscPh')} placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="characters"
               />
             </View>
@@ -206,26 +210,26 @@ function BankFormSheet({
             {/* Bank Name + Branch row */}
             <View style={bfs.rowTwo}>
               <View style={[bfs.field, { flex: 1 }]}>
-                <Text style={bfs.label}>Bank Name</Text>
+                <Text style={bfs.label}>{t('screens.settingsBankFeeds.bankName')}</Text>
                 <TextInput
                   style={bfs.input} value={form.bankName}
-                  onChangeText={t => setField('bankName', t)}
-                  placeholder="Bank Name" placeholderTextColor={COLORS.textTertiary}
+                  onChangeText={v => setField('bankName', v)}
+                  placeholder={t('screens.settingsBankFeeds.bankName')} placeholderTextColor={COLORS.textTertiary}
                 />
               </View>
               <View style={[bfs.field, { flex: 1 }]}>
-                <Text style={bfs.label}>Branch</Text>
+                <Text style={bfs.label}>{t('screens.settingsBankFeeds.branch')}</Text>
                 <TextInput
                   style={bfs.input} value={form.branch}
-                  onChangeText={t => setField('branch', t)}
-                  placeholder="Branch" placeholderTextColor={COLORS.textTertiary}
+                  onChangeText={v => setField('branch', v)}
+                  placeholder={t('screens.settingsBankFeeds.branch')} placeholderTextColor={COLORS.textTertiary}
                 />
               </View>
             </View>
 
             {/* Account Type */}
             <View style={bfs.field}>
-              <Text style={bfs.label}>Account Type</Text>
+              <Text style={bfs.label}>{t('screens.settingsBankFeeds.accountType')}</Text>
               <AccountTypePicker value={form.accountType} onChange={v => setField('accountType', v as AccountType)} />
             </View>
             <View style={{ height: 8 }} />
@@ -239,15 +243,15 @@ function BankFormSheet({
             activeOpacity={0.85}
           >
             {saveState === 'saving' ? (
-              <><ActivityIndicator size="small" color={COLORS.white} /><Text style={bfs.saveTxt}>Saving...</Text></>
+              <><ActivityIndicator size="small" color={COLORS.white} /><Text style={bfs.saveTxt}>{t('common.saving')}</Text></>
             ) : saveState === 'saved' ? (
-              <><Ionicons name="checkmark-circle" size={18} color={COLORS.white} /><Text style={bfs.saveTxt}>Saved</Text></>
+              <><Ionicons name="checkmark-circle" size={18} color={COLORS.white} /><Text style={bfs.saveTxt}>{t('common.saved')}</Text></>
             ) : (
-              <Text style={bfs.saveTxt}>Save</Text>
+              <Text style={bfs.saveTxt}>{t('common.save')}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity style={bfs.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={bfs.cancelTxt}>Cancel</Text>
+            <Text style={bfs.cancelTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </View>
@@ -291,6 +295,7 @@ const bfs = StyleSheet.create({
 function DeleteSheet({ visible, count, onClose, onConfirm }: {
   visible: boolean; count: number; onClose: () => void; onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={del.overlay}>
@@ -302,17 +307,17 @@ function DeleteSheet({ visible, count, onClose, onConfirm }: {
               <Ionicons name="trash-outline" size={28} color={COLORS.negative} />
             </View>
           </View>
-          <Text style={del.title}>Delete Bank Account{count > 1 ? 's' : ''}?</Text>
+          <Text style={del.title}>{count > 1 ? t('screens.settingsBankFeeds.deleteTitleMany') : t('screens.settingsBankFeeds.deleteTitleOne')}</Text>
           <Text style={del.sub}>
-            Are you sure you want to delete {count > 1 ? `${count} bank accounts` : 'this bank account'}?{'\n'}
-            This action will permanently remove the account and its related transaction history from the system.
+            {count > 1 ? t('screens.settingsBankFeeds.deleteConfirmMany', { n: count }) : t('screens.settingsBankFeeds.deleteConfirmOne')}{'\n'}
+            {t('screens.settingsBankFeeds.deleteWarning')}
           </Text>
           <TouchableOpacity style={del.deleteBtn} onPress={onConfirm} activeOpacity={0.85}>
             <Ionicons name="trash-outline" size={16} color={COLORS.white} />
-            <Text style={del.deleteTxt}>Delete</Text>
+            <Text style={del.deleteTxt}>{t('common.delete')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={del.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={del.cancelTxt}>Cancel</Text>
+            <Text style={del.cancelTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </View>
@@ -342,6 +347,7 @@ function BankCard({ account, isSelecting, isSelected }: {
   isSelecting: boolean;
   isSelected: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <LinearGradient
       colors={account.gradient as [string, string]}
@@ -363,7 +369,7 @@ function BankCard({ account, isSelecting, isSelected }: {
 
       {/* Center: Account Number in credit-card mask format */}
       <Text style={bc.acNoTxt}>
-        {account.accountNumber ? formatCardNumber(account.accountNumber) : 'A/c not in sync yet'}
+        {account.accountNumber ? formatCardNumber(account.accountNumber) : t('screens.settingsBankFeeds.acNotSynced')}
       </Text>
 
       {/* Bottom row: Branch + type */}
@@ -410,6 +416,7 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
   isSelecting: boolean; isSelected: boolean;
   onPress: () => void; onLongPress: () => void; onEditPress: () => void;
 }) {
+  const { t } = useTranslation();
   const swipeRef     = useRef<any>(null);
   const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
@@ -441,9 +448,9 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
       activeOpacity={0.85}
     >
       <Ionicons name="pencil-outline" size={22} color={COLORS.white} />
-      <Text style={sw.editTxt}>Edit Detail</Text>
+      <Text style={sw.editTxt}>{t('screens.settingsBankFeeds.editDetail')}</Text>
     </TouchableOpacity>
-  ), [onEditPress]);
+  ), [onEditPress, t]);
 
   return (
     <View style={sw.rowWrap}>
@@ -486,6 +493,7 @@ const sw = StyleSheet.create({
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BankFeedsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
 
@@ -535,7 +543,7 @@ export default function BankFeedsScreen() {
   const handleAddSave = async (data: BankFormData) => {
     const grad = CARD_GRADIENTS[accounts.length % CARD_GRADIENTS.length];
     setAccounts(prev => [...prev, { id: Date.now().toString(), ...data, isPrimary: prev.length === 0, gradient: grad }]);
-    Toast.show({ type: 'success', text1: 'Bank Added', text2: `${data.bankName} account saved.` });
+    Toast.show({ type: 'success', text1: t('screens.settingsBankFeeds.bankAdded'), text2: t('screens.settingsBankFeeds.bankAddedMsg', { bank: data.bankName }) });
 
     // Push to Tally if company is paired
     if (company?.guid) {
@@ -558,18 +566,18 @@ export default function BankFeedsScreen() {
     if (!editTarget) return;
     setAccounts(accounts.map(a => a.id === editTarget.id ? { ...a, ...data } : a));
     setEditTarget(null);
-    Toast.show({ type: 'success', text1: 'Updated', text2: 'Bank account updated successfully.' });
+    Toast.show({ type: 'success', text1: t('screens.settingsBankFeeds.updated'), text2: t('screens.settingsBankFeeds.updatedMsg') });
   };
 
   const confirmDelete = () => {
     if (deleteTarget === 'single' && editTarget) {
       setAccounts(prev => prev.filter(a => a.id !== editTarget.id));
       setEditTarget(null);
-      Toast.show({ type: 'info', text1: 'Deleted', text2: 'Bank account removed.' });
+      Toast.show({ type: 'info', text1: t('screens.settingsBankFeeds.deleted'), text2: t('screens.settingsBankFeeds.deletedOne') });
     } else if (deleteTarget === 'multi') {
       setAccounts(prev => prev.filter(a => !selectedIds.has(a.id)));
       cancelSelection();
-      Toast.show({ type: 'info', text1: 'Deleted', text2: `${selectedIds.size} account(s) removed.` });
+      Toast.show({ type: 'info', text1: t('screens.settingsBankFeeds.deleted'), text2: t('screens.settingsBankFeeds.deletedMany', { n: selectedIds.size }) });
     }
     setDeleteTarget(null);
   };
@@ -588,7 +596,7 @@ export default function BankFeedsScreen() {
             <TouchableOpacity onPress={() => router.back()} style={s.back} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            <Text style={s.hdrTitle}>Bank Feeds</Text>
+            <Text style={s.hdrTitle}>{t('settings.bankFeeds')}</Text>
             <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addBtn} activeOpacity={0.85}>
               <Ionicons name="add" size={24} color={COLORS.white} />
             </TouchableOpacity>
@@ -597,9 +605,9 @@ export default function BankFeedsScreen() {
           /* ─── Multi-select Header ─────────────────────────────────────── */
           <View style={s.selHdr}>
             <TouchableOpacity onPress={cancelSelection} style={s.selBtn} activeOpacity={0.7}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={s.hdrTitle}>{selectedIds.size} Selected</Text>
+            <Text style={s.hdrTitle}>{t('ledger.selectedCount', { count: selectedIds.size })}</Text>
             <TouchableOpacity
               style={s.selBtn}
               onPress={() => selectedIds.size > 0 && setDeleteTarget('multi')}
@@ -622,7 +630,7 @@ export default function BankFeedsScreen() {
           <View style={s.infoBanner}>
             <Ionicons name="information-circle-outline" size={18} color={COLORS.textSecondary} />
             <Text style={s.infoBannerTxt}>
-              Connect your bank accounts to auto-reconcile transactions with Tally entries.
+              {t('screens.settingsBankFeeds.info')}
             </Text>
           </View>
 
@@ -630,15 +638,15 @@ export default function BankFeedsScreen() {
           {accounts.length === 0 ? (
             <View style={s.emptyWrap}>
               <Ionicons name="wallet-outline" size={52} color={COLORS.textTertiary} />
-              <Text style={s.emptyTxt}>No bank accounts added yet</Text>
-              <Text style={s.emptySub}>Tap "+" at the top to add your first bank account</Text>
+              <Text style={s.emptyTxt}>{t('screens.settingsBankFeeds.empty')}</Text>
+              <Text style={s.emptySub}>{t('screens.settingsBankFeeds.emptySub')}</Text>
             </View>
           ) : (
             accounts.map(account => (
               <View key={account.id}>
                 {account.isPrimary && (
                   <View style={s.primaryRow}>
-                    <Text style={s.primaryTxt}>★  PRIMARY ACCOUNT</Text>
+                    <Text style={s.primaryTxt}>{t('screens.settingsBankFeeds.primary')}</Text>
                   </View>
                 )}
                 <SwipeableCard
@@ -655,7 +663,7 @@ export default function BankFeedsScreen() {
 
           {accounts.length > 0 && !isSelecting && (
             <Text style={s.hintTxt}>
-              ↔ Swipe a card left to edit  ·  Hold 2s to multi-select
+              {t('screens.settingsBankFeeds.hint')}
             </Text>
           )}
         </ScrollView>

@@ -7,6 +7,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
 import { VoucherDocument } from '../../types/document';
 import { useAuth } from '../../context/AuthContext';
@@ -50,16 +51,17 @@ function ItemRows({
   rows: NonNullable<VoucherDocument['items']>;
   showGodown: boolean;
 }) {
+  const { t } = useTranslation();
   if (!rows.length) {
-    return <Text style={p.empty}>No stock lines</Text>;
+    return <Text style={p.empty}>{t('screens.componentsDocumentStockJournalPreview.noLines')}</Text>;
   }
   return (
     <View>
       <View style={p.tblHead}>
-        <Text style={[p.th, { flex: 1.4 }]}>Item</Text>
-        {showGodown ? <Text style={[p.th, { flex: 1 }]}>Godown</Text> : null}
-        <Text style={[p.th, p.thR, { width: 72 }]}>Qty</Text>
-        <Text style={[p.th, p.thR, { width: 72 }]}>Rate</Text>
+        <Text style={[p.th, { flex: 1.4 }]}>{t('screens.componentsDocumentStockJournalPreview.item')}</Text>
+        {showGodown ? <Text style={[p.th, { flex: 1 }]}>{t('screens.componentsDocumentStockJournalPreview.godown')}</Text> : null}
+        <Text style={[p.th, p.thR, { width: 72 }]}>{t('pdf.qty')}</Text>
+        <Text style={[p.th, p.thR, { width: 72 }]}>{t('pdf.rate')}</Text>
       </View>
       {rows.map((item, idx) => (
         <View
@@ -88,6 +90,7 @@ export default function StockJournalPreview({
   document: VoucherDocument;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company: authCompany } = useAuth();
 
   const companyName = doc.company?.name || authCompany?.name || '';
@@ -99,10 +102,10 @@ export default function StockJournalPreview({
   const destination = useMemo(() => items.filter((i) => i.direction === 'in'), [items]);
   const isTransfer = source.length > 0 || destination.length > 0;
 
-  const ribbon = isTransfer ? 'STOCK TRANSFER' : 'STOCK ADJUSTMENT';
+  const ribbon = isTransfer ? t('screens.componentsDocumentStockJournalPreview.ribbonTransfer') : t('screens.componentsDocumentStockJournalPreview.ribbonAdjustment');
   const navTitle =
     DOC_TYPE_CONFIG[doc.documentType]?.label ||
-    (isTransfer ? 'Stock Transfer' : 'Stock Adjustment');
+    (isTransfer ? t('quickActions.stockTransfer') : t('quickActions.stockAdjustment'));
 
   const tally = doc.tallyMeta;
   const reason = tally?.adjustmentReason || doc.narration;
@@ -124,29 +127,29 @@ export default function StockJournalPreview({
           <View style={p.companyBlock}>
             {!!companyName && <Text style={p.companyName}>{companyName}</Text>}
             {!!companyAddress && <Text style={p.companyAddr}>{companyAddress}</Text>}
-            {!!gstin && <Text style={p.companyMeta}>GSTIN: {gstin}</Text>}
+            {!!gstin && <Text style={p.companyMeta}>{t('screens.componentsDocumentStockJournalPreview.gstinLine', { gstin })}</Text>}
           </View>
 
           <View style={p.metaGrid}>
-            <MetaCell label="Voucher No." value={doc.documentNumber} />
-            <MetaCell label="Date" value={doc.date} />
-            <MetaCell label="Source Godown" value={tally?.sourceGodown} />
-            <MetaCell label="Destination" value={tally?.destinationGodown} />
-            <MetaCell label="Warehouse" value={tally?.warehouse} />
-            <MetaCell label="Reason" value={reason} />
+            <MetaCell label={t('screens.componentsDocumentStockJournalPreview.voucherNo')} value={doc.documentNumber} />
+            <MetaCell label={t('voucher.date')} value={doc.date} />
+            <MetaCell label={t('screens.componentsDocumentStockJournalPreview.sourceGodown')} value={tally?.sourceGodown} />
+            <MetaCell label={t('screens.componentsDocumentStockJournalPreview.destination')} value={tally?.destinationGodown} />
+            <MetaCell label={t('screens.componentsDocumentStockJournalPreview.warehouse')} value={tally?.warehouse} />
+            <MetaCell label={t('screens.componentsDocumentStockJournalPreview.reason')} value={reason} />
           </View>
 
           <View style={p.gridWrap}>
             {isTransfer ? (
               <>
-                <Text style={p.sectionLabel}>Source (Out)</Text>
+                <Text style={p.sectionLabel}>{t('screens.componentsDocumentStockJournalPreview.sourceOut')}</Text>
                 <ItemRows rows={source} showGodown />
-                <Text style={[p.sectionLabel, { marginTop: 14 }]}>Destination (In)</Text>
+                <Text style={[p.sectionLabel, { marginTop: 14 }]}>{t('screens.componentsDocumentStockJournalPreview.destinationIn')}</Text>
                 <ItemRows rows={destination} showGodown />
               </>
             ) : (
               <>
-                <Text style={p.sectionLabel}>Physical Stock</Text>
+                <Text style={p.sectionLabel}>{t('screens.componentsDocumentStockJournalPreview.physicalStock')}</Text>
                 <ItemRows rows={items} showGodown />
               </>
             )}
@@ -154,13 +157,13 @@ export default function StockJournalPreview({
 
           {!!doc.narration && doc.narration !== reason && (
             <View style={p.footerBlock}>
-              <Text style={p.kvLabel}>Narration</Text>
+              <Text style={p.kvLabel}>{t('voucher.narration')}</Text>
               <Text style={p.narration}>{doc.narration}</Text>
             </View>
           )}
 
           <View style={p.signRow}>
-            <Text style={p.signHint}>Preview only — PDF sharing not available</Text>
+            <Text style={p.signHint}>{t('screens.componentsDocumentStockJournalPreview.previewOnly')}</Text>
           </View>
         </View>
         <View style={{ height: 24 }} />

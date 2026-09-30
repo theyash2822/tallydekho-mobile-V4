@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
@@ -18,6 +19,7 @@ const AMBER = '#A89060';
 export type { PrintItem } from '../../src/utils/labelPrint';
 
 export default function PrintSettingsScreen() {
+  const { t } = useTranslation();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{ ids?: string }>();
@@ -30,11 +32,16 @@ export default function PrintSettingsScreen() {
   const [items,    setItems]    = useState<PrintItem[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [queueIds, setQueueIds] = useState<string[]>(stockGuids);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+
+  if (loadedFor !== companyGuid) {
+    setLoadedFor(companyGuid);
+    if (companyGuid && stockGuids.length) setLoading(true);
+  }
 
   // Load real item data from API
   useEffect(() => {
     if (!companyGuid || !stockGuids.length) return;
-    setLoading(true);
     getBarcodesByGuids(companyGuid, stockGuids)
       .then((res: any) => {
         const d = res?.data?.items || res?.items || [];
@@ -85,7 +92,7 @@ export default function PrintSettingsScreen() {
       await Print.printAsync({ html });
     } catch (err: any) {
       if (!err?.message?.includes('cancel')) {
-        Alert.alert('Print failed', err?.message || 'Could not open print dialog');
+        Alert.alert(t('screens.stocksPrintSettings.printFailed'), err?.message || t('screens.stocksPrintSettings.printFailedMsg'));
       }
     } finally { setPrinting(false); }
   };
@@ -98,13 +105,13 @@ export default function PrintSettingsScreen() {
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share barcode labels PDF' });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksPrintSettings.shareDialogTitle') });
       } else {
-        Alert.alert('PDF saved', `Saved to: ${uri}`);
+        Alert.alert(t('screens.stocksPrintSettings.pdfSaved'), t('screens.stocksPrintSettings.savedTo', { uri }));
       }
     } catch (err: any) {
       if (!err?.message?.includes('cancel')) {
-        Alert.alert('Export failed', err?.message || 'Could not export PDF');
+        Alert.alert(t('screens.stocksPrintSettings.exportFailed'), err?.message || t('screens.stocksPrintSettings.exportFailedMsg'));
       }
     } finally { setPrinting(false); }
   };
@@ -116,7 +123,7 @@ export default function PrintSettingsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Print</Text>
+        <Text style={s.headerTitle}>{t('screens.stocksPrintSettings.title')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -125,13 +132,13 @@ export default function PrintSettingsScreen() {
 
         {/* ── Queued items chips */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>Print Queue</Text>
+          <Text style={s.sectionLabel}>{t('screens.stocksPrintSettings.printQueue')}</Text>
           {loading ? (
             <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ alignSelf: 'flex-start' }} />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
               {queuedItems.length === 0 ? (
-                <Text style={s.emptyQueue}>No items in queue. Go back to select items.</Text>
+                <Text style={s.emptyQueue}>{t('screens.stocksPrintSettings.emptyQueue')}</Text>
               ) : (
                 queuedItems.map(item => (
                   <View key={item.stockGuid} style={s.queueChip}>
@@ -150,7 +157,7 @@ export default function PrintSettingsScreen() {
 
         {/* ── Label Size */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>Label Size</Text>
+          <Text style={s.sectionLabel}>{t('screens.stocksPrintSettings.labelSize')}</Text>
           <TouchableOpacity style={s.dropdownTrigger} onPress={() => setSizeOpen(v => !v)} activeOpacity={0.7}>
             <Text style={s.dropdownValue}>{labelSize}</Text>
             <Ionicons name={sizeOpen ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textSecondary} />
@@ -174,17 +181,17 @@ export default function PrintSettingsScreen() {
           <View style={s.gridInfoBanner}>
             <View style={s.gridInfoItem}>
               <Text style={s.gridInfoValue}>{perPage}</Text>
-              <Text style={s.gridInfoLabel}>per A4 sheet</Text>
+              <Text style={s.gridInfoLabel}>{t('screens.stocksPrintSettings.perA4Sheet')}</Text>
             </View>
             <View style={s.gridInfoSep} />
             <View style={s.gridInfoItem}>
               <Text style={s.gridInfoValue}>{total}</Text>
-              <Text style={s.gridInfoLabel}>total labels</Text>
+              <Text style={s.gridInfoLabel}>{t('screens.stocksPrintSettings.totalLabels')}</Text>
             </View>
             <View style={s.gridInfoSep} />
             <View style={s.gridInfoItem}>
               <Text style={s.gridInfoValue}>{sheets}</Text>
-              <Text style={s.gridInfoLabel}>sheet{sheets !== 1 ? 's' : ''} needed</Text>
+              <Text style={s.gridInfoLabel}>{sheets !== 1 ? t('screens.stocksPrintSettings.sheetsNeededOther') : t('screens.stocksPrintSettings.sheetsNeededOne')}</Text>
             </View>
           </View>
         )}
@@ -193,7 +200,7 @@ export default function PrintSettingsScreen() {
 
         {/* ── Copies per barcode */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>Copies per barcode</Text>
+          <Text style={s.sectionLabel}>{t('screens.stocksPrintSettings.copiesPerBarcode')}</Text>
           <View style={s.stepper}>
             <TouchableOpacity style={s.stepBtn} onPress={() => setCopies(v => Math.max(1, v - 1))} activeOpacity={0.7}>
               <Ionicons name="remove" size={20} color={COLORS.textPrimary} />
@@ -217,10 +224,10 @@ export default function PrintSettingsScreen() {
 
         {/* ── Layout per label */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>Layout per label</Text>
+          <Text style={s.sectionLabel}>{t('screens.stocksPrintSettings.layoutPerLabel')}</Text>
 
           <TouchableOpacity style={s.checkRow} onPress={() => setShowSku(v => !v)} activeOpacity={0.7}>
-            <Text style={s.checkLabel}>Show SKU</Text>
+            <Text style={s.checkLabel}>{t('screens.stocksPrintSettings.showSku')}</Text>
             <View style={[s.checkbox, showSku && s.checkboxActive]}>
               {showSku && <Ionicons name="checkmark" size={14} color="#fff" />}
             </View>
@@ -229,7 +236,7 @@ export default function PrintSettingsScreen() {
           <View style={s.checkDivider} />
 
           <TouchableOpacity style={s.checkRow} onPress={() => setShowPrice(v => !v)} activeOpacity={0.7}>
-            <Text style={s.checkLabel}>Show Price</Text>
+            <Text style={s.checkLabel}>{t('screens.stocksPrintSettings.showPrice')}</Text>
             <View style={[s.checkbox, showPrice && s.checkboxActive]}>
               {showPrice && <Ionicons name="checkmark" size={14} color="#fff" />}
             </View>
@@ -238,7 +245,7 @@ export default function PrintSettingsScreen() {
           <View style={s.checkDivider} />
 
           <TouchableOpacity style={s.checkRow} onPress={() => setShowBatch(v => !v)} activeOpacity={0.7}>
-            <Text style={s.checkLabel}>Show Batch/Expiry</Text>
+            <Text style={s.checkLabel}>{t('screens.stocksPrintSettings.showBatchExpiry')}</Text>
             <View style={[s.checkbox, showBatch && s.checkboxActive]}>
               {showBatch && <Ionicons name="checkmark" size={14} color="#fff" />}
             </View>
@@ -260,7 +267,7 @@ export default function PrintSettingsScreen() {
             disabled={queuedItems.length === 0 || loading}
           >
             <Ionicons name="eye-outline" size={18} color="#fff" />
-            <Text style={s.previewBtnText}>Preview</Text>
+            <Text style={s.previewBtnText}>{t('screens.stocksPrintSettings.preview')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.printBtn, (queuedItems.length === 0 || loading || printing) && s.btnDisabled]}
@@ -272,7 +279,7 @@ export default function PrintSettingsScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="print-outline" size={18} color="#fff" />}
             <Text style={s.previewBtnText}>
-              {printing ? 'Opening…' : `Print ${queuedItems.length * copies}`}
+              {printing ? t('screens.stocksPrintSettings.opening') : t('screens.stocksPrintSettings.printCount', { count: queuedItems.length * copies })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -284,7 +291,7 @@ export default function PrintSettingsScreen() {
           disabled={queuedItems.length === 0 || loading || printing}
         >
           <Ionicons name="share-outline" size={16} color={COLORS.textPrimary} />
-          <Text style={s.exportBtnText}>Export / Share as PDF</Text>
+          <Text style={s.exportBtnText}>{t('screens.stocksPrintSettings.exportSharePdf')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

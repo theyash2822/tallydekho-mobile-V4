@@ -8,7 +8,7 @@
  *   • Outstanding = Cr-only payables; FIFO + leftover On Account/Advance
  *   • Methods: Cash/Bank/Cheque/NEFT/RTGS/UPI + instruments
  */
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
@@ -51,16 +51,30 @@ const fmtINR = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 const PAYMENT_METHODS = ['Cash', 'Bank', 'Cheque', 'NEFT', 'RTGS', 'UPI'] as const;
 type PaymentMethod = typeof PAYMENT_METHODS[number];
 
-const REF_LABELS: Record<PaymentMethod, string> = {
+const REF_LABEL_KEYS: Record<PaymentMethod, string> = {
   Cash: '',
-  Bank: 'Reference No.',
-  Cheque: 'Cheque No.',
-  NEFT: 'NEFT UTR',
-  RTGS: 'RTGS UTR',
-  UPI: 'UPI Ref ID',
+  Bank: 'screens.voucherCreatePayment.refBank',
+  Cheque: 'screens.voucherCreatePayment.refCheque',
+  NEFT: 'screens.voucherCreatePayment.refNeft',
+  RTGS: 'screens.voucherCreatePayment.refRtgs',
+  UPI: 'screens.voucherCreatePayment.refUpi',
+};
+
+const METHOD_LABEL_KEYS: Record<PaymentMethod, string> = {
+  Cash: 'screens.voucherCreatePayment.methodCash',
+  Bank: 'screens.voucherCreatePayment.methodBank',
+  Cheque: 'screens.voucherCreatePayment.methodCheque',
+  NEFT: '',
+  RTGS: '',
+  UPI: '',
 };
 
 type LeftoverType = 'On Account' | 'Advance';
+
+const LEFTOVER_LABEL_KEYS: Record<LeftoverType, string> = {
+  'On Account': 'screens.voucherCreatePayment.onAccount',
+  Advance: 'screens.voucherCreatePayment.advance',
+};
 
 interface BillRow {
   bill_name: string;
@@ -97,10 +111,12 @@ export default function CreatePaymentVoucher() {
   // ── Date (mirrors Sales Invoice pattern) ──────────────────────────────────
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  useEffect(() => {
+  const [prevEntryType, setPrevEntryType] = useState(entryType);
+  if (prevEntryType !== entryType) {
+    setPrevEntryType(entryType);
     // If user flips to Regular, snap date back to today.
     if (entryType === 'regular') setDate(todayStr());
-  }, [entryType]);
+  }
 
   // ── Party picker (Creditors → Expenses → All) ─────────────────────────────
   type PartyFilter = 'vendor' | 'expense' | 'all';
@@ -110,9 +126,9 @@ export default function CreatePaymentVoucher() {
   const [partyData, setPartyData] = useState<any>(null);
 
   const partyFilterLabel =
-    partyFilter === 'vendor' ? 'Sundry Creditors ▾'
-      : partyFilter === 'expense' ? '★ Expenses ▾'
-        : '★ All ledgers ▾';
+    partyFilter === 'vendor' ? t('screens.voucherCreatePayment.filterCreditors')
+      : partyFilter === 'expense' ? t('screens.voucherCreatePayment.filterExpenses')
+        : t('screens.voucherCreatePayment.filterAll');
 
   const cyclePartyFilter = () => {
     setPartyFilter(prev => (prev === 'vendor' ? 'expense' : prev === 'expense' ? 'all' : 'vendor'));
@@ -120,37 +136,47 @@ export default function CreatePaymentVoucher() {
     setPartyData(null);
   };
 
-  const loadParties = useCallback(async () => {
-    if (!company?.guid) return;
-    try {
-      const params =
-        partyFilter === 'vendor' ? { type: 'vendor' }
-          : partyFilter === 'expense' ? { type: 'expense' }
-            : undefined;
-      const res: any = await getParties(company.guid, params);
-      const list = scopeParties(res?.data || []).map((p: any) => ({
-        label: p.name,
-        value: p.name,
-        subtitle: p.parent || undefined,
-        data: p,
-      }));
-      setParties(list);
-    } catch (e) { /* silent */ }
+  useEffect(() => {
+    async function loadParties() {
+      const guid = company?.guid;
+      if (!guid) return;
+      try {
+        const params =
+          partyFilter === 'vendor' ? { type: 'vendor' }
+            : partyFilter === 'expense' ? { type: 'expense' }
+              : undefined;
+        const res: any = await getParties(guid, params);
+        const list = scopeParties(res?.data || []).map((p: any) => ({
+          label: p.name,
+          value: p.name,
+          subtitle: p.parent || undefined,
+          data: p,
+        }));
+        setParties(list);
+      } catch (e) { /* silent */ }
+    }
+    loadParties();
   }, [company?.guid, partyFilter, scopeParties]);
-  useEffect(() => { loadParties(); }, [loadParties]);
 
   // ── Outstanding bills for selected party ──────────────────────────────────
   const [bills, setBills] = useState<BillRow[]>([]);
   const [billsLoading, setBillsLoading] = useState(false);
   const [totalPending, setTotalPending] = useState(0);
 
+  const [prevBillsKey, setPrevBillsKey] = useState<{ guid?: string; party: string } | null>(null);
+  if (prevBillsKey === null || prevBillsKey.guid !== company?.guid || prevBillsKey.party !== party) {
+    setPrevBillsKey({ guid: company?.guid, party });
+    if (!company?.guid || !party) { setBills([]); setTotalPending(0); }
+    else setBillsLoading(true);
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function run() {
-      if (!company?.guid || !party) { setBills([]); setTotalPending(0); return; }
-      setBillsLoading(true);
+      const guid = company?.guid;
+      if (!guid || !party) return;
       try {
-        const res: any = await getPartyOutstandingBills(company.guid, party, { crOnly: true });
+        const res: any = await getPartyOutstandingBills(guid, party, { crOnly: true });
         if (cancelled) return;
         const rows: BillRow[] = (res?.data?.bills || []).map((b: any) => ({
           bill_name: b.bill_name || '',
@@ -195,7 +221,9 @@ export default function CreatePaymentVoucher() {
   const [narration, setNarration] = useState('');
 
   // Clear bill allocations when payment amount is cleared / zero
-  useEffect(() => {
+  const [prevAmount, setPrevAmount] = useState(amount);
+  if (prevAmount !== amount) {
+    setPrevAmount(amount);
     const n = parseFloat(amount);
     if (!amount || !Number.isFinite(n) || n <= 0) {
       setBills(prev => {
@@ -203,29 +231,40 @@ export default function CreatePaymentVoucher() {
         return prev.map(b => ({ ...b, selected: false, payAmount: '' }));
       });
     }
-  }, [amount]);
+  }
 
   // Load ledger dropdown per payment method (Cash → cash, else → bank)
-  const fetchLedgers = useCallback(async () => {
-    if (!company?.guid) return;
-    setLedgerLoading(true);
-    setLedgerAccount('');
-    try {
-      const type: 'cash' | 'bank' = paymentMethod === 'Cash' ? 'cash' : 'bank';
-      const res: any = await getBankLedgers(company.guid, type);
-      const list = scopeParties(res?.data || []).map((l: any) => ({
-        label: l.closing_balance != null
-          ? `${l.name} — ${fmtINR(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
-          : l.name,
-        value: l.name,
-        data: l,
-      }));
-      setLedgerOptions(list);
-    } catch (e) {
-      setLedgerOptions([]);
-    } finally { setLedgerLoading(false); }
+  const ledgerDeps = [company?.guid, paymentMethod, scopeParties];
+  const [prevLedgerDeps, setPrevLedgerDeps] = useState<unknown[] | null>(null);
+  if (prevLedgerDeps === null || ledgerDeps.some((d, i) => d !== prevLedgerDeps[i])) {
+    setPrevLedgerDeps(ledgerDeps);
+    if (company?.guid) {
+      setLedgerLoading(true);
+      setLedgerAccount('');
+    }
+  }
+
+  useEffect(() => {
+    async function fetchLedgers() {
+      const guid = company?.guid;
+      if (!guid) return;
+      try {
+        const type: 'cash' | 'bank' = paymentMethod === 'Cash' ? 'cash' : 'bank';
+        const res: any = await getBankLedgers(guid, type);
+        const list = scopeParties(res?.data || []).map((l: any) => ({
+          label: l.closing_balance != null
+            ? `${l.name} — ${fmtINR(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
+            : l.name,
+          value: l.name,
+          data: l,
+        }));
+        setLedgerOptions(list);
+      } catch (e) {
+        setLedgerOptions([]);
+      } finally { setLedgerLoading(false); }
+    }
+    fetchLedgers();
   }, [company?.guid, paymentMethod, scopeParties]);
-  useEffect(() => { fetchLedgers(); }, [fetchLedgers]);
 
   // ── Leftover disposition ──────────────────────────────────────────────────
   const [leftoverType, setLeftoverType] = useState<LeftoverType>('On Account');
@@ -262,13 +301,13 @@ export default function CreatePaymentVoucher() {
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
   const canSubmit = useMemo(() => {
-    if (!party) return 'Select a party';
-    if (!paymentAmt || paymentAmt <= 0) return 'Enter a valid amount';
-    if (!ledgerAccount) return paymentMethod === 'Cash' ? 'Select a Cash ledger' : 'Select a Bank ledger';
-    if (overAllocated) return 'Allocated amount exceeds payment amount';
-    if (paymentMethod !== 'Cash' && paymentMethod !== 'UPI' && paymentMethod !== 'Bank' && !instrumentDate) return 'Instrument date required';
+    if (!party) return t('screens.voucherCreatePayment.selectParty');
+    if (!paymentAmt || paymentAmt <= 0) return t('screens.voucherCreatePayment.enterValidAmount');
+    if (!ledgerAccount) return paymentMethod === 'Cash' ? t('screens.voucherCreatePayment.selectCashLedger') : t('screens.voucherCreatePayment.selectBankLedger');
+    if (overAllocated) return t('screens.voucherCreatePayment.allocatedExceeds');
+    if (paymentMethod !== 'Cash' && paymentMethod !== 'UPI' && paymentMethod !== 'Bank' && !instrumentDate) return t('screens.voucherCreatePayment.instrumentDateRequired');
     return null;
-  }, [party, paymentAmt, ledgerAccount, paymentMethod, overAllocated, instrumentDate]);
+  }, [party, paymentAmt, ledgerAccount, paymentMethod, overAllocated, instrumentDate, t]);
 
   const buildBillAllocations = () => {
     const blocks: { billRefName?: string; billType: string; amount: number }[] = [];
@@ -325,7 +364,7 @@ export default function CreatePaymentVoucher() {
       setSubmitResult({ tdkRef, isQueued, voucherNumber: res?.voucherNumber || undefined, numberingPolicy: res?.numberingPolicy || numberingPolicy });
       setShowSuccess(true);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.voucherCreatePayment.submitFailed'), text2: e?.message || t('screens.voucherCreatePayment.checkTallyConnection') });
     } finally {
       setSubmitting(false);
     }
@@ -365,14 +404,14 @@ export default function CreatePaymentVoucher() {
             <View style={[s.fieldBlock, { padding: SPACING.md }]}>
               <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Payment No.</Text>
+                  <Text style={s.fLabel}>{t('voucher.paymentNo')}</Text>
                   <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
+                    <Text style={s.autoTxt}>{t('screens.voucherCreatePayment.auto')}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.req}>*</Text></Text>
                   {entryType === 'regular' ? (
                     <View style={[s.autoBox, { opacity: 0.55 }]}>
                       <Text style={s.autoTxt}>{date}</Text>
@@ -381,7 +420,7 @@ export default function CreatePaymentVoucher() {
                   ) : (
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                       <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
+                        {date || t('screens.voucherCreatePayment.selectDate')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -393,18 +432,18 @@ export default function CreatePaymentVoucher() {
           {/* ── Party ────────────────────────────────────────────────── */}
           <View style={s.section}>
             <View style={s.sectionHead}>
-              <Text style={s.sectionTitle}>Party / Ledger</Text>
+              <Text style={s.sectionTitle}>{t('screens.voucherCreatePayment.partyLedgerSection')}</Text>
               <TouchableOpacity onPress={cyclePartyFilter} activeOpacity={0.8}>
                 <Text style={s.linkTxt}>{partyFilterLabel}</Text>
               </TouchableOpacity>
             </View>
             <BottomSheetSearch
-              label={partyFilter === 'expense' ? 'Expense Ledger' : 'Party Ledger'}
+              label={partyFilter === 'expense' ? t('screens.voucherCreatePayment.expenseLedger') : t('screens.voucherCreatePayment.partyLedger')}
               required
               placeholder={
-                partyFilter === 'expense' ? 'Search expense (Staff Salary, Rent…)…'
-                  : partyFilter === 'all' ? 'Search any ledger…'
-                    : 'Search party...'
+                partyFilter === 'expense' ? t('screens.voucherCreatePayment.searchExpense')
+                  : partyFilter === 'all' ? t('screens.voucherCreatePayment.searchAnyLedger')
+                    : t('screens.voucherCreatePayment.searchParty')
               }
               options={parties}
               value={party}
@@ -413,7 +452,7 @@ export default function CreatePaymentVoucher() {
             />
             {partyFilter === 'expense' && !party && (
               <Text style={s.hintTxt}>
-                Showing Direct / Indirect Expenses — tap the filter to switch back to Creditors.
+                {t('screens.voucherCreatePayment.expenseFilterHint')}
               </Text>
             )}
             {!!party && (
@@ -421,10 +460,10 @@ export default function CreatePaymentVoucher() {
                 {!!partyData?.parent && (
                   <View style={s.chip}><Text style={s.chipTxt}>{partyData.parent}</Text></View>
                 )}
-                {!!partyData?.gstin && <View style={s.chip}><Text style={s.chipTxt}>GSTIN: {partyData.gstin}</Text></View>}
+                {!!partyData?.gstin && <View style={s.chip}><Text style={s.chipTxt}>{t('screens.voucherCreatePayment.gstinValue', { gstin: partyData.gstin })}</Text></View>}
                 {totalPending > 0 && (
                   <View style={[s.chip, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B44' }]}>
-                    <Text style={[s.chipTxt, { color: '#92400E' }]}>Outstanding: {fmtINR(totalPending)}</Text>
+                    <Text style={[s.chipTxt, { color: '#92400E' }]}>{t('screens.voucherCreatePayment.outstandingValue', { amount: fmtINR(totalPending) })}</Text>
                   </View>
                 )}
               </View>
@@ -433,14 +472,14 @@ export default function CreatePaymentVoucher() {
 
           {/* ── Amount ──────────────────────────────────────────────── */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Payment Amount</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreatePayment.paymentAmount')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <View style={s.inputWrap}>
                   <Text style={s.rupee}>₹</Text>
                   <TextInput
                     style={s.input}
-                    placeholder="Enter amount"
+                    placeholder={t('voucher.enterAmount')}
                     placeholderTextColor={COLORS.textTertiary}
                     value={amount}
                     onChangeText={setAmount}
@@ -455,10 +494,10 @@ export default function CreatePaymentVoucher() {
           {!!party && (
             <View style={s.section}>
               <View style={s.sectionHead}>
-                <Text style={s.sectionTitle}>Bill Allocation</Text>
+                <Text style={s.sectionTitle}>{t('screens.voucherCreatePayment.billAllocation')}</Text>
                 {bills.length > 0 && (
                   <TouchableOpacity onPress={fifoAutoAllocate} activeOpacity={0.7}>
-                    <Text style={s.linkTxt}>⚡ Auto FIFO</Text>
+                    <Text style={s.linkTxt}>{t('screens.voucherCreatePayment.autoFifo')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -468,8 +507,8 @@ export default function CreatePaymentVoucher() {
               ) : bills.length === 0 ? (
                 <View style={s.emptyBlock}>
                   <Ionicons name="information-circle-outline" size={20} color={COLORS.textTertiary} />
-                  <Text style={s.emptyTxt}>No payable outstanding bills for this party.</Text>
-                  <Text style={s.emptySub}>Only Cr (payables) bills are listed. Payment will post as an advance / on-account entry.</Text>
+                  <Text style={s.emptyTxt}>{t('screens.voucherCreatePayment.noBills')}</Text>
+                  <Text style={s.emptySub}>{t('screens.voucherCreatePayment.noBillsSub')}</Text>
                 </View>
               ) : (
                 <View style={s.fieldBlock}>
@@ -486,8 +525,8 @@ export default function CreatePaymentVoucher() {
                         <Text style={s.billName}>{b.bill_name}</Text>
                         <Text style={s.billMeta}>
                           {b.bill_date ? new Date(b.bill_date).toLocaleDateString('en-IN') : '—'}
-                          {b.due_date ? ` · Due ${new Date(b.due_date).toLocaleDateString('en-IN')}` : ''}
-                          {' · Pending '}{fmtINR(b.pending_amount)}
+                          {b.due_date ? ` · ${t('screens.voucherCreatePayment.dueValue', { date: new Date(b.due_date).toLocaleDateString('en-IN') })}` : ''}
+                          {' · '}{t('screens.voucherCreatePayment.pendingValue', { amount: fmtINR(b.pending_amount) })}
                         </Text>
                       </View>
                       <View style={s.billPay}>
@@ -510,27 +549,27 @@ export default function CreatePaymentVoucher() {
               {paymentAmt > 0 && (
                 <View style={s.allocFooter}>
                   <View style={s.allocRow}>
-                    <Text style={s.allocLbl}>Payment Amount:</Text>
+                    <Text style={s.allocLbl}>{t('screens.voucherCreatePayment.paymentAmountColon')}</Text>
                     <Text style={s.allocVal}>{fmtINR(paymentAmt)}</Text>
                   </View>
                   <View style={s.allocRow}>
-                    <Text style={s.allocLbl}>Allocated:</Text>
+                    <Text style={s.allocLbl}>{t('screens.voucherCreatePayment.allocatedColon')}</Text>
                     <Text style={[s.allocVal, overAllocated && { color: COLORS.negative }]}>{fmtINR(allocated)}</Text>
                   </View>
                   {remaining > 0.01 && (
                     <View style={s.allocRow}>
-                      <Text style={s.allocLbl}>Remaining:</Text>
+                      <Text style={s.allocLbl}>{t('screens.voucherCreatePayment.remainingColon')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={s.allocVal}>{fmtINR(remaining)}</Text>
                         <TouchableOpacity style={s.leftoverPill} onPress={() => setShowLeftoverPicker(true)} activeOpacity={0.7}>
-                          <Text style={s.leftoverPillTxt}>{leftoverType}</Text>
+                          <Text style={s.leftoverPillTxt}>{t(LEFTOVER_LABEL_KEYS[leftoverType])}</Text>
                           <Ionicons name="chevron-down" size={14} color={COLORS.brandPrimary} />
                         </TouchableOpacity>
                       </View>
                     </View>
                   )}
                   {overAllocated && (
-                    <Text style={s.errTxt}>⚠ Allocated exceeds payment amount — reduce bill amounts.</Text>
+                    <Text style={s.errTxt}>{t('screens.voucherCreatePayment.overAllocatedWarning')}</Text>
                   )}
                 </View>
               )}
@@ -539,7 +578,7 @@ export default function CreatePaymentVoucher() {
 
           {/* ── Payment Method ──────────────────────────────────────── */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Payment Method</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreatePayment.paymentMethod')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }} contentContainerStyle={s.pillRowScroll}>
@@ -550,17 +589,17 @@ export default function CreatePaymentVoucher() {
                       onPress={() => setPaymentMethod(m)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[s.pillTxt, paymentMethod === m && s.pillActiveTxt]}>{m}</Text>
+                      <Text style={[s.pillTxt, paymentMethod === m && s.pillActiveTxt]}>{METHOD_LABEL_KEYS[m] ? t(METHOD_LABEL_KEYS[m]) : m}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
               </View>
               <View style={s.div} />
               <View style={s.field}>
-                <Text style={s.label}>{paymentMethod === 'Cash' ? 'Cash Ledger' : 'Bank Ledger'} <Text style={s.req}>*</Text></Text>
+                <Text style={s.label}>{paymentMethod === 'Cash' ? t('screens.voucherCreatePayment.cashLedger') : t('screens.voucherCreatePayment.bankLedger')} <Text style={s.req}>*</Text></Text>
                 <BottomSheetSearch
-                  label={paymentMethod === 'Cash' ? 'Cash Ledger' : 'Bank Ledger'}
-                  placeholder={ledgerLoading ? 'Loading...' : `Search ${paymentMethod === 'Cash' ? 'cash' : 'bank'} ledger...`}
+                  label={paymentMethod === 'Cash' ? t('screens.voucherCreatePayment.cashLedger') : t('screens.voucherCreatePayment.bankLedger')}
+                  placeholder={ledgerLoading ? t('common.loading') : paymentMethod === 'Cash' ? t('screens.voucherCreatePayment.searchCashLedger') : t('screens.voucherCreatePayment.searchBankLedger')}
                   options={ledgerOptions}
                   value={ledgerAccount}
                   onSelect={(opt) => setLedgerAccount(opt.value)}
@@ -572,12 +611,12 @@ export default function CreatePaymentVoucher() {
                 <>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>{REF_LABELS[paymentMethod]}</Text>
+                    <Text style={s.label}>{t(REF_LABEL_KEYS[paymentMethod])}</Text>
                     <View style={s.inputWrap}>
                       <Ionicons name="keypad-outline" size={16} color={COLORS.textTertiary} />
                       <TextInput
                         style={s.input}
-                        placeholder={`Enter ${REF_LABELS[paymentMethod].toLowerCase()}`}
+                        placeholder={t('screens.voucherCreatePayment.enterRef', { label: t(REF_LABEL_KEYS[paymentMethod]).toLowerCase() })}
                         placeholderTextColor={COLORS.textTertiary}
                         value={refNo}
                         onChangeText={setRefNo}
@@ -591,20 +630,20 @@ export default function CreatePaymentVoucher() {
                 <>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>Instrument Date</Text>
+                    <Text style={s.label}>{t('screens.voucherCreatePayment.instrumentDate')}</Text>
                     <TouchableOpacity style={s.inputWrap} onPress={() => setShowInstrumentDatePicker(true)}>
                       <Ionicons name="calendar-outline" size={16} color={COLORS.textTertiary} />
-                      <Text style={{ flex: 1, color: instrumentDate ? COLORS.textPrimary : COLORS.textTertiary }}>{instrumentDate || 'Select instrument date'}</Text>
+                      <Text style={{ flex: 1, color: instrumentDate ? COLORS.textPrimary : COLORS.textTertiary }}>{instrumentDate || t('screens.voucherCreatePayment.selectInstrumentDate')}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>Bank Name</Text>
+                    <Text style={s.label}>{t('screens.voucherCreatePayment.bankName')}</Text>
                     <View style={s.inputWrap}>
                       <Ionicons name="business-outline" size={16} color={COLORS.textTertiary} />
                       <TextInput
                         style={s.input}
-                        placeholder="e.g. HDFC Bank"
+                        placeholder={t('screens.voucherCreatePayment.bankNamePlaceholder')}
                         placeholderTextColor={COLORS.textTertiary}
                         value={bankName}
                         onChangeText={setBankName}
@@ -621,12 +660,12 @@ export default function CreatePaymentVoucher() {
             style={s.section}
             onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
           >
-            <Text style={s.sectionTitle}>Narration</Text>
+            <Text style={s.sectionTitle}>{t('voucher.narration')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <TextInput
                   style={s.textarea}
-                  placeholder="Notes (optional)"
+                  placeholder={t('screens.voucherCreatePayment.notesOptional')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={narration}
                   onChangeText={setNarration}
@@ -649,7 +688,7 @@ export default function CreatePaymentVoucher() {
             {submitting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="send" size={16} color={COLORS.white} />}
-            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Payment Voucher'}</Text>
+            <Text style={s.btnPriTxt}>{submitting ? t('voucher.submitting') : t('screens.voucherCreatePayment.submitBtn')}</Text>
           </TouchableOpacity>
           {/* Extra space so keyboard doesn't cover narration/submit */}
           <View style={{ height: 24 }} />
@@ -660,9 +699,9 @@ export default function CreatePaymentVoucher() {
       <Modal visible={showLeftoverPicker} transparent animationType="fade" onRequestClose={() => setShowLeftoverPicker(false)}>
         <TouchableOpacity style={ss.overlay} activeOpacity={1} onPress={() => setShowLeftoverPicker(false)}>
           <View style={ss.sheetCard}>
-            <Text style={ss.sheetTitle}>Remaining amount will post as</Text>
+            <Text style={ss.sheetTitle}>{t('screens.voucherCreatePayment.leftoverTitle')}</Text>
             <Text style={{ fontSize: 12, color: COLORS.textTertiary, marginBottom: 4, lineHeight: 16 }}>
-              On Account needs no name. Advance gets an auto ref name (Tally requirement).
+              {t('screens.voucherCreatePayment.leftoverHint')}
             </Text>
             {(['On Account', 'Advance'] as LeftoverType[]).map(opt => (
               <TouchableOpacity
@@ -671,7 +710,7 @@ export default function CreatePaymentVoucher() {
                 onPress={() => { setLeftoverType(opt); setShowLeftoverPicker(false); }}
                 activeOpacity={0.7}
               >
-                <Text style={[ss.sheetOptTxt, leftoverType === opt && ss.sheetOptActiveTxt]}>{opt}</Text>
+                <Text style={[ss.sheetOptTxt, leftoverType === opt && ss.sheetOptActiveTxt]}>{t(LEFTOVER_LABEL_KEYS[opt])}</Text>
                 {leftoverType === opt && <Ionicons name="checkmark" size={18} color={COLORS.brandPrimary} />}
               </TouchableOpacity>
             ))}
@@ -689,75 +728,77 @@ export default function CreatePaymentVoucher() {
         onRequestClose={() => { setShowSuccess(false); router.back(); }}
       >
         <View style={ss.overlay2}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
+          {submitResult && (
+            <View style={ss.card}>
+              <View style={ss.iconWrap}>
+                <Ionicons
+                  name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                  size={56}
+                  color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                />
+              </View>
+              <Text style={ss.title}>{submitResult.isQueued ? t('screens.voucherCreatePayment.savedPendingSync') : t('screens.voucherCreatePayment.submitted')}</Text>
+              <Text style={ss.sub}>
+                {submitResult.isQueued
+                  ? t('screens.voucherCreatePayment.entryQueued')
+                  : t('screens.voucherCreatePayment.pushed')}
+              </Text>
+              {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+                <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreatePayment.voucherNo')}</Text>
+                  <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <View style={ss.refBadge}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreatePayment.refBank')}</Text>
+                  <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={ss.previewBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (!submitResult?.tdkRef) return;
+                  setShowSuccess(false);
+                  router.replace(`/voucher/payment-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                }}
+              >
+                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={ss.previewBtnTxt}>{t('screens.voucherCreatePayment.preview')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+                activeOpacity={0.85}
+                disabled={sharePdfLoading}
+                onPress={async () => {
+                  if (!submitResult.tdkRef || !company?.guid) return;
+                  setSharePdfLoading(true);
+                  try {
+                    await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                      documentType: 'payment_voucher',
+                      onBeforeShare: () => setSharePdfLoading(false),
+                      fallback: async () => {
+                        Toast.show({ type: 'info', text1: t('screens.voucherCreatePayment.sharingUnavailable') });
+                      },
+                    });
+                  } catch (err: any) {
+                    Toast.show({ type: 'error', text1: t('screens.voucherCreatePayment.pdfError'), text2: err?.message || t('screens.voucherCreatePayment.couldNotGeneratePdf') });
+                  } finally {
+                    setSharePdfLoading(false);
+                  }
+                }}
+              >
+                {sharePdfLoading
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+                <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? t('screens.voucherCreatePayment.pdfCreating') : t('pdf.sharePdf')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+                <Text style={ss.closeBtnTxt}>{t('common.close')}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Payment Submitted!'}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Payment pushed to Tally successfully.'}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Voucher No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult?.tdkRef) return;
-                setShowSuccess(false);
-                router.replace(`/voucher/payment-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
-                setSharePdfLoading(true);
-                try {
-                  await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
-                    documentType: 'payment_voucher',
-                    onBeforeShare: () => setSharePdfLoading(false),
-                    fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                    },
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
-              <Text style={ss.closeBtnTxt}>Close</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
       </Modal>
 

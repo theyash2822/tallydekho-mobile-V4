@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { updateAlertSettings } from '../../src/services/api';
 
@@ -109,11 +110,11 @@ const sb = StyleSheet.create({
 // 3. ChannelChips
 // ─────────────────────────────────────────────────────────────────────────────
 type Channels = { push: boolean; email: boolean; whatsapp: boolean; sms: boolean };
-const CHANNEL_LIST: { key: keyof Channels; label: string }[] = [
-  { key: 'push',      label: 'Push'      },
-  { key: 'email',     label: 'Email'     },
+const CHANNEL_LIST: { key: keyof Channels; label?: string; labelKey?: string }[] = [
+  { key: 'push',      labelKey: 'screens.settingsComplianceReminders.channelPush'  },
+  { key: 'email',     labelKey: 'screens.settingsComplianceReminders.channelEmail' },
   { key: 'whatsapp',  label: 'WhatsApp'  },
-  { key: 'sms',       label: 'SMS'       },
+  { key: 'sms',       labelKey: 'screens.settingsComplianceReminders.channelSms'   },
 ];
 
 function ChannelChips({
@@ -121,9 +122,10 @@ function ChannelChips({
 }: {
   value: Channels; onChange: (v: Channels) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={cc.wrap}>
-      <Text style={cc.label}>Channel</Text>
+      <Text style={cc.label}>{t('screens.settingsComplianceReminders.channel')}</Text>
       <View style={cc.row}>
         {CHANNEL_LIST.map(ch => {
           const active = value[ch.key];
@@ -134,7 +136,7 @@ function ChannelChips({
               onPress={() => onChange({ ...value, [ch.key]: !active })}
               activeOpacity={0.7}
             >
-              <Text style={[cc.chipTxt, active && cc.chipTxtActive]}>{ch.label}</Text>
+              <Text style={[cc.chipTxt, active && cc.chipTxtActive]}>{ch.labelKey ? t(ch.labelKey) : ch.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -171,6 +173,7 @@ function SectionDivider() {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceRemindersScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   // ── GST ─────────────────────────────────────────────────────────────────
   const [gst, setGst] = useState({
@@ -207,10 +210,10 @@ export default function ComplianceRemindersScreen() {
           other_taxes: other,
         },
       });
-      Toast.show({ type: 'success', text1: 'Saved', text2: 'Compliance reminders updated.' });
+      Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsComplianceReminders.updated') });
       setIsDirty(false);
     } catch {
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not save. Try again.' });
+      Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsComplianceReminders.couldNotSave') });
     }
   };
 
@@ -221,7 +224,7 @@ export default function ComplianceRemindersScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.title}>Compliance Reminders</Text>
+        <Text style={s.title}>{t('settings.complianceReminders')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -233,22 +236,22 @@ export default function ComplianceRemindersScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="receipt-outline" size={18} color={COLORS.positive} />
-            <Text style={s.cardTitle}>GST</Text>
+            <Text style={s.cardTitle}>{t('reports.gst')}</Text>
           </View>
 
           {/* Two side-by-side steppers */}
           <View style={s.stepperRow}>
             <StepperBox
-              label="GSTR-1 filing"
+              label={t('screens.settingsComplianceReminders.gstr1Filing')}
               value={gst.gstr1Days}
-              sublabel="Days before due"
+              sublabel={t('screens.settingsComplianceReminders.daysBeforeDue')}
               onChange={v => setGst(p => ({ ...p, gstr1Days: v }))}
             />
             <View style={{ width: 12 }} />
             <StepperBox
-              label="GSTR-3B filing"
+              label={t('screens.settingsComplianceReminders.gstr3bFiling')}
               value={gst.gstr3bDays}
-              sublabel="Days before due"
+              sublabel={t('screens.settingsComplianceReminders.daysBeforeDue')}
               onChange={v => setGst(p => ({ ...p, gstr3bDays: v }))}
             />
           </View>
@@ -256,11 +259,11 @@ export default function ComplianceRemindersScreen() {
           {/* Auto-pause checkbox */}
           <SectionDivider />
           <View style={s.checkboxRow}>
-            <Text style={s.checkboxGroupLabel}>Auto-pause</Text>
+            <Text style={s.checkboxGroupLabel}>{t('screens.settingsComplianceReminders.autoPause')}</Text>
             <CustomCheckbox
               value={gst.autoPause}
               onChange={v => setGst(p => ({ ...p, autoPause: v }))}
-              label="If No Sales"
+              label={t('screens.settingsComplianceReminders.ifNoSales')}
             />
           </View>
 
@@ -277,14 +280,14 @@ export default function ComplianceRemindersScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="barcode-outline" size={18} color={COLORS.info} />
-            <Text style={s.cardTitle}>E-Invoice</Text>
+            <Text style={s.cardTitle}>{t('screens.settingsComplianceReminders.eInvoice')}</Text>
           </View>
 
           {/* Full-width single stepper */}
           <StepperBox
-            label="IRN error digest"
+            label={t('screens.settingsComplianceReminders.irnErrorDigest')}
             value={einv.irnDays}
-            sublabel="Days before due"
+            sublabel={t('screens.settingsComplianceReminders.daysBeforeDue')}
             onChange={v => setEinv(p => ({ ...p, irnDays: v }))}
           />
 
@@ -300,13 +303,13 @@ export default function ComplianceRemindersScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="document-outline" size={18} color={COLORS.warning} />
-            <Text style={s.cardTitle}>E-Way Bill</Text>
+            <Text style={s.cardTitle}>{t('screens.settingsComplianceReminders.eWayBill')}</Text>
           </View>
 
           <StepperBox
-            label="Expiry reminder"
+            label={t('screens.settingsComplianceReminders.expiryReminder')}
             value={ewb.expiryHours}
-            sublabel="h before validity end"
+            sublabel={t('screens.settingsComplianceReminders.hBeforeValidityEnd')}
             onChange={v => setEwb(p => ({ ...p, expiryHours: v }))}
             max={72}
           />
@@ -323,22 +326,22 @@ export default function ComplianceRemindersScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="card-outline" size={18} color="#7C3AED" />
-            <Text style={s.cardTitle}>Other Taxes</Text>
+            <Text style={s.cardTitle}>{t('reports.otherTaxes')}</Text>
           </View>
 
           {/* Two side-by-side steppers */}
           <View style={s.stepperRow}>
             <StepperBox
-              label="TDS payment"
+              label={t('screens.settingsComplianceReminders.tdsPayment')}
               value={other.tdsDays}
-              sublabel="Days before 7th"
+              sublabel={t('screens.settingsComplianceReminders.daysBefore7th')}
               onChange={v => setOther(p => ({ ...p, tdsDays: v }))}
             />
             <View style={{ width: 12 }} />
             <StepperBox
-              label="VAT return"
+              label={t('screens.settingsComplianceReminders.vatReturn')}
               value={other.vatDays}
-              sublabel="Days before due"
+              sublabel={t('screens.settingsComplianceReminders.daysBeforeDue')}
               onChange={v => setOther(p => ({ ...p, vatDays: v }))}
             />
           </View>
@@ -351,7 +354,7 @@ export default function ComplianceRemindersScreen() {
 
         {/* Save */}
         <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.8}>
-          <Text style={s.saveTxt}>Save Settings</Text>
+          <Text style={s.saveTxt}>{t('screens.settingsComplianceReminders.saveSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

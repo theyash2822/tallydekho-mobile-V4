@@ -5,6 +5,7 @@
  * Button chrome matches AccountingVoucherPreview.
  */
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator,
@@ -85,6 +86,7 @@ export default function CommercialDocumentPreview({
   document: VoucherDocument;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { company: authCompany } = useAuth();
   const [sharing, setSharing] = useState(false);
@@ -101,17 +103,17 @@ export default function CommercialDocumentPreview({
   if (!model) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.pageBg }} edges={['top', 'left', 'right']}>
-        <DocNavBar title={DOC_TYPE_CONFIG[doc.documentType]?.label || 'Document'} onBack={() => router.back()} />
+        <DocNavBar title={DOC_TYPE_CONFIG[doc.documentType]?.label || t('screens.componentsDocumentCommercialDocumentPreview.document')} onBack={() => router.back()} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <Ionicons name="document-text-outline" size={48} color={COLORS.textTertiary} />
           <Text style={{ marginTop: 12, fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center' }}>
-            Could not render this document
+            {t('screens.componentsDocumentCommercialDocumentPreview.couldNotRender')}
           </Text>
           <TouchableOpacity
             onPress={() => router.back()}
             style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: 8 }}
           >
-            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Go Back</Text>
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{t('screens.componentsDocumentCommercialDocumentPreview.goBack')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -136,26 +138,26 @@ export default function CommercialDocumentPreview({
   );
 
   const refs = model.references;
-  const numLabel = model.flags?.documentNumberLabel || 'Invoice No.';
+  const numLabel = model.flags?.documentNumberLabel || t('screens.componentsDocumentCommercialDocumentPreview.invoiceNo');
   const hideAmt = !!model.flags?.hideItemAmounts;
   const metaPairs: { label: string; value?: string | null }[] = [
     { label: numLabel, value: model.identity.documentNumber },
-    { label: 'Dated', value: model.identity.date },
-    { label: 'Place of Supply', value: refs.extra?.find((e) => /place of supply/i.test(e.label))?.value },
-    { label: 'Order / PO Ref', value: refs.buyerOrderNo },
-    { label: 'Order Dated', value: refs.buyerOrderDate },
-    { label: 'Supplier Invoice', value: [refs.supplierInvoiceNo, refs.supplierInvoiceDate].filter(Boolean).join(' / ') || null },
-    { label: 'Original Invoice', value: [refs.originalInvoiceNo, refs.originalInvoiceDate].filter(Boolean).join(' / ') || null },
-    { label: 'Payment Terms', value: refs.paymentTerms },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.dated'), value: model.identity.date },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.placeOfSupply'), value: refs.extra?.find((e) => /place of supply/i.test(e.label))?.value },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.orderPoRef'), value: refs.buyerOrderNo },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.orderDated'), value: refs.buyerOrderDate },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.supplierInvoice'), value: [refs.supplierInvoiceNo, refs.supplierInvoiceDate].filter(Boolean).join(' / ') || null },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.originalInvoice'), value: [refs.originalInvoiceNo, refs.originalInvoiceDate].filter(Boolean).join(' / ') || null },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.paymentTerms'), value: refs.paymentTerms },
     { label: 'e-Way Bill No.', value: refs.eWayBillNo },
-    { label: 'Dispatch Doc', value: refs.dispatchDocNo },
-    { label: 'Dispatch / Vehicle', value: refs.motorVehicleNo },
-    { label: 'Transport', value: refs.dispatchThrough },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.dispatchDoc'), value: refs.dispatchDocNo },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.dispatchVehicle'), value: refs.motorVehicleNo },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.transport'), value: refs.dispatchThrough },
     { label: 'LR / RR', value: refs.lrRrNo },
-    { label: 'Destination', value: refs.destination },
-    { label: 'Terms of Delivery', value: refs.termsOfDelivery },
-    { label: 'Valid Until', value: refs.validUntil },
-    { label: 'Reason', value: refs.reasonForNote },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.destination'), value: refs.destination },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.termsOfDelivery'), value: refs.termsOfDelivery },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.validUntil'), value: refs.validUntil },
+    { label: t('screens.componentsDocumentCommercialDocumentPreview.reason'), value: refs.reasonForNote },
   ].filter((m) => !!m.value);
 
   const items = doc.items || [];
@@ -163,37 +165,37 @@ export default function CommercialDocumentPreview({
   const COL = { sl: 28, name: 140, hsn: 58, qty: 72, rate: 78, disc: 48, amt: 92 };
   const totalQty = items.reduce((s, i) => s + (i.qty || 0), 0);
 
-  const t = doc.totals;
+  const totals = doc.totals;
   const hsnRows = model.taxSummary || [];
   const taxFromDoc = doc.taxes || [];
   const sumTaxField = (field: 'cgst' | 'sgst' | 'igst' | 'cess') =>
     taxFromDoc.reduce((s, row) => s + (Number(row[field]) || 0), 0);
   const totRows: { label: string; value: number }[] = [];
   if (!hideAmt) {
-    if (t.subtotal != null) totRows.push({ label: 'Sub Total', value: t.subtotal });
-    if (t.discount) totRows.push({ label: 'Discount (−)', value: t.discount });
-    if (t.taxableAmount != null && (t.discount || t.taxTotal || sumTaxField('cgst') || sumTaxField('sgst') || sumTaxField('igst'))) {
-      totRows.push({ label: 'Taxable Value', value: t.taxableAmount });
+    if (totals.subtotal != null) totRows.push({ label: t('screens.componentsDocumentCommercialDocumentPreview.subTotal'), value: totals.subtotal });
+    if (totals.discount) totRows.push({ label: t('screens.componentsDocumentCommercialDocumentPreview.discountMinus'), value: totals.discount });
+    if (totals.taxableAmount != null && (totals.discount || totals.taxTotal || sumTaxField('cgst') || sumTaxField('sgst') || sumTaxField('igst'))) {
+      totRows.push({ label: t('screens.componentsDocumentCommercialDocumentPreview.taxableValue'), value: totals.taxableAmount });
     }
-    const cgst = t.cgstTotal || sumTaxField('cgst');
-    const sgst = t.sgstTotal || sumTaxField('sgst');
-    const igst = t.igstTotal || sumTaxField('igst');
+    const cgst = totals.cgstTotal || sumTaxField('cgst');
+    const sgst = totals.sgstTotal || sumTaxField('sgst');
+    const igst = totals.igstTotal || sumTaxField('igst');
     if (cgst) totRows.push({ label: 'Output CGST', value: cgst });
     if (sgst) totRows.push({ label: 'Output SGST', value: sgst });
     if (igst) totRows.push({ label: 'Output IGST', value: igst });
-    if (t.cessTotal || sumTaxField('cess')) totRows.push({ label: 'Cess', value: t.cessTotal || sumTaxField('cess') });
+    if (totals.cessTotal || sumTaxField('cess')) totRows.push({ label: t('screens.componentsDocumentCommercialDocumentPreview.cess'), value: totals.cessTotal || sumTaxField('cess') });
     let chargeHasRoundOff = false;
     for (const c of model.charges) {
       const n = parseFloat(String(c.amount).replace(/,/g, ''));
       if (/round\s*(ed)?\s*off/i.test(c.label || '')) chargeHasRoundOff = true;
       if (Number.isFinite(n) && n !== 0) totRows.push({ label: c.label, value: n });
     }
-    if (t.roundOff && !chargeHasRoundOff) {
-      totRows.push({ label: t.roundOffLabel || 'Round Off', value: t.roundOff });
+    if (totals.roundOff && !chargeHasRoundOff) {
+      totRows.push({ label: totals.roundOffLabel || t('pdf.roundOff'), value: totals.roundOff });
     }
   }
 
-  const words = model.amountInWords || t.totalInWords || amountInWords(t.total || 0);
+  const words = model.amountInWords || totals.totalInWords || amountInWords(totals.total || 0);
   const taxWords = model.taxAmountInWords;
 
   const handleShare = async () => {
@@ -201,7 +203,7 @@ export default function CommercialDocumentPreview({
     setSharing(true);
     await shareVoucherPdfSafely(doc, {
       companyGuid: authCompany?.guid,
-      dialogTitle: `${doc.documentNumber || 'Document'}.pdf`,
+      dialogTitle: `${doc.documentNumber || t('screens.componentsDocumentCommercialDocumentPreview.document')}.pdf`,
       onBeforeShare: () => setSharing(false),
     });
     setSharing(false);
@@ -242,7 +244,7 @@ export default function CommercialDocumentPreview({
             <View style={p.gridColLeft}>
               {buyer && (
                 <View style={p.addrBox}>
-                  <Text style={p.addrTitle}>{buyer.label || 'Buyer (Bill to)'}</Text>
+                  <Text style={p.addrTitle}>{buyer.label || t('screens.componentsDocumentCommercialDocumentPreview.buyerBillTo')}</Text>
                   <Text style={p.addrName}>{buyer.name}</Text>
                   {buyer.addressLines.map((l, i) => (
                     <Text key={i} style={p.addrLine}>{l}</Text>
@@ -253,7 +255,7 @@ export default function CommercialDocumentPreview({
               )}
               {ship && ship.name && ship.name !== buyer?.name && (
                 <View style={[p.addrBox, p.shipDivider]}>
-                  <Text style={p.addrTitle}>{ship.label || 'Consignee (Ship to)'}</Text>
+                  <Text style={p.addrTitle}>{ship.label || t('screens.componentsDocumentCommercialDocumentPreview.consigneeShipTo')}</Text>
                   <Text style={p.addrName}>{ship.name}</Text>
                   {ship.addressLines.map((l, i) => (
                     <Text key={i} style={p.addrLine}>{l}</Text>
@@ -263,7 +265,7 @@ export default function CommercialDocumentPreview({
               )}
               {!buyer && !ship && (
                 <View style={p.addrBox}>
-                  <Text style={p.addrTitle}>Party</Text>
+                  <Text style={p.addrTitle}>{t('voucher.party')}</Text>
                   <Text style={p.addrName}>{doc.party?.name || '—'}</Text>
                 </View>
               )}
@@ -286,13 +288,13 @@ export default function CommercialDocumentPreview({
               <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
                 <View>
                   <View style={p.gHeadRow}>
-                    <Text style={[p.gHead, { width: COL.sl }]}>Sl</Text>
-                    <Text style={[p.gHead, { width: COL.name }]}>Description of Goods</Text>
+                    <Text style={[p.gHead, { width: COL.sl }]}>{t('screens.componentsDocumentCommercialDocumentPreview.sl')}</Text>
+                    <Text style={[p.gHead, { width: COL.name }]}>{t('screens.componentsDocumentCommercialDocumentPreview.descriptionOfGoods')}</Text>
                     <Text style={[p.gHead, { width: COL.hsn }]}>HSN/SAC</Text>
-                    <Text style={[p.gHead, p.right, { width: COL.qty }]}>Qty</Text>
-                    {!hideAmt && <Text style={[p.gHead, p.right, { width: COL.rate }]}>Rate</Text>}
-                    {!hideAmt && hasDisc && <Text style={[p.gHead, p.right, { width: COL.disc }]}>Disc%</Text>}
-                    {!hideAmt && <Text style={[p.gHead, p.right, { width: COL.amt, borderRightWidth: 0 }]}>Amount</Text>}
+                    <Text style={[p.gHead, p.right, { width: COL.qty }]}>{t('pdf.qty')}</Text>
+                    {!hideAmt && <Text style={[p.gHead, p.right, { width: COL.rate }]}>{t('pdf.rate')}</Text>}
+                    {!hideAmt && hasDisc && <Text style={[p.gHead, p.right, { width: COL.disc }]}>{t('screens.componentsDocumentCommercialDocumentPreview.discPct')}</Text>}
+                    {!hideAmt && <Text style={[p.gHead, p.right, { width: COL.amt, borderRightWidth: 0 }]}>{t('pdf.amount')}</Text>}
                   </View>
                   {items.map((item, idx) => {
                     const sec = (item as any).secondaryQty || (item as any).alternateQty;
@@ -332,12 +334,12 @@ export default function CommercialDocumentPreview({
                   })}
                   <View style={[p.gRow, p.gTotalRow]}>
                     <Text style={[p.gCell, { width: COL.sl }]} />
-                    <Text style={[p.gCell, p.bold, { width: COL.name }]}>Total</Text>
+                    <Text style={[p.gCell, p.bold, { width: COL.name }]}>{t('pdf.total')}</Text>
                     <Text style={[p.gCell, { width: COL.hsn }]} />
                     <Text style={[p.gCell, p.right, p.bold, { width: COL.qty }]}>{totalQty}</Text>
                     {!hideAmt && <Text style={[p.gCell, { width: COL.rate }]} />}
                     {!hideAmt && hasDisc && <Text style={[p.gCell, { width: COL.disc }]} />}
-                    {!hideAmt && <AmtCell value={t.subtotal ?? t.total} width={COL.amt} strong last />}
+                    {!hideAmt && <AmtCell value={totals.subtotal ?? totals.total} width={COL.amt} strong last />}
                   </View>
                 </View>
               </ScrollView>
@@ -354,8 +356,8 @@ export default function CommercialDocumentPreview({
                 </View>
               ))}
               <View style={p.grandRow}>
-                <Text style={p.grandLabel}>Total</Text>
-                <Text style={p.grandValue}>{formatCurrency(t.total || 0)}</Text>
+                <Text style={p.grandLabel}>{t('pdf.total')}</Text>
+                <Text style={p.grandValue}>{formatCurrency(totals.total || 0)}</Text>
               </View>
             </View>
           )}
@@ -364,25 +366,25 @@ export default function CommercialDocumentPreview({
           <View style={p.wordsBlock}>
             {!hideAmt ? (
               <>
-                <Text style={p.wordsLabel}>Amount Chargeable (in words)</Text>
+                <Text style={p.wordsLabel}>{t('screens.componentsDocumentCommercialDocumentPreview.amountChargeable')}</Text>
                 <Text style={p.wordsValue}>INR {words}</Text>
                 {!!taxWords && (
                   <>
-                    <Text style={[p.wordsLabel, { marginTop: 10 }]}>Tax Amount (in words)</Text>
+                    <Text style={[p.wordsLabel, { marginTop: 10 }]}>{t('screens.componentsDocumentCommercialDocumentPreview.taxAmountWords')}</Text>
                     <Text style={p.wordsValue}>{taxWords}</Text>
                   </>
                 )}
                 <Text style={p.eoe}>E. & O.E</Text>
               </>
             ) : (
-              <Text style={p.softTextItalic}>Quantity note — amounts not applicable.</Text>
+              <Text style={p.softTextItalic}>{t('screens.componentsDocumentCommercialDocumentPreview.quantityNote')}</Text>
             )}
           </View>
 
           {/* HSN Summary */}
           {hsnRows.length > 0 && !hideAmt && (
             <View style={p.softBlock}>
-              <Text style={p.softLabel}>HSN / Tax Summary</Text>
+              <Text style={p.softLabel}>{t('screens.componentsDocumentCommercialDocumentPreview.hsnTaxSummary')}</Text>
               {hsnRows.map((row) => (
                 <View key={`${row.sequence}-${row.hsnSac}`} style={p.hsnRow}>
                   <Text style={p.hsnHsn}>{row.hsnSac || '—'}</Text>
@@ -401,13 +403,13 @@ export default function CommercialDocumentPreview({
 
           {!!model.narration && (
             <View style={p.softBlock}>
-              <Text style={p.softLabel}>Narration</Text>
+              <Text style={p.softLabel}>{t('voucher.narration')}</Text>
               <Text style={p.softTextItalic}>{model.narration}</Text>
             </View>
           )}
           {!!(model.terms || doc.terms) && (
             <View style={p.softBlock}>
-              <Text style={p.softLabel}>Terms & Conditions</Text>
+              <Text style={p.softLabel}>{t('pdf.terms')}</Text>
               <Text style={p.softText}>{model.terms || doc.terms}</Text>
             </View>
           )}
@@ -417,7 +419,7 @@ export default function CommercialDocumentPreview({
             <View style={p.footDecl}>
               {!!model.legal.declaration && (
                 <>
-                  <Text style={p.softLabel}>Declaration</Text>
+                  <Text style={p.softLabel}>{t('screens.componentsDocumentCommercialDocumentPreview.declaration')}</Text>
                   <Text style={p.softText}>{model.legal.declaration}</Text>
                 </>
               )}
@@ -427,12 +429,12 @@ export default function CommercialDocumentPreview({
             </View>
             <View style={p.footSig}>
               <Text style={p.sigFor}>
-                for {model.legal.authorisedFor || companyName}
+                {t('screens.componentsDocumentCommercialDocumentPreview.forCompany', { name: model.legal.authorisedFor || companyName })}
               </Text>
               <View style={p.sigSpace} />
               <View style={p.sigLine} />
               <Text style={p.sigCaption}>
-                {model.legal.authorisedSignatoryLabel || 'Authorised Signatory'}
+                {model.legal.authorisedSignatoryLabel || t('pdf.authorizedSignatory')}
               </Text>
             </View>
           </View>
@@ -453,7 +455,7 @@ export default function CommercialDocumentPreview({
           {sharing
             ? <ActivityIndicator size="small" color={COLORS.white} />
             : <Ionicons name="share-outline" size={18} color={COLORS.white} />}
-          <Text style={p.shareBtnText}>{sharing ? 'Preparing…' : 'Share as PDF'}</Text>
+          <Text style={p.shareBtnText}>{sharing ? t('screens.componentsDocumentCommercialDocumentPreview.preparing') : t('screens.componentsDocumentCommercialDocumentPreview.shareAsPdf')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -160,7 +160,7 @@ export default function OTPScreen() {
         setError(t('auth.invalidOtpRetry'));
       }
     } catch (err: any) {
-      setError(err?.message || 'Verification failed. Please retry.');
+      setError(err?.message || t('screens.authOtp.verificationFailed'));
     } finally {
       setLoading(false);
     }

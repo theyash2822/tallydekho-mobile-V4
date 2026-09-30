@@ -111,6 +111,7 @@ function TransferItemTile({
   onQty: (q: number) => void;
   onSource: (wh: string) => void;
 }) {
+  const { t } = useTranslation();
   const avail = sourceQty(row);
   const multiWh = row.godowns.length > 1;
   const whOptions: BSSOption[] = row.godowns.map(g => ({
@@ -131,12 +132,12 @@ function TransferItemTile({
       <View style={s.tileRow}>
         {multiWh ? (
           <View style={s.whCol}>
-            <Text style={s.qtyLbl}>Source</Text>
+            <Text style={s.qtyLbl}>{t('screens.stocksCreateTransfer.source')}</Text>
             <BottomSheetSearch
               compact
-              placeholder="Source"
-              sheetTitle="Source Warehouse"
-              searchPlaceholder="Search..."
+              placeholder={t('screens.stocksCreateTransfer.source')}
+              sheetTitle={t('screens.stocksCreateTransfer.sourceWarehouse')}
+              searchPlaceholder={t('screens.stocksCreateTransfer.search')}
               icon="home-outline"
               options={whOptions}
               value={row.sourceWh}
@@ -152,18 +153,18 @@ function TransferItemTile({
         )}
 
         <View style={s.qtyCol}>
-          <Text style={s.qtyLbl}>Transfer</Text>
+          <Text style={s.qtyLbl}>{t('screens.stocksCreateTransfer.transfer')}</Text>
           <CompactQtyInput value={row.qty} onChange={onQty} min={1} />
         </View>
       </View>
 
       {multiWh && row.sourceWh ? (
         <Text style={s.effectHint}>
-          Max {avail} {row.item.unit || 'pcs'} at {row.sourceWh}
-          {destWh && row.sourceWh === destWh ? ' · same as destination' : ''}
+          {t('screens.stocksCreateTransfer.maxAt', { avail, unit: row.item.unit || 'pcs', wh: row.sourceWh })}
+          {destWh && row.sourceWh === destWh ? t('screens.stocksCreateTransfer.sameAsDestination') : ''}
         </Text>
       ) : (
-        <Text style={s.effectHint}>Max {avail} {row.item.unit || 'pcs'}</Text>
+        <Text style={s.effectHint}>{t('screens.stocksCreateTransfer.max', { avail, unit: row.item.unit || 'pcs' })}</Text>
       )}
     </View>
   );
@@ -202,9 +203,14 @@ export default function CreateStockTransferScreen() {
     }, 250);
   }, []);
 
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== companyGuid || loadDeps[1] !== formatAmount || loadDeps[2] !== scopeGodowns) {
+    setLoadDeps([companyGuid, formatAmount, scopeGodowns]);
+    setLoading(!!companyGuid);
+  }
+
   useEffect(() => {
-    if (!companyGuid) { setLoading(false); return; }
-    setLoading(true);
+    if (!companyGuid) return;
     Promise.all([
       getStocks(companyGuid, { limit: '1000' }),
       getWarehouses(companyGuid),
@@ -260,36 +266,36 @@ export default function CreateStockTransferScreen() {
 
   const validate = () => {
     if (rows.length === 0) {
-      Toast.show({ type: 'error', text1: 'No Items', text2: 'Add at least one stock item.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateTransfer.noItems'), text2: t('screens.stocksCreateTransfer.addAtLeastOne') });
       return false;
     }
     if (rows.some(r => !r.sourceWh)) {
-      Toast.show({ type: 'error', text1: 'Source Required', text2: 'Select source warehouse for each item.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateTransfer.sourceRequired'), text2: t('screens.stocksCreateTransfer.selectSourceEach') });
       return false;
     }
     if (!destWh) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select destination warehouse.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.stocksCreateTransfer.selectDestination') });
       return false;
     }
     const same = rows.find(r => r.sourceWh === destWh);
     if (same) {
       Toast.show({
         type: 'error',
-        text1: 'Invalid',
-        text2: `${same.item.name}: source cannot match destination.`,
+        text1: t('screens.stocksCreateTransfer.invalid'),
+        text2: t('screens.stocksCreateTransfer.sourceMatchesDest', { name: same.item.name }),
       });
       return false;
     }
     if (rows.some(r => r.qty <= 0)) {
-      Toast.show({ type: 'error', text1: 'Invalid Qty', text2: 'Each item needs qty greater than 0.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateTransfer.invalidQty'), text2: t('screens.stocksCreateTransfer.qtyGreaterThanZero') });
       return false;
     }
     const over = rows.find(r => r.qty > sourceQty(r));
     if (over) {
       Toast.show({
         type: 'error',
-        text1: 'Exceeds Stock',
-        text2: `${over.item.name}: max ${sourceQty(over)} ${over.item.unit || 'pcs'} in ${over.sourceWh}`,
+        text1: t('screens.stocksCreateTransfer.exceedsStock'),
+        text2: t('screens.stocksCreateTransfer.exceedsStockMsg', { name: over.item.name, max: sourceQty(over), unit: over.item.unit || 'pcs', wh: over.sourceWh }),
       });
       return false;
     }
@@ -326,7 +332,7 @@ export default function CreateStockTransferScreen() {
       clearStockListCache();
       setShowSuccess(true);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Transfer Failed', text2: err?.message || 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateTransfer.transferFailed'), text2: err?.message || t('screens.stocksCreateTransfer.pleaseTryAgain') });
     }
   };
 
@@ -356,16 +362,16 @@ export default function CreateStockTransferScreen() {
         >
           <View style={s.field}>
             <BottomSheetSearch
-              label="Add Stock Items"
-              placeholder={itemOptions.length ? 'Search and select items...' : 'All items added'}
-              sheetTitle="Select Stock Items"
-              searchPlaceholder="Search by name or SKU..."
+              label={t('screens.stocksCreateTransfer.addStockItems')}
+              placeholder={itemOptions.length ? t('screens.stocksCreateTransfer.searchSelectItems') : t('screens.stocksCreateTransfer.allItemsAdded')}
+              sheetTitle={t('screens.stocksCreateTransfer.selectStockItems')}
+              searchPlaceholder={t('screens.stocksCreateTransfer.searchByNameSku')}
               icon="cube-outline"
               options={itemOptions}
               value=""
               onSelect={() => {}}
               multiSelect
-              confirmLabel={n => `Add ${n} Item${n !== 1 ? 's' : ''}`}
+              confirmLabel={n => (n !== 1 ? t('screens.stocksCreateTransfer.addItems', { count: n }) : t('screens.stocksCreateTransfer.addItem', { count: n }))}
               onMultiConfirm={addItems}
               disabled={itemOptions.length === 0 || addingItems}
             />
@@ -376,7 +382,7 @@ export default function CreateStockTransferScreen() {
 
           {rows.length > 0 && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>Items ({rows.length})</Text>
+              <Text style={s.sectionTitle}>{t('screens.stocksCreateTransfer.itemsCount', { count: rows.length })}</Text>
               {rows.map(r => (
                 <TransferItemTile
                   key={r.item.id}
@@ -391,13 +397,13 @@ export default function CreateStockTransferScreen() {
           )}
 
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Destination</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksCreateTransfer.destination')}</Text>
             <BottomSheetSearch
-              label="Destination Warehouse"
+              label={t('screens.stocksCreateTransfer.destinationWarehouse')}
               required
-              placeholder="Select destination..."
-              sheetTitle="Destination Warehouse"
-              searchPlaceholder="Search warehouses..."
+              placeholder={t('screens.stocksCreateTransfer.selectDestinationPh')}
+              sheetTitle={t('screens.stocksCreateTransfer.destinationWarehouse')}
+              searchPlaceholder={t('screens.stocksCreateTransfer.searchWarehouses')}
               icon="navigate-outline"
               options={destOptions}
               value={destWh}
@@ -407,10 +413,10 @@ export default function CreateStockTransferScreen() {
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Note</Text>
+            <Text style={s.label}>{t('screens.stocksCreateTransfer.note')}</Text>
             <TextInput
               style={s.noteInput}
-              placeholder="Optional note"
+              placeholder={t('screens.stocksCreateTransfer.optionalNote')}
               placeholderTextColor={COLORS.textTertiary}
               value={note}
               onChangeText={setNote}
@@ -423,9 +429,9 @@ export default function CreateStockTransferScreen() {
 
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <SubmitButton
-          idleLabel={rows.length ? `Transfer ${rows.length} Item${rows.length !== 1 ? 's' : ''}` : 'Transfer'}
-          loadingLabel="Transferring..."
-          successLabel="✓ Done"
+          idleLabel={rows.length ? (rows.length !== 1 ? t('screens.stocksCreateTransfer.transferItems', { count: rows.length }) : t('screens.stocksCreateTransfer.transferItem', { count: rows.length })) : t('screens.stocksCreateTransfer.transfer')}
+          loadingLabel={t('screens.stocksCreateTransfer.transferring')}
+          successLabel={t('screens.stocksCreateTransfer.doneCheck')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -441,54 +447,57 @@ export default function CreateStockTransferScreen() {
         onRequestClose={() => { setShowSuccess(false); router.back(); }}
       >
         <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>
-              {submitResult.isQueued ? 'Saved. Pending Sync' : 'Transfer Saved!'}
-            </Text>
-            <Text style={ss.sub}>
-              {rows.length} item(s) → {destWh}.
-              {submitResult.isQueued ? ' Will push to Tally when desktop connects.' : ''}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Voucher No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+          {submitResult && (
+            <View style={ss.card}>
+              <View style={ss.iconWrap}>
+                <Ionicons
+                  name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                  size={56}
+                  color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                />
               </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
+              <Text style={ss.title}>
+                {submitResult.isQueued ? t('screens.stocksCreateTransfer.savedPendingSync') : t('screens.stocksCreateTransfer.transferSaved')}
+              </Text>
+              <Text style={ss.sub}>
+                {submitResult.isQueued
+                  ? t('screens.stocksCreateTransfer.itemsToDestQueued', { count: rows.length, dest: destWh })
+                  : t('screens.stocksCreateTransfer.itemsToDest', { count: rows.length, dest: destWh })}
+              </Text>
+              {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+                <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                  <Text style={ss.refLabel}>{t('screens.stocksCreateTransfer.voucherNo')}</Text>
+                  <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <View style={ss.refBadge}>
+                  <Text style={ss.refLabel}>{t('screens.stocksCreateTransfer.referenceNo')}</Text>
+                  <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <TouchableOpacity
+                  style={ss.previewBtn}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setShowSuccess(false);
+                    router.replace(`/stocks/transfer-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
+                  }}
+                >
+                  <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={ss.previewBtnTxt}>{t('screens.stocksCreateTransfer.preview')}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={ss.previewBtn}
+                style={ss.closeBtn}
                 activeOpacity={0.85}
-                onPress={() => {
-                  setShowSuccess(false);
-                  router.replace(`/stocks/transfer-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
-                }}
+                onPress={() => { setShowSuccess(false); router.back(); }}
               >
-                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.previewBtnTxt}>Preview</Text>
+                <Text style={ss.closeBtnTxt}>{t('common.close')}</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={ss.closeBtn}
-              activeOpacity={0.85}
-              onPress={() => { setShowSuccess(false); router.back(); }}
-            >
-              <Text style={ss.closeBtnTxt}>Close</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
         </View>
       </Modal>
     </SafeAreaView>

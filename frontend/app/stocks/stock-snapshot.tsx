@@ -5,6 +5,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -28,6 +29,12 @@ interface SnapshotData {
 }
 
 const VALUATION_TYPES: ValuationType[] = ['Average', 'Opening', 'Closing', 'Peak'];
+const VALUATION_LABEL_KEYS: Record<ValuationType, string> = {
+  Average: 'screens.stocksStockSnapshot.valAverage',
+  Opening: 'screens.stocksStockSnapshot.valOpening',
+  Closing: 'screens.stocksStockSnapshot.valClosing',
+  Peak:    'screens.stocksStockSnapshot.valPeak',
+};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ApiWarehouse {
@@ -46,6 +53,7 @@ interface ApiSummary {
 }
 
 export default function StockSnapshotScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -65,10 +73,8 @@ export default function StockSnapshotScreen() {
   const [isLoading,     setIsLoading]     = useState(false);
   const [apiError,      setApiError]      = useState<string | null>(null);
 
-  const loadSnapshot = useCallback(() => {
+  const fetchSnapshot = useCallback(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     const params: Record<string, string> = {};
     if (fyParam) params.fy = fyParam;
     getStockSnapshot(companyGuid, params)
@@ -76,11 +82,27 @@ export default function StockSnapshotScreen() {
         setApiWarehouses(res?.data?.warehouses ?? []);
         setApiSummary(res?.data?.summary ?? null);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load snapshot'))
+      .catch((e: any) => setApiError(e?.message || t('screens.stocksStockSnapshot.loadFailed')))
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fyParam]);
+  }, [companyGuid, fyParam, t]);
 
-  useEffect(() => { loadSnapshot(); }, [loadSnapshot]);
+  const loadSnapshot = useCallback(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    fetchSnapshot();
+  }, [companyGuid, fetchSnapshot]);
+
+  const [prevLoadDeps, setPrevLoadDeps] = useState<unknown[] | null>(null);
+  if (prevLoadDeps === null || prevLoadDeps[0] !== companyGuid || prevLoadDeps[1] !== fyParam) {
+    setPrevLoadDeps([companyGuid, fyParam]);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchSnapshot(); }, [fetchSnapshot]);
 
   // Build display data from API response in the shape the existing UI expects
   const valKey = valuation.toLowerCase() as 'average' | 'opening' | 'closing' | 'peak';
@@ -142,7 +164,7 @@ export default function StockSnapshotScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       cancelSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksStockSnapshot.shareFailedMsg'));
     } finally {
       setIsSharing(false);
     }
@@ -157,7 +179,7 @@ export default function StockSnapshotScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Snapshot</Text>
+        <Text style={s.headerTitle}>{t('screens.stocksStockSnapshot.title')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -166,11 +188,11 @@ export default function StockSnapshotScreen() {
         <View style={s.selBanner}>
           <TouchableOpacity onPress={cancelSelection} style={s.selBannerBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selBannerCancel}>Cancel</Text>
+            <Text style={s.selBannerCancel}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={selectAll} style={s.selBannerBtn} activeOpacity={0.7}>
-            <Text style={s.selBannerAll}>All</Text>
+            <Text style={s.selBannerAll}>{t('common.all')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -190,7 +212,7 @@ export default function StockSnapshotScreen() {
               activeOpacity={0.8}
             >
               <Ionicons name="layers-outline" size={14} color={COLORS.textPrimary} />
-              <Text style={s.controlPillTxt}>{valuation}</Text>
+              <Text style={s.controlPillTxt}>{t(VALUATION_LABEL_KEYS[valuation])}</Text>
               <Ionicons
                 name={showValDrop ? 'chevron-up' : 'chevron-down'}
                 size={14}
@@ -210,7 +232,7 @@ export default function StockSnapshotScreen() {
                 onPress={() => { setValuation(v); setShowValDrop(false); }}
                 activeOpacity={0.7}
               >
-                <Text style={[s.valDropTxt, valuation === v && s.valDropTxtActive]}>{v}</Text>
+                <Text style={[s.valDropTxt, valuation === v && s.valDropTxtActive]}>{t(VALUATION_LABEL_KEYS[v])}</Text>
                 {valuation === v && <Ionicons name="checkmark" size={16} color={COLORS.textPrimary} />}
               </TouchableOpacity>
             ))}
@@ -226,7 +248,7 @@ export default function StockSnapshotScreen() {
         {!isSelMode && (
           <View style={s.hintRow}>
             <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
-            <Text style={s.hintTxt}>Long press to select rows</Text>
+            <Text style={s.hintTxt}>{t('screens.stocksStockSnapshot.longPressHint')}</Text>
           </View>
         )}
 
@@ -235,23 +257,23 @@ export default function StockSnapshotScreen() {
           {/* Header row */}
           <View style={[s.tableRow, s.tableHeader]}>
             <Text style={[s.colIdx, s.hdrTxt]}>#</Text>
-            <Text style={[s.colWarehouse, s.hdrTxt]}>Warehouse</Text>
-            <Text style={[s.colValue, s.hdrTxt]} numberOfLines={1}>Value (₹)</Text>
-            <Text style={[s.colPct, s.hdrTxt]} numberOfLines={1}>% Share</Text>
+            <Text style={[s.colWarehouse, s.hdrTxt]}>{t('screens.stocksStockSnapshot.warehouse')}</Text>
+            <Text style={[s.colValue, s.hdrTxt]} numberOfLines={1}>{t('screens.stocksStockSnapshot.valueInr')}</Text>
+            <Text style={[s.colPct, s.hdrTxt]} numberOfLines={1}>{t('screens.stocksStockSnapshot.pctShare')}</Text>
           </View>
 
           {/* Loading state */}
           {isLoading && (
             <View style={{ paddingVertical: 32, alignItems: 'center' }}>
               <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-              <Text style={{ marginTop: 8, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>Loading...</Text>
+              <Text style={{ marginTop: 8, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>{t('common.loading')}</Text>
             </View>
           )}
 
           {/* Empty state */}
           {!isLoading && !apiError && data.rows.length === 0 && (
             <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-              <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary }}>No stock valuation data for this FY</Text>
+              <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary }}>{t('screens.stocksStockSnapshot.noData')}</Text>
             </View>
           )}
 
@@ -291,7 +313,7 @@ export default function StockSnapshotScreen() {
           {!isLoading && data.rows.length > 0 && (
             <View style={[s.tableRow, s.grandRow]}>
               <Text style={[s.colIdx, s.grandTxt]}>-</Text>
-              <Text style={[s.colWarehouse, s.grandTxt]}>Grand Total</Text>
+              <Text style={[s.colWarehouse, s.grandTxt]}>{t('screens.stocksStockSnapshot.grandTotal')}</Text>
               <Text style={[s.colValue, s.grandTxt]}>{data.grandValue}</Text>
               <Text style={[s.colPct, s.grandTxt]}>{data.grandPct}</Text>
             </View>
@@ -306,10 +328,10 @@ export default function StockSnapshotScreen() {
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+            <Text style={s.cancelSelFooterTxt}>{t('screens.stocksStockSnapshot.deselect')}</Text>
           </TouchableOpacity>
           <Text style={s.shareBarCount}>
-            {selectedIds.size} row{selectedIds.size !== 1 ? 's' : ''}
+            {t(selectedIds.size !== 1 ? 'screens.stocksStockSnapshot.rowCountOther' : 'screens.stocksStockSnapshot.rowCountOne', { count: selectedIds.size })}
           </Text>
           <TouchableOpacity
             style={[s.shareBtnView, isSharing && { opacity: 0.6 }]}
@@ -321,7 +343,7 @@ export default function StockSnapshotScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareTxt}>{isSharing ? t('screens.stocksStockSnapshot.preparing') : t('screens.stocksStockSnapshot.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

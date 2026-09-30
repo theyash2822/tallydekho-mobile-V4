@@ -39,17 +39,17 @@ const REDUCE_REASONS = ['Damage', 'Shortage', 'Expired', 'Lost'];
 const INCREASE_REASONS = ['Excess'];
 
 const REASON_OPTS = [
-  { label: 'Damage', value: 'Damage' },
-  { label: 'Shortage', value: 'Shortage' },
-  { label: 'Expired', value: 'Expired' },
-  { label: 'Lost', value: 'Lost' },
-  { label: 'Excess', value: 'Excess' },
-  { label: 'Correction', value: 'Correction' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonDamage', value: 'Damage' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonShortage', value: 'Shortage' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonExpired', value: 'Expired' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonLost', value: 'Lost' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonExcess', value: 'Excess' },
+  { labelKey: 'screens.stocksCreateAdjustment.reasonCorrection', value: 'Correction' },
 ];
 
 const DIRECTION_OPTS = [
-  { label: '+ Add stock', value: 'Add' },
-  { label: '− Reduce stock', value: 'Reduce' },
+  { labelKey: 'screens.stocksCreateAdjustment.directionAdd', value: 'Add' },
+  { labelKey: 'screens.stocksCreateAdjustment.directionReduce', value: 'Reduce' },
 ];
 
 function mapStockRow(r: any, formatAmount: (n: number) => string): StockItem {
@@ -141,6 +141,7 @@ function AdjItemTile({
   onQty: (q: number) => void;
   onWarehouse: (wh: string) => void;
 }) {
+  const { t } = useTranslation();
   const whQty = warehouseQty(row);
   const multiWh = row.godowns.length > 1;
   const whOptions: BSSOption[] = row.godowns.map(g => ({
@@ -151,9 +152,9 @@ function AdjItemTile({
 
   const effect = reason ? adjustmentEffect(reason, direction) : null;
   const effectHint = effect === 'reduce'
-    ? `Max ${whQty} ${row.item.unit || 'pcs'}`
+    ? t('screens.stocksCreateAdjustment.max', { qty: whQty, unit: row.item.unit || 'pcs' })
     : effect === 'increase'
-    ? '+ add to stock'
+    ? t('screens.stocksCreateAdjustment.addToStock')
     : null;
 
   return (
@@ -170,9 +171,9 @@ function AdjItemTile({
           <View style={s.whCol}>
             <BottomSheetSearch
               compact
-              placeholder="Warehouse"
-              sheetTitle="Select Warehouse"
-              searchPlaceholder="Search..."
+              placeholder={t('screens.stocksCreateAdjustment.warehouse')}
+              sheetTitle={t('screens.stocksCreateAdjustment.selectWarehouse')}
+              searchPlaceholder={t('screens.stocksCreateAdjustment.search')}
               icon="home-outline"
               options={whOptions}
               value={row.warehouse}
@@ -188,7 +189,7 @@ function AdjItemTile({
         )}
 
         <View style={s.qtyCol}>
-          <Text style={s.qtyLbl}>Adjust</Text>
+          <Text style={s.qtyLbl}>{t('screens.stocksCreateAdjustment.adjust')}</Text>
           <CompactQtyInput value={row.qty} onChange={onQty} min={1} />
         </View>
       </View>
@@ -236,9 +237,14 @@ export default function CreateStockAdjustmentScreen() {
     }, 250);
   }, []);
 
+  const [stocksLoadKey, setStocksLoadKey] = useState<{ companyGuid?: string; formatAmount: typeof formatAmount } | null>(null);
+  if (!stocksLoadKey || stocksLoadKey.companyGuid !== companyGuid || stocksLoadKey.formatAmount !== formatAmount) {
+    setStocksLoadKey({ companyGuid, formatAmount });
+    setLoading(!!companyGuid);
+  }
+
   useEffect(() => {
-    if (!companyGuid) { setLoading(false); return; }
-    setLoading(true);
+    if (!companyGuid) return;
     getStocks(companyGuid, { limit: '1000' })
       .then((stockRes: any) => {
         const items = stockRes?.data?.items ?? [];
@@ -287,23 +293,23 @@ export default function CreateStockAdjustmentScreen() {
 
   const validate = () => {
     if (rows.length === 0) {
-      Toast.show({ type: 'error', text1: 'No Items', text2: 'Add at least one stock item.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateAdjustment.noItems'), text2: t('screens.stocksCreateAdjustment.addAtLeastOne') });
       return false;
     }
     if (rows.some(r => !r.warehouse)) {
-      Toast.show({ type: 'error', text1: 'Warehouse Required', text2: 'Select warehouse for each item.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateAdjustment.warehouseRequired'), text2: t('screens.stocksCreateAdjustment.selectWarehouseEach') });
       return false;
     }
     if (rows.some(r => r.qty <= 0)) {
-      Toast.show({ type: 'error', text1: 'Invalid Qty', text2: 'Each item needs qty greater than 0.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateAdjustment.invalidQty'), text2: t('screens.stocksCreateAdjustment.qtyGreaterThanZero') });
       return false;
     }
     if (!reason) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select adjustment reason.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.stocksCreateAdjustment.selectReason') });
       return false;
     }
     if (reason === 'Correction' && !direction) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select Add or Reduce for Correction.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.stocksCreateAdjustment.selectDirection') });
       return false;
     }
 
@@ -313,8 +319,8 @@ export default function CreateStockAdjustmentScreen() {
       if (over) {
         Toast.show({
           type: 'error',
-          text1: 'Exceeds Stock',
-          text2: `${over.item.name}: max ${warehouseQty(over)} ${over.item.unit || 'pcs'} in ${over.warehouse}`,
+          text1: t('screens.stocksCreateAdjustment.exceedsStock'),
+          text2: t('screens.stocksCreateAdjustment.exceedsStockMsg', { name: over.item.name, max: warehouseQty(over), unit: over.item.unit || 'pcs', wh: over.warehouse }),
         });
         return false;
       }
@@ -364,7 +370,7 @@ export default function CreateStockAdjustmentScreen() {
       clearStockListCache();
       setShowSuccess(true);
     } else {
-      Toast.show({ type: 'error', text1: 'Adjustment Failed', text2: 'Could not save adjustments.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateAdjustment.adjustmentFailed'), text2: t('screens.stocksCreateAdjustment.couldNotSave') });
     }
   };
 
@@ -394,16 +400,16 @@ export default function CreateStockAdjustmentScreen() {
         >
           <View style={s.field}>
             <BottomSheetSearch
-              label="Add Stock Items"
-              placeholder={itemOptions.length ? 'Search and select items...' : 'All items added'}
-              sheetTitle="Select Stock Items"
-              searchPlaceholder="Search by name or SKU..."
+              label={t('screens.stocksCreateAdjustment.addStockItems')}
+              placeholder={itemOptions.length ? t('screens.stocksCreateAdjustment.searchSelectItems') : t('screens.stocksCreateAdjustment.allItemsAdded')}
+              sheetTitle={t('screens.stocksCreateAdjustment.selectStockItems')}
+              searchPlaceholder={t('screens.stocksCreateAdjustment.searchByNameSku')}
               icon="cube-outline"
               options={itemOptions}
               value=""
               onSelect={() => {}}
               multiSelect
-              confirmLabel={n => `Add ${n} Item${n !== 1 ? 's' : ''}`}
+              confirmLabel={n => (n !== 1 ? t('screens.stocksCreateAdjustment.addItems', { count: n }) : t('screens.stocksCreateAdjustment.addItem', { count: n }))}
               onMultiConfirm={addItems}
               disabled={itemOptions.length === 0 || addingItems}
             />
@@ -414,7 +420,7 @@ export default function CreateStockAdjustmentScreen() {
 
           {rows.length > 0 && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>Items ({rows.length})</Text>
+              <Text style={s.sectionTitle}>{t('screens.stocksCreateAdjustment.itemsCount', { count: rows.length })}</Text>
               {rows.map(r => (
                 <AdjItemTile
                   key={r.item.id}
@@ -430,13 +436,13 @@ export default function CreateStockAdjustmentScreen() {
           )}
 
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Reason</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksCreateAdjustment.reason')}</Text>
             <FormDropdown
-              label="Adjustment Reason"
+              label={t('screens.stocksCreateAdjustment.adjustmentReason')}
               required
               value={reason}
-              options={REASON_OPTS}
-              placeholder="Select reason"
+              options={REASON_OPTS.map(o => ({ label: t(o.labelKey), value: o.value }))}
+              placeholder={t('screens.stocksCreateAdjustment.selectReasonPh')}
               onSelect={o => {
                 setReason(o.value);
                 if (o.value !== 'Correction') setDirection('');
@@ -444,26 +450,26 @@ export default function CreateStockAdjustmentScreen() {
             />
             {reason === 'Correction' && (
               <FormDropdown
-                label="Direction"
+                label={t('screens.stocksCreateAdjustment.direction')}
                 required
                 value={direction}
-                options={DIRECTION_OPTS}
-                placeholder="Add or Reduce"
+                options={DIRECTION_OPTS.map(o => ({ label: t(o.labelKey), value: o.value }))}
+                placeholder={t('screens.stocksCreateAdjustment.addOrReduce')}
                 onSelect={o => setDirection(o.value)}
               />
             )}
             {reason && reason !== 'Correction' ? (
               <Text style={s.reasonHint}>
                 {REDUCE_REASONS.includes(reason)
-                  ? `${reason} automatically reduces stock.`
-                  : `${reason} automatically adds stock.`}
+                  ? t('screens.stocksCreateAdjustment.reasonReduces', { reason: t(REASON_OPTS.find(o => o.value === reason)?.labelKey ?? reason) })
+                  : t('screens.stocksCreateAdjustment.reasonAdds', { reason: t(REASON_OPTS.find(o => o.value === reason)?.labelKey ?? reason) })}
               </Text>
             ) : null}
             <View style={s.field}>
-              <Text style={s.label}>Note</Text>
+              <Text style={s.label}>{t('screens.stocksCreateAdjustment.note')}</Text>
               <TextInput
                 style={s.noteInput}
-                placeholder="Optional note"
+                placeholder={t('screens.stocksCreateAdjustment.optionalNote')}
                 placeholderTextColor={COLORS.textTertiary}
                 value={note}
                 onChangeText={setNote}
@@ -477,9 +483,9 @@ export default function CreateStockAdjustmentScreen() {
 
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <SubmitButton
-          idleLabel={rows.length ? `Adjust ${rows.length} Item${rows.length !== 1 ? 's' : ''}` : 'Adjust'}
-          loadingLabel="Saving..."
-          successLabel="✓ Done"
+          idleLabel={rows.length ? (rows.length !== 1 ? t('screens.stocksCreateAdjustment.adjustItems', { count: rows.length }) : t('screens.stocksCreateAdjustment.adjustItem', { count: rows.length })) : t('screens.stocksCreateAdjustment.adjust')}
+          loadingLabel={t('common.saving')}
+          successLabel={t('screens.stocksCreateAdjustment.doneCheck')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -495,56 +501,61 @@ export default function CreateStockAdjustmentScreen() {
         onRequestClose={() => { setShowSuccess(false); router.back(); }}
       >
         <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>
-              {submitResult.isQueued ? 'Saved. Pending Sync' : 'Adjustment Saved!'}
-            </Text>
-            <Text style={ss.sub}>
-              {submitResult.savedCount === submitResult.totalCount
-                ? `${submitResult.savedCount} item(s) adjusted.`
-                : `${submitResult.savedCount} of ${submitResult.totalCount} saved.`}
-              {submitResult.isQueued ? ' Will push to Tally when desktop connects.' : ''}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Voucher No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+          {submitResult && (
+            <View style={ss.card}>
+              <View style={ss.iconWrap}>
+                <Ionicons
+                  name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                  size={56}
+                  color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                />
               </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
+              <Text style={ss.title}>
+                {submitResult.isQueued ? t('screens.stocksCreateAdjustment.savedPendingSync') : t('screens.stocksCreateAdjustment.adjustmentSaved')}
+              </Text>
+              <Text style={ss.sub}>
+                {submitResult.savedCount === submitResult.totalCount
+                  ? (submitResult.isQueued
+                    ? t('screens.stocksCreateAdjustment.itemsAdjustedQueued', { count: submitResult.savedCount })
+                    : t('screens.stocksCreateAdjustment.itemsAdjusted', { count: submitResult.savedCount }))
+                  : (submitResult.isQueued
+                    ? t('screens.stocksCreateAdjustment.partialSavedQueued', { saved: submitResult.savedCount, total: submitResult.totalCount })
+                    : t('screens.stocksCreateAdjustment.partialSaved', { saved: submitResult.savedCount, total: submitResult.totalCount }))}
+              </Text>
+              {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+                <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                  <Text style={ss.refLabel}>{t('screens.stocksCreateAdjustment.voucherNo')}</Text>
+                  <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <View style={ss.refBadge}>
+                  <Text style={ss.refLabel}>{t('screens.stocksCreateAdjustment.referenceNo')}</Text>
+                  <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <TouchableOpacity
+                  style={ss.previewBtn}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setShowSuccess(false);
+                    router.replace(`/stocks/adjustment-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
+                  }}
+                >
+                  <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={ss.previewBtnTxt}>{t('screens.stocksCreateAdjustment.preview')}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={ss.previewBtn}
+                style={ss.closeBtn}
                 activeOpacity={0.85}
-                onPress={() => {
-                  setShowSuccess(false);
-                  router.replace(`/stocks/adjustment-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
-                }}
+                onPress={() => { setShowSuccess(false); router.back(); }}
               >
-                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.previewBtnTxt}>Preview</Text>
+                <Text style={ss.closeBtnTxt}>{t('common.close')}</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={ss.closeBtn}
-              activeOpacity={0.85}
-              onPress={() => { setShowSuccess(false); router.back(); }}
-            >
-              <Text style={ss.closeBtnTxt}>Close</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
         </View>
       </Modal>
     </SafeAreaView>

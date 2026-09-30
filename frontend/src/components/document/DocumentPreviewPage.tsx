@@ -54,6 +54,7 @@ function DocNavBar({ title, onBack }: { title: string; onBack: () => void }) {
 // DocHeader — company letterhead + document type badge + number + date
 // ─────────────────────────────────────────────────────────────────────────────
 function DocHeader({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   const cfg = DOC_TYPE_CONFIG[doc.documentType] ?? {
     label: String(doc.documentType).replace(/_/g, ' '),
     color: '#374151',
@@ -76,13 +77,13 @@ function DocHeader({ doc }: { doc: VoucherDocument }) {
       <View style={ds.chipRow}>
         {doc.company.gstin && (
           <View style={ds.chip}>
-            <Text style={ds.chipLabel}>GSTIN </Text>
+            <Text style={ds.chipLabel}>{t('screens.componentsDocumentDocumentPreviewPage.gstinChip')}</Text>
             <Text style={ds.chipValue}>{doc.company.gstin}</Text>
           </View>
         )}
         {doc.company.pan && (
           <View style={ds.chip}>
-            <Text style={ds.chipLabel}>PAN </Text>
+            <Text style={ds.chipLabel}>{t('screens.componentsDocumentDocumentPreviewPage.panChip')}</Text>
             <Text style={ds.chipValue}>{doc.company.pan}</Text>
           </View>
         )}
@@ -111,11 +112,11 @@ function DocHeader({ doc }: { doc: VoucherDocument }) {
       {/* Document number + date row */}
       <View style={ds.docMetaRow}>
         <View style={{ flex: 1 }}>
-          <Text style={ds.metaSmallLabel}>DOCUMENT NO.</Text>
+          <Text style={ds.metaSmallLabel}>{t('screens.componentsDocumentDocumentPreviewPage.documentNo')}</Text>
           <Text style={ds.docNumber}>{doc.documentNumber}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={ds.metaSmallLabel}>DATE</Text>
+          <Text style={ds.metaSmallLabel}>{t('screens.componentsDocumentDocumentPreviewPage.dateUpper')}</Text>
           <Text style={ds.docDate}>{doc.date}</Text>
         </View>
       </View>
@@ -127,6 +128,7 @@ function DocHeader({ doc }: { doc: VoucherDocument }) {
 // PartySection — Bill To / Ship To
 // ─────────────────────────────────────────────────────────────────────────────
 function PartySection({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.party && !doc.billing && !doc.shipping) return null;
   // Stock docs have no counterparty — the godowns print in the movement table.
   if (doc.layout?.family === 'stock') return null;
@@ -134,12 +136,12 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
   const hasShipping = !!(doc.shipping?.line1 || doc.shipping?.city);
   // Money vouchers have no bill-to; Tally labels the party ledger "Account".
   const partyLabel = doc.layout?.family === 'voucher'
-    ? 'ACCOUNT'
-    : (doc.layout?.partyRole === 'supplier' ? 'BILL FROM' : 'BILL TO');
+    ? t('screens.componentsDocumentDocumentPreviewPage.accountUpper')
+    : (doc.layout?.partyRole === 'supplier' ? t('screens.componentsDocumentDocumentPreviewPage.billFrom') : t('screens.componentsDocumentDocumentPreviewPage.billTo'));
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="PARTY DETAILS" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.partyDetails')} />
       <View style={ds.partyRow}>
         {/* Bill To */}
         <View style={{ flex: 1 }}>
@@ -158,7 +160,7 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
             </Text>
           )}
           {doc.party?.gstin && (
-            <Text style={ds.partyGstin}>GSTIN: {doc.party.gstin}</Text>
+            <Text style={ds.partyGstin}>{t('screens.componentsDocumentDocumentPreviewPage.gstin', { gstin: doc.party.gstin })}</Text>
           )}
           {doc.party?.phone && (
             <View style={[ds.contactItem, { marginTop: 4 }]}>
@@ -173,7 +175,7 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
           <>
             <View style={ds.partySep} />
             <View style={{ flex: 1 }}>
-              <Text style={ds.partyColLabel}>SHIP TO</Text>
+              <Text style={ds.partyColLabel}>{t('screens.componentsDocumentDocumentPreviewPage.shipTo')}</Text>
               {doc.shipping?.name && (
                 <Text style={ds.partyName}>{doc.shipping.name}</Text>
               )}
@@ -199,40 +201,41 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
 // MetaGrid — reference numbers, supply details, payment terms
 // ─────────────────────────────────────────────────────────────────────────────
 function MetaGrid({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   const m = doc.metadata;
-  const t = doc.tallyMeta;
-  if (!m && !t) return null;
+  const tm = doc.tallyMeta;
+  if (!m && !tm) return null;
 
   // Label order follows Tally's header grid (PDF_LAYOUT_SPEC.md section 2.5), so
   // the preview reads the same as the printed document. Blank fields are dropped
   // on screen — only the PDF keeps empty labelled cells.
   const candidates: (null | { label: string; value?: string })[] = [
-    { label: 'Reference No.',      value: t?.referenceNo },
-    { label: 'Reference Date',     value: t?.referenceDate },
-    { label: 'Place of Supply',    value: t?.placeOfSupply    ?? m?.placeOfSupply },
-    { label: "Buyer's Order No.",  value: t?.buyersOrderNo    ?? m?.orderRef },
-    { label: 'Supplier Invoice',   value: t?.supplierInvoiceNo },
-    { label: 'Supplier Inv. Date', value: t?.supplierInvoiceDate },
-    { label: 'Original Invoice',   value: t?.originalInvoiceNo ?? m?.invoiceRef },
-    { label: 'Orig. Invoice Date', value: t?.originalInvoiceDate },
-    { label: 'Delivery Note',      value: t?.deliveryNoteNo },
-    { label: 'Dispatch Doc No.',   value: t?.dispatchDocNo },
-    { label: 'Dispatched through', value: t?.dispatchedThrough },
-    { label: 'Destination',        value: t?.destination },
-    { label: 'Transport Mode',     value: t?.transportMode },
-    { label: 'Motor Vehicle No.',  value: t?.motorVehicleNo   ?? m?.vehicleNo },
-    { label: 'Bill of Lading',     value: t?.billOfLadingNo },
-    { label: 'Mode/Terms of Pmt.', value: t?.paymentTerms     ?? m?.paymentTerms },
-    { label: 'Terms of Delivery',  value: t?.termsOfDelivery  ?? m?.deliveryTerms },
-    { label: 'Due Date',           value: t?.dueDate          ?? m?.dueDate },
-    { label: 'e-Way Bill No.',     value: t?.ewayBillNo       ?? m?.eway },
-    { label: 'IRN',                value: t?.irn },
-    { label: 'Other References',   value: t?.otherReferences },
-    { label: 'Source Godown',      value: t?.sourceGodown },
-    { label: 'Destination Godown', value: t?.destinationGodown },
-    { label: 'Adjustment Reason',  value: t?.adjustmentReason },
-    { label: 'Warehouse',          value: m?.warehouse },
-    { label: 'Cost Centre',        value: m?.costCentre },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.referenceNo'), value: tm?.referenceNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.referenceDate'), value: tm?.referenceDate },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.placeOfSupply'), value: tm?.placeOfSupply    ?? m?.placeOfSupply },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.buyersOrderNo'), value: tm?.buyersOrderNo    ?? m?.orderRef },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.supplierInvoice'), value: tm?.supplierInvoiceNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.supplierInvDate'), value: tm?.supplierInvoiceDate },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.originalInvoice'), value: tm?.originalInvoiceNo ?? m?.invoiceRef },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.origInvoiceDate'), value: tm?.originalInvoiceDate },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.deliveryNote'), value: tm?.deliveryNoteNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.dispatchDocNo'), value: tm?.dispatchDocNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.dispatchedThrough'), value: tm?.dispatchedThrough },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.destination'), value: tm?.destination },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.transportMode'), value: tm?.transportMode },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.motorVehicleNo'), value: tm?.motorVehicleNo   ?? m?.vehicleNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.billOfLading'), value: tm?.billOfLadingNo },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.modeTermsPmt'), value: tm?.paymentTerms     ?? m?.paymentTerms },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.termsOfDelivery'), value: tm?.termsOfDelivery  ?? m?.deliveryTerms },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.dueDate'), value: tm?.dueDate          ?? m?.dueDate },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.ewayBillNo'), value: tm?.ewayBillNo       ?? m?.eway },
+    { label: 'IRN',                value: tm?.irn },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.otherReferences'), value: tm?.otherReferences },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.sourceGodown'), value: tm?.sourceGodown },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.destinationGodown'), value: tm?.destinationGodown },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.adjustmentReason'), value: tm?.adjustmentReason },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.warehouse'), value: m?.warehouse },
+    { label: t('screens.componentsDocumentDocumentPreviewPage.costCentre'), value: m?.costCentre },
   ];
 
   const pairs = candidates
@@ -243,7 +246,7 @@ function MetaGrid({ doc }: { doc: VoucherDocument }) {
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="REFERENCE & DETAILS" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.referenceDetails')} />
       <View style={ds.metaGrid}>
         {pairs.map((p, i) => (
           <View
@@ -269,6 +272,7 @@ function MetaGrid({ doc }: { doc: VoucherDocument }) {
 // ItemsTable — horizontally scrollable goods/services line items
 // ─────────────────────────────────────────────────────────────────────────────
 function ItemsTable({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.items || doc.items.length === 0) return null;
   const hasDiscount = doc.items.some(i => (i.discount ?? 0) > 0);
 
@@ -276,21 +280,21 @@ function ItemsTable({ doc }: { doc: VoucherDocument }) {
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="ITEMS" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.items')} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
         <View>
           {/* Table header */}
           <View style={ds.tblHeader}>
             <Text style={[ds.th, { width: W.idx }]}>#</Text>
-            <Text style={[ds.th, { width: W.name }]}>ITEM</Text>
+            <Text style={[ds.th, { width: W.name }]}>{t('screens.componentsDocumentDocumentPreviewPage.item')}</Text>
             <Text style={[ds.th, { width: W.hsn }]}>HSN</Text>
-            <Text style={[ds.th, ds.thR, { width: W.qty }]}>QTY</Text>
-            <Text style={[ds.th, ds.thR, { width: W.rate }]}>RATE</Text>
+            <Text style={[ds.th, ds.thR, { width: W.qty }]}>{t('screens.componentsDocumentDocumentPreviewPage.qty')}</Text>
+            <Text style={[ds.th, ds.thR, { width: W.rate }]}>{t('screens.componentsDocumentDocumentPreviewPage.rate')}</Text>
             {hasDiscount && (
-              <Text style={[ds.th, ds.thR, { width: W.disc }]}>DISC</Text>
+              <Text style={[ds.th, ds.thR, { width: W.disc }]}>{t('screens.componentsDocumentDocumentPreviewPage.disc')}</Text>
             )}
-            <Text style={[ds.th, ds.thR, { width: W.tax }]}>TAX%</Text>
-            <Text style={[ds.th, ds.thR, { width: W.amt }]}>AMOUNT</Text>
+            <Text style={[ds.th, ds.thR, { width: W.tax }]}>{t('screens.componentsDocumentDocumentPreviewPage.taxPct')}</Text>
+            <Text style={[ds.th, ds.thR, { width: W.amt }]}>{t('screens.componentsDocumentDocumentPreviewPage.amount')}</Text>
           </View>
 
           {/* Item rows */}
@@ -337,7 +341,7 @@ function ItemsTable({ doc }: { doc: VoucherDocument }) {
       {/* Swipe hint */}
       <View style={ds.scrollHintRow}>
         <Ionicons name="swap-horizontal-outline" size={11} color={COLORS.textTertiary} />
-        <Text style={ds.scrollHintText}>Swipe table to see all columns</Text>
+        <Text style={ds.scrollHintText}>{t('screens.componentsDocumentDocumentPreviewPage.swipeHint')}</Text>
       </View>
     </View>
   );
@@ -347,17 +351,18 @@ function ItemsTable({ doc }: { doc: VoucherDocument }) {
 // LedgerTable — Dr/Cr entries for voucher documents
 // ─────────────────────────────────────────────────────────────────────────────
 function LedgerTable({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.ledgerEntries || doc.ledgerEntries.length === 0) return null;
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="LEDGER ENTRIES" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.ledgerEntries')} />
 
       {/* Header */}
       <View style={ds.tblHeader}>
-        <Text style={[ds.th, { flex: 1 }]}>PARTICULARS</Text>
-        <Text style={[ds.th, ds.thR, { width: 100 }]}>DEBIT (₹)</Text>
-        <Text style={[ds.th, ds.thR, { width: 100 }]}>CREDIT (₹)</Text>
+        <Text style={[ds.th, { flex: 1 }]}>{t('screens.componentsDocumentDocumentPreviewPage.particulars')}</Text>
+        <Text style={[ds.th, ds.thR, { width: 100 }]}>{t('screens.componentsDocumentDocumentPreviewPage.debitInr')}</Text>
+        <Text style={[ds.th, ds.thR, { width: 100 }]}>{t('screens.componentsDocumentDocumentPreviewPage.creditInr')}</Text>
       </View>
 
       {/* Entry rows. Tally groups these under "Account :" and "Through :", with
@@ -373,7 +378,7 @@ function LedgerTable({ doc }: { doc: VoucherDocument }) {
         >
           <View style={{ flex: 1, paddingRight: 8 }}>
             {(entry.reference === 'Account' || entry.reference === 'Through') && (
-              <Text style={ds.ledgerGroupLabel}>{entry.reference} :</Text>
+              <Text style={ds.ledgerGroupLabel}>{entry.reference === 'Account' ? t('screens.componentsDocumentDocumentPreviewPage.account') : t('screens.componentsDocumentDocumentPreviewPage.through')} :</Text>
             )}
             <Text style={[ds.tdBold, entry.reference === 'allocation' && ds.ledgerAllocation]}>
               {entry.particulars}
@@ -407,7 +412,7 @@ function LedgerTable({ doc }: { doc: VoucherDocument }) {
 
       {/* Totals row */}
       <View style={ds.ledgerTotals}>
-        <Text style={[ds.ledgerTotalLabel, { flex: 1 }]}>TOTAL</Text>
+        <Text style={[ds.ledgerTotalLabel, { flex: 1 }]}>{t('screens.componentsDocumentDocumentPreviewPage.totalUpper')}</Text>
         <Text style={[ds.ledgerTotalAmt, { width: 100, color: COLORS.negative }]}>
           {doc.totals.drTotal ? formatCurrency(doc.totals.drTotal) : '—'}
         </Text>
@@ -423,23 +428,24 @@ function LedgerTable({ doc }: { doc: VoucherDocument }) {
 // TaxBreakdown — GST / tax summary table
 // ─────────────────────────────────────────────────────────────────────────────
 function TaxBreakdown({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.taxes || doc.taxes.length === 0) return null;
-  const hasCGST = doc.taxes.some(t => t.cgst);
-  const hasIGST = doc.taxes.some(t => t.igst);
+  const hasCGST = doc.taxes.some(x => x.cgst);
+  const hasIGST = doc.taxes.some(x => x.igst);
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="TAX SUMMARY" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.taxSummary')} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
         <View>
           <View style={ds.tblHeader}>
-            <Text style={[ds.th, { width: 148 }]}>TAX TYPE</Text>
-            <Text style={[ds.th, { width: 42 }]}>RATE</Text>
-            <Text style={[ds.th, ds.thR, { width: 96 }]}>TAXABLE</Text>
+            <Text style={[ds.th, { width: 148 }]}>{t('screens.componentsDocumentDocumentPreviewPage.taxType')}</Text>
+            <Text style={[ds.th, { width: 42 }]}>{t('screens.componentsDocumentDocumentPreviewPage.rate')}</Text>
+            <Text style={[ds.th, ds.thR, { width: 96 }]}>{t('screens.componentsDocumentDocumentPreviewPage.taxable')}</Text>
             {hasCGST && <Text style={[ds.th, ds.thR, { width: 84 }]}>CGST</Text>}
             {hasCGST && <Text style={[ds.th, ds.thR, { width: 84 }]}>SGST</Text>}
             {hasIGST && <Text style={[ds.th, ds.thR, { width: 84 }]}>IGST</Text>}
-            <Text style={[ds.th, ds.thR, { width: 84 }]}>TAX TOTAL</Text>
+            <Text style={[ds.th, ds.thR, { width: 84 }]}>{t('screens.componentsDocumentDocumentPreviewPage.taxTotal')}</Text>
           </View>
 
           {doc.taxes.map((tax, idx) => (
@@ -488,37 +494,38 @@ function TaxBreakdown({ doc }: { doc: VoucherDocument }) {
 // TotalsSummary — subtotals, tax breakdown, grand total, amount in words
 // ─────────────────────────────────────────────────────────────────────────────
 function TotalsSummary({ doc }: { doc: VoucherDocument }) {
-  const t = doc.totals;
+  const { t } = useTranslation();
+  const tot = doc.totals;
   type RowStyle = 'default' | 'bold' | 'subtracted' | 'added';
 
   const rows: { label: string; value: string; style?: RowStyle }[] = [];
 
-  if (t.subtotal !== undefined)
-    rows.push({ label: 'Subtotal', value: formatCurrency(t.subtotal) });
-  if (t.discount)
-    rows.push({ label: 'Discount  (−)', value: formatCurrency(t.discount), style: 'subtracted' });
-  if (t.taxableAmount !== undefined && t.discount)
-    rows.push({ label: 'Taxable Amount', value: formatCurrency(t.taxableAmount), style: 'bold' });
+  if (tot.subtotal !== undefined)
+    rows.push({ label: t('pdf.subtotal'), value: formatCurrency(tot.subtotal) });
+  if (tot.discount)
+    rows.push({ label: t('screens.componentsDocumentDocumentPreviewPage.discountMinus'), value: formatCurrency(tot.discount), style: 'subtracted' });
+  if (tot.taxableAmount !== undefined && tot.discount)
+    rows.push({ label: t('screens.componentsDocumentDocumentPreviewPage.taxableAmount'), value: formatCurrency(tot.taxableAmount), style: 'bold' });
   for (const charge of doc.additionalCharges || [])
     rows.push({ label: `${charge.description}  (+)`, value: formatCurrency(charge.amount), style: 'added' });
-  if (t.cgstTotal)
-    rows.push({ label: 'CGST  (+)', value: formatCurrency(t.cgstTotal), style: 'added' });
-  if (t.sgstTotal)
-    rows.push({ label: 'SGST  (+)', value: formatCurrency(t.sgstTotal), style: 'added' });
-  if (t.igstTotal)
-    rows.push({ label: 'IGST  (+)', value: formatCurrency(t.igstTotal), style: 'added' });
-  if (t.taxTotal)
-    rows.push({ label: 'Total Tax', value: formatCurrency(t.taxTotal), style: 'bold' });
-  if (t.roundOff !== undefined && t.roundOff !== 0)
+  if (tot.cgstTotal)
+    rows.push({ label: 'CGST  (+)', value: formatCurrency(tot.cgstTotal), style: 'added' });
+  if (tot.sgstTotal)
+    rows.push({ label: 'SGST  (+)', value: formatCurrency(tot.sgstTotal), style: 'added' });
+  if (tot.igstTotal)
+    rows.push({ label: 'IGST  (+)', value: formatCurrency(tot.igstTotal), style: 'added' });
+  if (tot.taxTotal)
+    rows.push({ label: t('screens.componentsDocumentDocumentPreviewPage.totalTax'), value: formatCurrency(tot.taxTotal), style: 'bold' });
+  if (tot.roundOff !== undefined && tot.roundOff !== 0)
     rows.push({
-      label: 'Round Off',
-      value: (t.roundOff > 0 ? '+ ' : '− ') + formatCurrency(Math.abs(t.roundOff)),
-      style: t.roundOff < 0 ? 'subtracted' : 'added',
+      label: t('pdf.roundOff'),
+      value: (tot.roundOff > 0 ? '+ ' : '− ') + formatCurrency(Math.abs(tot.roundOff)),
+      style: tot.roundOff < 0 ? 'subtracted' : 'added',
     });
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="AMOUNT SUMMARY" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.amountSummary')} />
 
       {rows.map((row, i) => (
         <View key={i} style={ds.sumRow}>
@@ -542,24 +549,24 @@ function TotalsSummary({ doc }: { doc: VoucherDocument }) {
 
       {/* Grand Total */}
       <View style={ds.grandTotal}>
-        <Text style={ds.grandTotalLabel}>GRAND TOTAL</Text>
-        <Text style={ds.grandTotalValue}>{formatCurrency(t.total)}</Text>
+        <Text style={ds.grandTotalLabel}>{t('screens.componentsDocumentDocumentPreviewPage.grandTotal')}</Text>
+        <Text style={ds.grandTotalValue}>{formatCurrency(tot.total)}</Text>
       </View>
 
       {/* Balance due (if different) */}
-      {t.balanceDue !== undefined && t.balanceDue !== t.total && (
+      {tot.balanceDue !== undefined && tot.balanceDue !== tot.total && (
         <View style={[ds.sumRow, { marginTop: 12 }]}>
           <View style={ds.balanceBadge}>
-            <Text style={ds.balanceBadgeText}>BALANCE DUE</Text>
+            <Text style={ds.balanceBadgeText}>{t('screens.componentsDocumentDocumentPreviewPage.balanceDue')}</Text>
           </View>
-          <Text style={ds.balanceValue}>{formatCurrency(t.balanceDue)}</Text>
+          <Text style={ds.balanceValue}>{formatCurrency(tot.balanceDue)}</Text>
         </View>
       )}
 
       {/* Amount in words — server value wins so every client reads identically */}
       <View style={ds.amtWords}>
-        <Text style={ds.amtWordsLabel}>Amount in Words</Text>
-        <Text style={ds.amtWordsText}>{t.totalInWords || amountInWords(t.total)}</Text>
+        <Text style={ds.amtWordsLabel}>{t('pdf.amountInWords')}</Text>
+        <Text style={ds.amtWordsText}>{tot.totalInWords || amountInWords(tot.total)}</Text>
       </View>
     </View>
   );
@@ -569,23 +576,24 @@ function TotalsSummary({ doc }: { doc: VoucherDocument }) {
 // PaymentBlock — payment mode, bank, reference details
 // ─────────────────────────────────────────────────────────────────────────────
 function PaymentBlock({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.paymentDetails) return null;
   const p = doc.paymentDetails;
 
   const rows: { label: string; value: string }[] = ([
-    p.mode           ? { label: 'Payment Mode',    value: p.mode }           : null,
-    p.bankName       ? { label: 'Bank',            value: p.bankName }       : null,
-    p.accountNo      ? { label: 'Account No.',     value: p.accountNo }      : null,
-    p.ifsc           ? { label: 'IFSC Code',       value: p.ifsc }           : null,
-    p.upi            ? { label: 'UPI ID',          value: p.upi }            : null,
-    p.chequeNo       ? { label: 'Cheque No.',      value: p.chequeNo }       : null,
-    p.transactionRef ? { label: 'Transaction Ref', value: p.transactionRef } : null,
-    p.instrumentDate ? { label: 'Instrument Date', value: p.instrumentDate } : null,
+    p.mode           ? { label: t('screens.componentsDocumentDocumentPreviewPage.paymentMode'), value: p.mode }           : null,
+    p.bankName       ? { label: t('screens.componentsDocumentDocumentPreviewPage.bank'), value: p.bankName }       : null,
+    p.accountNo      ? { label: t('screens.componentsDocumentDocumentPreviewPage.accountNo'), value: p.accountNo }      : null,
+    p.ifsc           ? { label: t('screens.componentsDocumentDocumentPreviewPage.ifscCode'), value: p.ifsc }           : null,
+    p.upi            ? { label: t('screens.componentsDocumentDocumentPreviewPage.upiId'), value: p.upi }            : null,
+    p.chequeNo       ? { label: t('screens.componentsDocumentDocumentPreviewPage.chequeNo'), value: p.chequeNo }       : null,
+    p.transactionRef ? { label: t('screens.componentsDocumentDocumentPreviewPage.transactionRef'), value: p.transactionRef } : null,
+    p.instrumentDate ? { label: t('screens.componentsDocumentDocumentPreviewPage.instrumentDate'), value: p.instrumentDate } : null,
   ] as (null | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[];
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="PAYMENT DETAILS" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.paymentDetails')} />
       {/* Mode badge */}
       {p.mode && (
         <View style={ds.modeRow}>
@@ -614,26 +622,27 @@ function PaymentBlock({ doc }: { doc: VoucherDocument }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DispatchBlock — dispatch, ship-to, and transport details
 function DispatchBlock({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   const d = doc.dispatchDetails;
   if (!d) return null;
 
   const rows: { label: string; value: string }[] = [
-    (d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from) ? { label: 'Dispatch From', value: [d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from, d.dispatch_from_state, d.dispatch_from_pincode].filter(Boolean).join(', ') } : null,
-    (d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to) ? { label: 'Ship To', value: [d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to, d.ship_to_state].filter(Boolean).join(', ') } : null,
-    d.transport_mode_simple || d.transport_mode ? { label: 'Transport Mode', value: d.transport_mode_simple || d.transport_mode || '' } : null,
-    d.vehicle_number ? { label: 'Vehicle No.', value: d.vehicle_number } : null,
-    d.vehicle_type   ? { label: 'Vehicle Type', value: d.vehicle_type } : null,
-    d.transporter_name ? { label: 'Transporter', value: d.transporter_name } : null,
-    d.transporter_id   ? { label: 'Transporter ID', value: d.transporter_id } : null,
-    d.transport_doc_no ? { label: 'Doc / LR / RR No.', value: d.transport_doc_no } : null,
-    d.transport_doc_date ? { label: 'Doc Date', value: String(d.transport_doc_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$3/$2/$1') } : null,
+    (d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from) ? { label: t('screens.componentsDocumentDocumentPreviewPage.dispatchFrom'), value: [d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from, d.dispatch_from_state, d.dispatch_from_pincode].filter(Boolean).join(', ') } : null,
+    (d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to) ? { label: t('pdf.shipTo'), value: [d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to, d.ship_to_state].filter(Boolean).join(', ') } : null,
+    d.transport_mode_simple || d.transport_mode ? { label: t('screens.componentsDocumentDocumentPreviewPage.transportMode'), value: d.transport_mode_simple || d.transport_mode || '' } : null,
+    d.vehicle_number ? { label: t('screens.componentsDocumentDocumentPreviewPage.vehicleNo'), value: d.vehicle_number } : null,
+    d.vehicle_type   ? { label: t('screens.componentsDocumentDocumentPreviewPage.vehicleType'), value: d.vehicle_type } : null,
+    d.transporter_name ? { label: t('screens.componentsDocumentDocumentPreviewPage.transporter'), value: d.transporter_name } : null,
+    d.transporter_id   ? { label: t('screens.componentsDocumentDocumentPreviewPage.transporterId'), value: d.transporter_id } : null,
+    d.transport_doc_no ? { label: t('screens.componentsDocumentDocumentPreviewPage.docLrRrNo'), value: d.transport_doc_no } : null,
+    d.transport_doc_date ? { label: t('screens.componentsDocumentDocumentPreviewPage.docDate'), value: String(d.transport_doc_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$3/$2/$1') } : null,
   ].filter(Boolean) as { label: string; value: string }[];
 
   if (rows.length === 0) return null;
 
   return (
     <View style={ds.card}>
-      <SectionLabel title="DISPATCH & TRANSPORT" />
+      <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.dispatchTransport')} />
       {rows.map((row, i) => (
         <View key={i} style={[ds.dispatchRow, i < rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault }]}>
           <Text style={ds.dispatchLabel}>{row.label}</Text>
@@ -647,13 +656,14 @@ function DispatchBlock({ doc }: { doc: VoucherDocument }) {
 // NarrationBlock — narration text + terms & conditions
 // ─────────────────────────────────────────────────────────────────────────────
 function NarrationBlock({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.narration && !doc.terms) return null;
 
   return (
     <View style={ds.card}>
       {doc.narration && (
         <>
-          <SectionLabel title="NARRATION" />
+          <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.narrationUpper')} />
           <View style={ds.narrationBox}>
             <Ionicons
               name="chatbubble-ellipses-outline"
@@ -670,7 +680,7 @@ function NarrationBlock({ doc }: { doc: VoucherDocument }) {
 
       {doc.terms && (
         <>
-          <SectionLabel title="TERMS & CONDITIONS" />
+          <SectionLabel title={t('screens.componentsDocumentDocumentPreviewPage.termsUpper')} />
           <Text style={ds.termsText}>{doc.terms}</Text>
         </>
       )}
@@ -682,6 +692,7 @@ function NarrationBlock({ doc }: { doc: VoucherDocument }) {
 // FooterBlock — declaration + signature lines + system note
 // ─────────────────────────────────────────────────────────────────────────────
 function FooterBlock({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.footerInfo) return null;
   const f = doc.footerInfo;
 
@@ -705,7 +716,7 @@ function FooterBlock({ doc }: { doc: VoucherDocument }) {
               <View style={{ flex: 1 }} />
               <View style={ds.sigLine} />
               <Text style={ds.sigName}>{f.authorizedSignatory}</Text>
-              <Text style={ds.sigSub}>Authorized Signatory</Text>
+              <Text style={ds.sigSub}>{t('screens.componentsDocumentDocumentPreviewPage.authorizedSignatory')}</Text>
             </View>
           )}
         </View>
@@ -738,7 +749,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     fallback?: () => Promise<void>
   ) => {
     if (!canSharePdf) {
-      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'PDF share is not permitted for your role' });
+      Toast.show({ type: 'error', text1: t('screens.componentsDocumentDocumentPreviewPage.notAllowed'), text2: t('screens.componentsDocumentDocumentPreviewPage.pdfNotPermitted') });
       return;
     }
     setLoading(true);
@@ -787,6 +798,7 @@ export default function DocumentPreviewPage({
   isProvisional?: boolean;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
 
   // Accounting vouchers (Payment / Receipt / Contra / Journal / Expense) always
   // use the polished print-sheet + Settings-driven Share as PDF.
@@ -807,7 +819,7 @@ export default function DocumentPreviewPage({
 
   return (
     <SafeAreaView style={ds.safe} edges={['top', 'left', 'right']}>
-      <DocNavBar title={doc.documentTitle || 'Invoice'} onBack={() => router.back()} />
+      <DocNavBar title={doc.documentTitle || t('pdf.invoice')} onBack={() => router.back()} />
 
       <ScrollView
         style={ds.scroll}

@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../src/context/AuthContext';
 import { useWorkspace } from '../src/context/WorkspaceContext';
 import { getCompanies } from '../src/services/api';
@@ -21,6 +22,7 @@ function companyGuid(c: any): string {
 }
 
 export default function SwitchCompanyScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, setCompany } = useAuth();
   const { pairingStatus, filterScoped, demoMode } = useWorkspace();
@@ -80,7 +82,7 @@ export default function SwitchCompanyScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Switch Company</Text>
+        <Text style={styles.title}>{t('screens.switchCompany.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -92,7 +94,7 @@ export default function SwitchCompanyScreen() {
           keyExtractor={(item) => companyGuid(item) || item.name}
           contentContainerStyle={{ padding: SPACING.md }}
           ListEmptyComponent={
-            <Text style={styles.empty}>No companies available</Text>
+            <Text style={styles.empty}>{t('screens.switchCompany.empty')}</Text>
           }
           renderItem={({ item }) => {
             const active = companyGuid(item) === companyGuid(company);

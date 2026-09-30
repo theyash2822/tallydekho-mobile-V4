@@ -6,7 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { useTranslation } from 'react-i18next';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -18,6 +19,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 const SCREEN_W = Dimensions.get('window').width;
@@ -72,6 +74,7 @@ function DrCrDonutChart({
 }: {
   drPct: number; drAmt: string; crAmt: string; size?: number;
 }) {
+  const { t } = useTranslation();
   const [sel, setSel] = useState<'dr' | 'cr' | null>(null);
   const S = size;
   const cx = S / 2;
@@ -89,7 +92,7 @@ function DrCrDonutChart({
   const topText  = sel === 'dr' ? compactDonutLabel(drAmt)
     : sel === 'cr' ? compactDonutLabel(crAmt)
     : `${drPct}%`;
-  const botText  = sel === 'dr' ? 'Debit' : sel === 'cr' ? 'Credit' : 'Debit';
+  const botText  = sel === 'dr' ? t('ledger.debit') : sel === 'cr' ? t('ledger.credit') : t('ledger.debit');
   const topColor = sel === 'dr' ? CHART_DR : sel === 'cr' ? CHART_CR : COLORS.textPrimary;
 
   return (
@@ -160,22 +163,23 @@ function isDebitVoucher(voucherType: string): boolean {
 // Transaction data from API only
 
 // ── Info Modal ────────────────────────────────────────────────────────────────
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <View style={im.section}>
+    <Text style={im.sectionTitle}>{title}</Text>
+    <View style={im.sectionBody}>{children}</View>
+  </View>
+);
+
+const Row = ({ label, value }: { label: string; value: string }) => (
+  <Text style={im.rowText}>
+    <Text style={im.rowLabel}>{label}: </Text>
+    <Text style={im.rowValue}>{value}</Text>
+  </Text>
+);
+
 function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { visible: boolean; onClose: () => void; ledger: any; fyOpening?: { balance: number; type: string } | null; fyClosing?: { balance: number; type: string } | null }) {
+  const { t } = useTranslation();
   const { formatAmount } = useSettings();
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <View style={im.section}>
-      <Text style={im.sectionTitle}>{title}</Text>
-      <View style={im.sectionBody}>{children}</View>
-    </View>
-  );
-
-  const Row = ({ label, value }: { label: string; value: string }) => (
-    <Text style={im.rowText}>
-      <Text style={im.rowLabel}>{label}: </Text>
-      <Text style={im.rowValue}>{value}</Text>
-    </Text>
-  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -188,7 +192,7 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
           <View style={im.header}>
             <View style={im.headerLeft}>
               <Ionicons name="information-circle-outline" size={20} color={COLORS.brandPrimary} />
-              <Text style={im.title}>Information</Text>
+              <Text style={im.title}>{t('screens.ledgerId.information')}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={im.closeX} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
@@ -200,28 +204,28 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Section title="LEDGER DETAILS">
-              <Row label="Name"   value={ledger?.name || '—'} />
-              <Row label="Group"  value={ledger?.parent || '—'} />
-              <Row label="Type"   value={ledger?.balance_type === 'Dr' ? 'Debit (Asset/Expense)' : 'Credit (Liability/Income)'} />
+            <Section title={t('screens.ledgerId.ledgerDetails')}>
+              <Row label={t('screens.ledgerId.name')} value={ledger?.name || '—'} />
+              <Row label={t('screens.ledgerId.group')} value={ledger?.parent || '—'} />
+              <Row label={t('screens.ledgerId.type')} value={ledger?.balance_type === 'Dr' ? t('screens.ledgerId.debitAssetExpense') : t('screens.ledgerId.creditLiabilityIncome')} />
             </Section>
 
             {(ledger?.gstin || ledger?.pan) && (
-              <Section title="GST / TAX">
-                {ledger?.gstin ? <Row label="GSTIN" value={ledger.gstin} /> : null}
-                {ledger?.pan   ? <Row label="PAN"   value={ledger.pan}   /> : null}
+              <Section title={t('screens.ledgerId.gstTax')}>
+                {ledger?.gstin ? <Row label={t('company.gstin')} value={ledger.gstin} /> : null}
+                {ledger?.pan   ? <Row label={t('company.pan')} value={ledger.pan}   /> : null}
               </Section>
             )}
 
-            <Section title="CONTACT">
-              <Row label="Mobile"  value={ledger?.phone   || '—'} />
-              <Row label="Email"   value={ledger?.email   || '—'} />
-              <Row label="Address" value={ledger?.address || '—'} />
+            <Section title={t('screens.ledgerId.contact')}>
+              <Row label={t('screens.ledgerId.mobile')} value={ledger?.phone   || '—'} />
+              <Row label={t('profile.email')} value={ledger?.email   || '—'} />
+              <Row label={t('screens.ledgerId.address')} value={ledger?.address || '—'} />
             </Section>
 
-            <Section title="BALANCE">
-              <Row label="Opening" value={fyOpening ? `${formatAmount(Math.round(fyOpening.balance))} ${fyOpening.type}` : (ledger?.opening_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.opening_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
-              <Row label="Closing" value={fyClosing ? `${formatAmount(Math.round(fyClosing.balance))} ${fyClosing.type}` : (ledger?.closing_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.closing_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
+            <Section title={t('screens.ledgerId.balance')}>
+              <Row label={t('kpi.opening')} value={fyOpening ? `${formatAmount(Math.round(fyOpening.balance))} ${fyOpening.type}` : (ledger?.opening_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.opening_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
+              <Row label={t('kpi.closing')} value={fyClosing ? `${formatAmount(Math.round(fyClosing.balance))} ${fyClosing.type}` : (ledger?.closing_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.closing_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
             </Section>
 
             <View style={{ height: 12 }} />
@@ -230,7 +234,7 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
           {/* Close button — theme colour */}
           <View style={im.footer}>
             <TouchableOpacity style={im.closeBtn} onPress={onClose} activeOpacity={0.85}>
-              <Text style={im.closeBtnText}>Close</Text>
+              <Text style={im.closeBtnText}>{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -241,6 +245,7 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function LedgerDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { company, selectedFY } = useAuth();
@@ -251,6 +256,8 @@ export default function LedgerDetailScreen() {
   const [fyOpening, setFyOpening] = useState<{ balance: number; type: string } | null>(null);
   const [fyClosing, setFyClosing] = useState<{ balance: number; type: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo = selectedFY?.endDate ?? '';
@@ -258,12 +265,24 @@ export default function LedgerDetailScreen() {
   const [toDate, setToDate] = useState(fyTo);
   const [showDateRange, setShowDateRange] = useState(false);
 
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ fyFrom, fyTo });
+  if (prevFy.fyFrom !== fyFrom || prevFy.fyTo !== fyTo) {
+    setPrevFy({ fyFrom, fyTo });
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
+
+  const loadDeps = [companyGuid, id, fromDate, toDate, fyFrom, fyTo, formatAmount, reloadKey];
+  const [prevLoadDeps, setPrevLoadDeps] = useState(loadDeps);
+  if (loadDeps.some((d, i) => d !== prevLoadDeps[i])) {
+    setPrevLoadDeps(loadDeps);
+    if (companyGuid && id) {
+      setIsLoading(true);
+      setLoadError(null);
+    }
+  }
 
   useEffect(() => {
     if (!companyGuid || !id) return;
@@ -272,7 +291,6 @@ export default function LedgerDetailScreen() {
     const params = rangeFrom && rangeTo
       ? { from: rangeFrom, to: rangeTo }
       : undefined;
-    setIsLoading(true);
     // Try statement API first (uses voucher_ledger_entries for accurate Dr/Cr)
     // Falls back to getLedgerDetail (party_name match) if statement has no entries
     getLedgerStatement(companyGuid, id as string, undefined, params).then((res: any) => {
@@ -323,10 +341,11 @@ export default function LedgerDetailScreen() {
               };
             }));
           }
-        }).catch(() => {});
+        }).catch((err: any) => setLoadError(err?.message || t('screens.ledgerId.loadError')));
       }
-    }).catch(() => {}).finally(() => setIsLoading(false));
-  }, [companyGuid, id, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+    }).catch((err: any) => setLoadError(err?.message || t('screens.ledgerId.loadError')))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, id, fromDate, toDate, fyFrom, fyTo, formatAmount, reloadKey]);
 
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
@@ -357,11 +376,11 @@ export default function LedgerDetailScreen() {
           gstin: (company as any)?.gstin,
           state: (company as any)?.state,
         },
-        title: 'Ledger Account',
+        title: t('screens.ledgerId.ledgerAccount'),
         partyName: ledger?.name,
         partyAddress: ledger?.address,
-        period: fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : undefined,
-        openingLabel: 'Opening Balance',
+        period: fromDate && toDate ? t('screens.ledgerId.periodRange', { from: formatDate(fromDate), to: formatDate(toDate) }) : undefined,
+        openingLabel: t('ledger.opening'),
         openingAmount: Math.round(openingBal),
         openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
         rows: txns.map((t: any) => ({
@@ -372,14 +391,14 @@ export default function LedgerDetailScreen() {
           debit: t.isDebit ? t.amount_raw : null,
           credit: t.isDebit ? null : t.amount_raw,
         })),
-        closingLabel: 'Closing Balance',
+        closingLabel: t('ledger.closing'),
         closingAmount: Math.round(closingBal),
         closingSide: closingType === 'Cr' ? 'Cr' : 'Dr',
       }, {
         fileName: `${ledger?.name || 'Ledger'} — Statement.pdf`,
       });
     } catch {
-      Alert.alert('Error', 'Could not generate PDF. Please try again.');
+      Alert.alert(t('common.error'), t('screens.ledgerId.pdfFailed'));
     }
   };
 
@@ -405,13 +424,13 @@ export default function LedgerDetailScreen() {
       if (failed > 0) {
         Toast.show({
           type: 'info',
-          text1: `Shared ${shared} of ${shareTxns.length}`,
-          text2: `${failed} voucher(s) could not be loaded`,
+          text1: t('screens.ledgerId.sharedOf', { shared, total: shareTxns.length }),
+          text2: t('screens.ledgerId.vouchersFailed', { failed }),
         });
       }
       cancelTxnSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not generate voucher PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.ledgerId.voucherPdfsFailed'));
     } finally {
       setTxnSharing(false);
     }
@@ -422,18 +441,18 @@ export default function LedgerDetailScreen() {
     const phone = liveLedger?.phone || liveLedger?.mobile || '';
     const digits = phone.replace(/[^0-9]/g, '');
     if (!digits || digits.length < 10) {
-      Alert.alert('No Phone', 'This ledger does not have a phone number. Please add one in Tally.');
+      Alert.alert(t('screens.ledgerId.noPhone'), t('screens.ledgerId.noPhoneMsg'));
       return;
     }
     const companyName = company?.name || '';
     const amount = closingBal > 0 ? formatAmount(Math.round(closingBal)) : formatAmount(0);
     Alert.alert(
-      'Send Payment Reminder',
-      `Send WhatsApp reminder to ${liveLedger?.name}?\nAmount: ${amount}\nPhone: +91 ${digits.slice(-10)}`,
+      t('screens.ledgerId.sendReminderTitle'),
+      t('screens.ledgerId.sendReminderMsg', { name: liveLedger?.name, amount, phone: digits.slice(-10) }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Send', onPress: async () => {
+          text: t('screens.ledgerId.send'), onPress: async () => {
             try {
               await sendPaymentReminder(company?.guid || '', {
                 ledgerName: liveLedger?.name || '',
@@ -441,9 +460,9 @@ export default function LedgerDetailScreen() {
                 amount: closingBal,
                 contactNumber: companyName,
               });
-              Alert.alert('Sent ✓', 'Payment reminder sent via WhatsApp.');
+              Alert.alert(t('screens.ledgerId.sent'), t('screens.ledgerId.sentMsg'));
             } catch (err: any) {
-              Alert.alert('Failed', err?.message || 'Could not send reminder.');
+              Alert.alert(t('screens.ledgerId.failed'), err?.message || t('screens.ledgerId.sendFailed'));
             }
           }
         },
@@ -452,7 +471,7 @@ export default function LedgerDetailScreen() {
   };
 
   // Use real ledger data only — no mock fallback
-  const ledger = liveLedger || { id: id || '', name: 'Loading…', group: '', balance: '' };
+  const ledger = liveLedger || { id: id || '', name: t('screens.ledgerId.loading'), group: '', balance: '' };
 
   const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
@@ -489,12 +508,14 @@ export default function LedgerDetailScreen() {
 
   // Accordion state — expand first month when live data arrives
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(() => new Set());
-  useEffect(() => {
+  const [prevTxnCount, setPrevTxnCount] = useState(liveTxns.length);
+  if (prevTxnCount !== liveTxns.length) {
+    setPrevTxnCount(liveTxns.length);
     if (liveTxns.length > 0) {
       const firstMon = liveTxns[0]?.date?.split(' ')[1];
       if (firstMon) setExpandedMonths(new Set([firstMon]));
     }
-  }, [liveTxns.length]);
+  }
 
   const toggleMonth = (mon: string) => {
     Keyboard.dismiss();
@@ -521,17 +542,17 @@ export default function LedgerDetailScreen() {
   const closingType = fyClosing?.type ?? liveLedger?.balance_type ?? 'Dr';
   const summaryCells = [
     {
-      label: 'Opening',
+      label: t('kpi.opening'),
       value: openingBal > 0 ? `${fmtCompact(openingBal)} ${openingType}` : formatAmount(0),
       color: openingType === 'Dr' ? COLORS.negative : COLORS.positive,
     },
     {
-      label: 'Closing',
+      label: t('kpi.closing'),
       value: closingBal > 0 ? `${fmtCompact(closingBal)} ${closingType}` : formatAmount(0),
       color: closingType === 'Dr' ? COLORS.negative : COLORS.positive,
     },
-    { label: 'Debit', value: fmtCompact(totalDr), color: COLORS.negative },
-    { label: 'Credit', value: fmtCompact(totalCr), color: COLORS.positive },
+    { label: t('ledger.debit'), value: fmtCompact(totalDr), color: COLORS.negative },
+    { label: t('ledger.credit'), value: fmtCompact(totalCr), color: COLORS.positive },
   ];
 
   return (
@@ -550,7 +571,7 @@ export default function LedgerDetailScreen() {
       <SearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
-        placeholder="Search vouchers, type, amount..."
+        placeholder={t('screens.ledgerId.searchPlaceholder')}
         style={{ marginTop: 8, marginBottom: 8 }}
         inputProps={{ selectionColor: COLORS.brandPrimary, autoCorrect: false, autoCapitalize: 'none' }}
       />
@@ -564,7 +585,7 @@ export default function LedgerDetailScreen() {
             onPress={() => setSummaryExpanded(v => !v)}
             activeOpacity={0.75}
           >
-            <Text style={styles.summaryHeaderTitle}>Summary</Text>
+            <Text style={styles.summaryHeaderTitle}>{t('screens.ledgerId.summary')}</Text>
             <Ionicons
               name={summaryExpanded ? 'chevron-up' : 'chevron-down'}
               size={16}
@@ -589,7 +610,7 @@ export default function LedgerDetailScreen() {
                   <View style={[styles.legendDot, { backgroundColor: CHART_CR }]} />
                   <Text style={styles.legendText}>Cr {fmtAmt(totalCr)}</Text>
                 </View>
-                <Text style={styles.tapHint}>Tap segment to inspect</Text>
+                <Text style={styles.tapHint}>{t('screens.ledgerId.tapHint')}</Text>
               </View>
             </View>
           )}
@@ -624,7 +645,7 @@ export default function LedgerDetailScreen() {
             <Text style={[styles.dateRangePillText, isDateActive && styles.dateRangePillTextActive]} numberOfLines={1}>
               {fromDate && toDate
                 ? formatDateRangeLabel(formatDate(fromDate), formatDate(toDate))
-                : 'Dates'}
+                : t('screens.ledgerId.dates')}
             </Text>
             {isDateActive ? (
               <TouchableOpacity
@@ -660,14 +681,15 @@ export default function LedgerDetailScreen() {
 
       {/* ── Single scrollable voucher list (no nested month cages) ── */}
       <ScrollView style={styles.txnScroll} contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: txnSelectMode ? 100 : 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
+        {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
           {isLoading ? (
             <View style={{ paddingTop: 8 }}>
               {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
             </View>
-          ) : sortedMonths.length === 0 ? (
+          ) : sortedMonths.length === 0 && loadError ? null : sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
               <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
-              <Text style={styles.emptySearchText}>No transactions match your search</Text>
+              <Text style={styles.emptySearchText}>{t('screens.ledgerId.noMatch')}</Text>
             </View>
           ) : (
             sortedMonths.map(mon => {
@@ -703,13 +725,7 @@ export default function LedgerDetailScreen() {
                         if (txnSelectMode) {
                           toggleTxnSelect(txn.id);
                         } else {
-                          const docType = TX_TO_DOC_TYPE[txn.type];
-                          const docId = txn.id || txn.voucher;
-                          safePush(router, 
-                            docType
-                              ? `/document/${docId}?type=${docType}`
-                              : `/document/${docId}`
-                          );
+                          openVoucherPreview(router, { guid: txn.guid, docType: TX_TO_DOC_TYPE[txn.type] });
                         }
                       }}
                       onLongPress={() => toggleTxnSelect(txn.id)}
@@ -757,12 +773,12 @@ export default function LedgerDetailScreen() {
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} activeOpacity={0.8} onPress={handleStatementShare}>
               <Ionicons name="share-outline" size={16} color={COLORS.white} />
-              <Text style={styles.shareBtnText}>Share PDF</Text>
+              <Text style={styles.shareBtnText}>{t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
             {(liveLedger?.phone || liveLedger?.mobile) ? (
               <TouchableOpacity style={[styles.shareBtn, { flex: 1, backgroundColor: '#25D366' }]} activeOpacity={0.8} onPress={handleSendReminder}>
                 <Ionicons name="logo-whatsapp" size={16} color={COLORS.white} />
-                <Text style={styles.shareBtnText}>Remind</Text>
+                <Text style={styles.shareBtnText}>{t('screens.ledgerId.remind')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -777,7 +793,7 @@ export default function LedgerDetailScreen() {
         visible={showDateRange}
         fromDate={fromDate || fyFrom}
         toDate={toDate || fyTo}
-        onApply={(f, t) => { setFromDate(f); setToDate(t); }}
+        onApply={(f, to) => { setFromDate(f); setToDate(to); }}
         onClose={() => setShowDateRange(false)}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}
@@ -787,20 +803,20 @@ export default function LedgerDetailScreen() {
       {txnSelectMode && (
         <View style={styles.txnShareBar}>
           <View style={styles.txnShareLeft}>
-            <Text style={styles.txnShareCount}>{selectedTxns.length} selected</Text>
+            <Text style={styles.txnShareCount}>{t('screens.ledgerId.selectedCount', { n: selectedTxns.length })}</Text>
             <TouchableOpacity
               onPress={() => setSelectedTxns(txns.map((t: any) => t.id))}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
             >
-              <Text style={styles.txnShareCancelTxt}>Select All</Text>
+              <Text style={styles.txnShareCancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={cancelTxnSelect}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
             >
-              <Text style={styles.txnShareCancelTxt}>Cancel</Text>
+              <Text style={styles.txnShareCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -812,7 +828,7 @@ export default function LedgerDetailScreen() {
             {txnSharing
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />}
-            <Text style={styles.txnShareActionTxt}>{txnSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={styles.txnShareActionTxt}>{txnSharing ? t('screens.ledgerId.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 
 const MONTHS = [
@@ -35,23 +36,26 @@ interface Props {
   maxDate?: string;    // ISO YYYY-MM-DD
 }
 
-export default function DatePickerModal({ visible, value, onSelect, onClose, title = 'Select Date', minDate, maxDate }: Props) {
+export default function DatePickerModal({ visible, value, onSelect, onClose, title, minDate, maxDate }: Props) {
+  const { t } = useTranslation();
   const today = new Date();
   const initDate = parseDMY(value) || today;
 
   const [viewYear, setViewYear]   = useState(initDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(initDate.getMonth());
   const [selected, setSelected]   = useState<Date | null>(parseDMY(value));
+  const [prevVisible, setPrevVisible] = useState(false);
 
   // Sync when modal re-opens
-  useEffect(() => {
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) {
       const d = parseDMY(value) || today;
       setViewYear(d.getFullYear());
       setViewMonth(d.getMonth());
       setSelected(parseDMY(value));
     }
-  }, [visible]);
+  }
 
   /** Parse ISO YYYY-MM-DD → Date (local, avoids UTC offset issues) */
   const parseISO = (iso: string): Date => {
@@ -107,7 +111,7 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
         <View style={s.sheet}>
           {/* Handle */}
           <View style={s.handle} />
-          <Text style={s.title}>{title}</Text>
+          <Text style={s.title}>{title ?? t('screens.componentsFormsDatePickerModal.selectDate')}</Text>
 
           {/* Month/Year Navigation */}
           <View style={s.navRow}>
@@ -162,7 +166,7 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
           {/* Action Buttons */}
           <View style={s.btnRow}>
             <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.confirmBtn, !selected && s.confirmBtnDis]}
@@ -172,7 +176,7 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
             >
               <Ionicons name="checkmark" size={16} color={COLORS.white} />
               <Text style={s.confirmTxt}>
-                {selected ? `Select ${formatDMY(selected)}` : 'Choose a date'}
+                {selected ? t('screens.componentsFormsDatePickerModal.selectValue', { date: formatDMY(selected) }) : t('screens.componentsFormsDatePickerModal.chooseDate')}
               </Text>
             </TouchableOpacity>
           </View>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput,
   useWindowDimensions,
@@ -18,6 +19,7 @@ import {
   generateBarcode, alterStockItem, checkHsnCode, getBarcodeSettings,
 } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { ErrorBanner, ErrorState } from '../../src/components/ApiStateViews';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 // STRICT PRODUCTION DATA RULE: No mock/fallback data. Real data or — only.
@@ -107,6 +109,7 @@ const pr = StyleSheet.create({
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 export default function ItemDetailScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { company, selectedFY } = useAuth();
   const { formatDate } = useSettings();
@@ -130,15 +133,40 @@ export default function ItemDetailScreen() {
   const [hsnSaving,  setHsnSaving]  = useState(false);
   const [hsnEditing, setHsnEditing] = useState(false);
   const [itemBarcode,       setItemBarcode]       = useState<string | null>(null);
+  const [itemError,  setItemError]  = useState<string | null>(null);
+  const [movError,   setMovError]   = useState<string | null>(null);
+  const [itemReload, setItemReload] = useState(0);
+  const [movReload,  setMovReload]  = useState(0);
   const [barcodeGenerating, setBarcodeGenerating] = useState(false);
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ start: selectedFY?.startDate, end: selectedFY?.endDate });
+  if (prevFy.start !== selectedFY?.startDate || prevFy.end !== selectedFY?.endDate) {
+    setPrevFy({ start: selectedFY?.startDate, end: selectedFY?.endDate });
     setDateFrom('');
     setDateTo('');
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
+  }
+
+  const itemDeps = [companyGuid, id, selectedFY, itemReload];
+  const [prevItemDeps, setPrevItemDeps] = useState(itemDeps);
+  if (itemDeps.some((d, i) => d !== prevItemDeps[i])) {
+    setPrevItemDeps(itemDeps);
+    if (companyGuid && id) {
+      setItemLoading(true);
+      setItemError(null);
+    }
+  }
+
+  const movDeps = [companyGuid, id, selectedFY, dateFrom, dateTo, fyParam, movReload];
+  const [prevMovDeps, setPrevMovDeps] = useState(movDeps);
+  if (movDeps.some((d, i) => d !== prevMovDeps[i])) {
+    setPrevMovDeps(movDeps);
+    if (companyGuid && id) {
+      setMovLoading(true);
+      setMovError(null);
+    }
+  }
 
   useEffect(() => {
     if (!companyGuid || !id) return;
-    setItemLoading(true);
     getStockItem(companyGuid, id as string, fyParam ? { fy: fyParam } : undefined)
       .then((res: any) => {
         if (res?.data) {
@@ -146,7 +174,7 @@ export default function ItemDetailScreen() {
           setHsnDraft(res.data.hsn || '');
         }
       })
-      .catch(() => {})
+      .catch((err: any) => setItemError(err?.message || t('screens.stocksItemDetail.loadFailed')))
       .finally(() => setItemLoading(false));
     // Fetch warehouse breakdown
     getStockGodowns(companyGuid, id as string)
@@ -169,11 +197,10 @@ export default function ItemDetailScreen() {
         setItemBarcode(bc);
       })
       .catch(() => {});
-  }, [companyGuid, id, selectedFY]);
+  }, [companyGuid, id, selectedFY, itemReload]);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
-    setMovLoading(true);
     const params: Record<string, string> = { limit: '20' };
     if (dateFrom && dateTo) {
       params.from = dateFrom;
@@ -186,21 +213,21 @@ export default function ItemDetailScreen() {
       .then((res: any) => {
         if (res?.data) { setMovements(res.data.movements || []); setRateData(res.data); }
       })
-      .catch(() => {})
+      .catch((err: any) => setMovError(err?.message || t('screens.stocksItemDetail.loadFailed')))
       .finally(() => setMovLoading(false));
-  }, [companyGuid, id, selectedFY, dateFrom, dateTo, fyParam]);
+  }, [companyGuid, id, selectedFY, dateFrom, dateTo, fyParam, movReload]);
 
   // All data from real API — STRICT PRODUCTION DATA RULE
-  const itemName     = liveItem?.name || (itemLoading ? 'Loading…' : '—');
+  const itemName     = liveItem?.name || (itemLoading ? t('screens.stocksItemDetail.loading') : '—');
   const itemSku      = liveItem?.sku || liveItem?.alias || liveItem?.hsn || '—';
   const totalQty     = liveItem != null ? +(liveItem.closing_qty ?? 0) : null;
   const stockValue   = fmtRs(liveItem?.closing_value);
   const reorderLevel = liveItem?.reorder_level != null ? +(liveItem.reorder_level) : null;
   const lastPurchRate = rateData?.lastPurchaseRate
-    ? fmtRs(rateData.lastPurchaseRate, '/unit')
-    : liveItem?.closing_rate ? fmtRs(liveItem.closing_rate, '/unit') : '—';
-  const avgPurchRate  = rateData?.avgPurchaseRate ? fmtRs(Math.round(+rateData.avgPurchaseRate), '/unit') : '—';
-  const sellingPrice  = rateData?.lastSellRate && +rateData.lastSellRate > 0 ? fmtRs(rateData.lastSellRate, '/unit') : '—';
+    ? fmtRs(rateData.lastPurchaseRate, t('screens.stocksItemDetail.perUnit'))
+    : liveItem?.closing_rate ? fmtRs(liveItem.closing_rate, t('screens.stocksItemDetail.perUnit')) : '—';
+  const avgPurchRate  = rateData?.avgPurchaseRate ? fmtRs(Math.round(+rateData.avgPurchaseRate), t('screens.stocksItemDetail.perUnit')) : '—';
+  const sellingPrice  = rateData?.lastSellRate && +rateData.lastSellRate > 0 ? fmtRs(rateData.lastSellRate, t('screens.stocksItemDetail.perUnit')) : '—';
   const narration     = liveItem?.alias || '—';
   const itemUnit      = liveItem?.unit || godownMeta.unit || 'pcs';
   const godownSum     = godowns.reduce((s, g) => s + (g.name === 'Unassigned' ? 0 : g.qty), 0);
@@ -210,7 +237,7 @@ export default function ItemDetailScreen() {
     : reorderLevel != null && totalQty < reorderLevel ? COLORS.warning
     : COLORS.positive;
 
-  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : 'Last 20';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : t('screens.stocksItemDetail.last20');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -227,11 +254,13 @@ export default function ItemDetailScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color={COLORS.brandPrimary} />
         </View>
+      ) : !liveItem && itemError ? (
+        <ErrorState title={t('screens.stocksItemDetail.couldntLoadItem')} message={itemError} onRetry={() => setItemReload(k => k + 1)} />
       ) : !liveItem ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl }}>
           <Ionicons name="cube-outline" size={48} color={COLORS.textTertiary} />
           <Text style={{ marginTop: 12, color: COLORS.textSecondary, fontSize: TYPOGRAPHY.base, textAlign: 'center' }}>
-            Item not found. It may have been deleted or not yet synced.
+            {t('screens.stocksItemDetail.notFound')}
           </Text>
         </View>
       ) : (
@@ -265,14 +294,14 @@ export default function ItemDetailScreen() {
                       setItemBarcode(bc);
                       Toast.show({
                         type: 'success',
-                        text1: 'Barcode generated',
-                        text2: syncTarget !== 'app_only' ? `${bc} · syncing to Tally` : bc,
+                        text1: t('screens.stocksItemDetail.barcodeGenerated'),
+                        text2: syncTarget !== 'app_only' ? t('screens.stocksItemDetail.syncingToTally', { barcode: bc }) : bc,
                       });
                     } else {
-                      Toast.show({ type: 'error', text1: 'Generate failed', text2: 'No barcode returned' });
+                      Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.generateFailed'), text2: t('screens.stocksItemDetail.noBarcodeReturned') });
                     }
                   } catch (e: any) {
-                    Toast.show({ type: 'error', text1: 'Generate failed', text2: e?.message || 'Try again' });
+                    Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.generateFailed'), text2: e?.message || t('screens.stocksItemDetail.tryAgain') });
                   } finally {
                     setBarcodeGenerating(false);
                   }
@@ -282,7 +311,7 @@ export default function ItemDetailScreen() {
                   ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
                   : <Ionicons name="barcode-outline" size={18} color={COLORS.brandPrimary} />}
                 <Text style={bgs.genBtnText}>
-                  {barcodeGenerating ? 'Generating…' : 'Generate Barcode'}
+                  {barcodeGenerating ? t('pdf.generating') : t('screens.stocksItemDetail.generateBarcode')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -290,19 +319,19 @@ export default function ItemDetailScreen() {
 
           {/* Key Matrix */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Key Matrix</Text>
+            <Text style={styles.cardTitle}>{t('screens.stocksItemDetail.keyMatrix')}</Text>
             <View style={styles.matrixGrid}>
               <View style={styles.matrixRow}>
-                <MatrixCell label="Total Qty on Hand"  value={totalQty != null ? String(totalQty) : '—'} valueColor={qtyColor} />
-                <MatrixCell label="Total Stock Value"  value={stockValue} />
+                <MatrixCell label={t('screens.stocksItemDetail.totalQtyOnHand')}  value={totalQty != null ? String(totalQty) : '—'} valueColor={qtyColor} />
+                <MatrixCell label={t('stocks.totalStockValue')}  value={stockValue} />
               </View>
               <View style={[styles.matrixRow, styles.matrixRowMid]}>
-                <MatrixCell label="Reorder Level"      value={reorderLevel != null ? String(reorderLevel) : '—'} />
-                <MatrixCell label="Warehouses"          value={godowns.length > 0 ? String(godowns.length) : '—'} />
+                <MatrixCell label={t('screens.stocksItemDetail.reorderLevel')}      value={reorderLevel != null ? String(reorderLevel) : '—'} />
+                <MatrixCell label={t('stocks.warehouses')}          value={godowns.length > 0 ? String(godowns.length) : '—'} />
               </View>
               <View style={styles.matrixRow}>
-                <MatrixCell label="Stock Group"        value={liveItem?.group_name || '—'} />
-                <MatrixCell label="Unit"               value={liveItem?.unit || '—'} />
+                <MatrixCell label={t('screens.stocksItemDetail.stockGroup')}        value={liveItem?.group_name || '—'} />
+                <MatrixCell label={t('screens.stocksItemDetail.unit')}               value={liveItem?.unit || '—'} />
               </View>
             </View>
           </View>
@@ -310,12 +339,12 @@ export default function ItemDetailScreen() {
           {/* Warehouse Breakdown */}
           {godowns.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Warehouse Breakdown</Text>
+              <Text style={styles.cardTitle}>{t('screens.stocksItemDetail.warehouseBreakdown')}</Text>
               {!godownMeta.reconciled && (godownMeta.unassignedQty ?? 0) > 0 && (
                 <View style={styles.reconcileBanner}>
                   <Ionicons name="information-circle-outline" size={14} color="#B45309" />
                   <Text style={styles.reconcileTxt}>
-                    Godown totals ({godownSum.toLocaleString('en-IN')}) differ from book qty ({totalQty?.toLocaleString('en-IN')}). Unassigned qty shown below.
+                    {t('screens.stocksItemDetail.godownMismatch', { godownSum: godownSum.toLocaleString('en-IN'), bookQty: totalQty?.toLocaleString('en-IN') })}
                   </Text>
                 </View>
               )}
@@ -324,7 +353,7 @@ export default function ItemDetailScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={pr.label}>{g.name}</Text>
                     {g.pct != null && g.pct > 0 && g.name !== 'Unassigned' && (
-                      <Text style={styles.whPct}>{g.pct}% of total</Text>
+                      <Text style={styles.whPct}>{t('screens.stocksItemDetail.pctOfTotal', { pct: g.pct })}</Text>
                     )}
                   </View>
                   <Text style={[pr.value, g.name === 'Unassigned' && { color: '#B45309' }]}>
@@ -338,35 +367,35 @@ export default function ItemDetailScreen() {
           {/* Item Details */}
           {(liveItem?.sku || liveItem?.alias || liveItem?.description) && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Item Details</Text>
+              <Text style={styles.cardTitle}>{t('screens.stocksItemDetail.itemDetails')}</Text>
               {(liveItem?.sku || liveItem?.alias) && (
-                <PricingRow label="Part Number" value={liveItem?.sku || liveItem?.alias} />
+                <PricingRow label={t('screens.stocksItemDetail.partNumber')} value={liveItem?.sku || liveItem?.alias} />
               )}
               {liveItem?.tax_rate != null && +liveItem.tax_rate > 0 && (
-                <PricingRow label="Tax Rate" value={`${liveItem.tax_rate}%`} />
+                <PricingRow label={t('screens.stocksItemDetail.taxRate')} value={`${liveItem.tax_rate}%`} />
               )}
               {liveItem?.description && (
-                <PricingRow label="Description" value={liveItem.description} />
+                <PricingRow label={t('pdf.description')} value={liveItem.description} />
               )}
             </View>
           )}
 
           {/* Pricing & Cost */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Pricing &amp; Cost</Text>
-            <PricingRow label="Last Purchase Rate"         value={lastPurchRate} />
-            <PricingRow label="Average Purchase Rate"      value={avgPurchRate} />
-            <PricingRow label="Last Selling Price"         value={sellingPrice} />
+            <Text style={styles.cardTitle}>{t('screens.stocksItemDetail.pricingCost')}</Text>
+            <PricingRow label={t('screens.stocksItemDetail.lastPurchaseRate')}         value={lastPurchRate} />
+            <PricingRow label={t('screens.stocksItemDetail.avgPurchaseRate')}      value={avgPurchRate} />
+            <PricingRow label={t('screens.stocksItemDetail.lastSellingPrice')}         value={sellingPrice} />
             {/* HSN — inline under Last Selling Price; edit → save */}
             <View style={[pr.row, { borderBottomWidth: 0 }]}>
-              <Text style={pr.label}>HSN</Text>
+              <Text style={pr.label}>{t('pdf.hsn')}</Text>
               <View style={hsnInline.valueWrap}>
                 {hsnEditing ? (
                   <TextInput
                     style={hsnInline.input}
                     value={hsnDraft}
                     onChangeText={(v) => { setHsnDraft(v.replace(/\D/g, '').slice(0, 8)); setHsnHint(null); }}
-                    placeholder="e.g. 38089190"
+                    placeholder={t('screens.stocksItemDetail.hsnPlaceholder')}
                     placeholderTextColor={COLORS.textTertiary}
                     keyboardType="number-pad"
                     maxLength={8}
@@ -377,7 +406,7 @@ export default function ItemDetailScreen() {
                       try {
                         const res: any = await checkHsnCode(code);
                         if (res?.data?.valid === false) {
-                          setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+                          setHsnHint(t('screens.stocksItemDetail.invalidHsnHint'));
                         } else setHsnHint(null);
                       } catch { setHsnHint(null); }
                     }}
@@ -412,8 +441,8 @@ export default function ItemDetailScreen() {
                     try {
                       const check: any = await checkHsnCode(code);
                       if (check?.data?.valid === false) {
-                        setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
-                        Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+                        setHsnHint(t('screens.stocksItemDetail.invalidHsnHint'));
+                        Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.invalidHsn'), text2: t('screens.stocksItemDetail.codeNotAccepted') });
                         return;
                       }
                       const res: any = await alterStockItem({
@@ -427,13 +456,13 @@ export default function ItemDetailScreen() {
                       setHsnHint(null);
                       Toast.show({
                         type: 'success',
-                        text1: res?.queued ? 'HSN queued' : 'HSN saved',
+                        text1: res?.queued ? t('screens.stocksItemDetail.hsnQueued') : t('screens.stocksItemDetail.hsnSaved'),
                         text2: res?.queued
-                          ? 'Will update in Tally when desktop connects.'
-                          : 'Updated in Tally',
+                          ? t('screens.stocksItemDetail.willUpdateInTally')
+                          : t('screens.stocksItemDetail.updatedInTally'),
                       });
                     } catch (e: any) {
-                      Toast.show({ type: 'error', text1: 'HSN update failed', text2: e?.message || 'Try again' });
+                      Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.hsnUpdateFailed'), text2: e?.message || t('screens.stocksItemDetail.tryAgain') });
                     } finally {
                       setHsnSaving(false);
                     }
@@ -455,7 +484,7 @@ export default function ItemDetailScreen() {
           {/* Narration / Alias */}
           {narration !== '—' && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Narration</Text>
+              <Text style={styles.cardTitle}>{t('voucher.narration')}</Text>
               <Text style={styles.narrationTxt}>{narration}</Text>
             </View>
           )}
@@ -463,7 +492,7 @@ export default function ItemDetailScreen() {
           {/* Movement History */}
           <View style={styles.card}>
             <View style={styles.movHeader}>
-              <Text style={styles.cardTitle}>Movement History</Text>
+              <Text style={styles.cardTitle}>{t('screens.stocksItemDetail.movementHistory')}</Text>
               <TouchableOpacity style={styles.calBtn} onPress={() => setCalOpen(true)} activeOpacity={0.7}>
                 <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
                 <Text style={styles.calBtnTxt}>{dateLabel}</Text>
@@ -472,9 +501,11 @@ export default function ItemDetailScreen() {
 
             {movLoading ? (
               <ActivityIndicator color={COLORS.brandPrimary} style={{ marginVertical: 16 }} />
+            ) : movError ? (
+              <ErrorBanner message={movError} onRetry={() => setMovReload(k => k + 1)} />
             ) : movements.length === 0 ? (
               <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, textAlign: 'center', paddingVertical: 16 }}>
-                No movement history found.
+                {t('screens.stocksItemDetail.noMovementHistory')}
               </Text>
             ) : (
               movements.map((m: any, i: number) => {
@@ -485,7 +516,7 @@ export default function ItemDetailScreen() {
                   ? `${qty} ${itemUnit}`
                   : `${isInward ? '+' : '-'}${Math.abs(qty)}`;
                 const isPos    = isTransfer || isInward;
-                const typeLabel = isTransfer ? 'Transfer' : (m.type || m.voucher_type || '—');
+                const typeLabel = isTransfer ? t('screens.stocksItemDetail.transfer') : (m.type || m.voucher_type || '—');
                 const refExtra = isTransfer && m.from_warehouse && m.to_warehouse
                   ? `${m.from_warehouse} → ${m.to_warehouse}`
                   : (m.reference || '');

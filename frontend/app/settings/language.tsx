@@ -156,6 +156,15 @@ const COUNTRY_TZ: Record<string, TzOption[]> = {
 
 const COUNTRIES  = Object.keys(COUNTRY_TZ).sort();
 const WEEK_DAYS  = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEK_DAY_KEYS: Record<string, string> = {
+  Sunday: 'screens.settingsLanguage.sunday',
+  Monday: 'screens.settingsLanguage.monday',
+  Tuesday: 'screens.settingsLanguage.tuesday',
+  Wednesday: 'screens.settingsLanguage.wednesday',
+  Thursday: 'screens.settingsLanguage.thursday',
+  Friday: 'screens.settingsLanguage.friday',
+  Saturday: 'screens.settingsLanguage.saturday',
+};
 // Date format moved to Currency & Number Format screen
 
 // ── Generic Picker Bottom Sheet ───────────────────────────────────────────────
@@ -252,22 +261,31 @@ export default function LanguageRegionScreen() {
   const [isDirty,    setIsDirty]    = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
 
+  const [detectedFor, setDetectedFor] = useState<{ phone: string | undefined } | null>(null);
+  const [detectedDefaults, setDetectedDefaults] = useState<{ country: string } | null>(null);
+
   // Auto-detect country from phone number — apply if detected differs from current setting
-  useEffect(() => {
+  if (!detectedFor || detectedFor.phone !== user?.phone) {
+    setDetectedFor({ phone: user?.phone });
     const detected = detectCountryFromPhone(user?.phone);
     if (detected && detected !== country) {
       setCountry(detected);
       const tzs = COUNTRY_TZ[detected] || [];
       if (tzs.length > 0) setTimezone(tzs[0].value);
-      // Cascade currency + number_format for detected country
-      const defaults = COUNTRY_DEFAULTS[detected];
-      if (defaults) {
-        updateSettings({ currency: defaults.currency, number_format: defaults.number_format });
-      }
+      setDetectedDefaults({ country: detected });
       setAutoDetected(true);
       setIsDirty(true);
     }
-  }, [user?.phone]);
+  }
+
+  // Cascade currency + number_format for detected country
+  useEffect(() => {
+    if (!detectedDefaults) return;
+    const defaults = COUNTRY_DEFAULTS[detectedDefaults.country];
+    if (defaults) {
+      updateSettings({ currency: defaults.currency, number_format: defaults.number_format });
+    }
+  }, [detectedDefaults]);
 
   const langObj   = LANGUAGES.find(l => l.value === lang);
   const tzOptions = COUNTRY_TZ[country] || [];
@@ -306,7 +324,7 @@ export default function LanguageRegionScreen() {
         text2: t('languageRegion.savedDesc'),
       });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Save Failed', text2: err?.message || 'Could not save settings.' });
+      Toast.show({ type: 'error', text1: t('profile.saveFailed'), text2: err?.message || t('screens.settingsLanguage.saveFailed') });
     }
   };
 
@@ -318,7 +336,7 @@ export default function LanguageRegionScreen() {
   }));
   const countryItems = COUNTRIES.map(c => ({ value: c, label: c }));
   const tzItems      = tzOptions.map(tz => ({ value: tz.value, label: tz.label, sublabel: tz.offset }));
-  const dayItems     = WEEK_DAYS.map(d => ({ value: d, label: d }));
+  const dayItems     = WEEK_DAYS.map(d => ({ value: d, label: t(WEEK_DAY_KEYS[d]) }));
 
   const langDisplay = langObj
     ? (langObj.native !== langObj.label ? `${langObj.label} · ${langObj.native}` : langObj.label)
@@ -375,7 +393,7 @@ export default function LanguageRegionScreen() {
           />
           <DropdownField
             label={t('languageRegion.firstDayOfWeek')}
-            value={weekday}
+            value={WEEK_DAY_KEYS[weekday] ? t(WEEK_DAY_KEYS[weekday]) : weekday}
             onPress={() => setPicker('weekday')}
           />
         </View>

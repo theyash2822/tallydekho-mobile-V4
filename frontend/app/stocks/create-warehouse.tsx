@@ -48,7 +48,7 @@ export default function CreateWarehouseScreen() {
   const [parent,  setParent]  = useState(TOP_LEVEL_VALUE);
   const [address, setAddress] = useState('');
   const [parentOptions, setParentOptions] = useState<{ label: string; value: string }[]>([
-    { label: 'None (top-level)', value: TOP_LEVEL_VALUE },
+    { label: t('screens.stocksCreateWarehouse.noneTopLevel'), value: TOP_LEVEL_VALUE },
   ]);
 
   useEffect(() => {
@@ -58,20 +58,20 @@ export default function CreateWarehouseScreen() {
       const names: string[] = scoped.map((w: any) => w.name).filter(Boolean);
       const unique = Array.from(new Set(names));
       setParentOptions([
-        { label: 'None (top-level)', value: TOP_LEVEL_VALUE },
+        { label: t('screens.stocksCreateWarehouse.noneTopLevel'), value: TOP_LEVEL_VALUE },
         ...unique.map(n => ({ label: n, value: n })),
       ]);
     }).catch(() => {});
-  }, [company?.guid, scopeGodowns]);
+  }, [company?.guid, scopeGodowns, t]);
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Toast.show({ type: 'error', text1: 'Name Required', text2: 'Please enter a warehouse name.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateWarehouse.nameRequired'), text2: t('screens.stocksCreateWarehouse.enterName') });
       return;
     }
     if (!assertCanCreate('warehouse.create')) return;
     if (String(pairingStatus || '').toUpperCase() !== 'CONNECTED') {
-      Toast.show({ type: 'error', text1: 'Tally not connected', text2: 'Connect and sync Tally before creating warehouses.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateWarehouse.tallyNotConnected'), text2: t('screens.stocksCreateWarehouse.connectFirst') });
       return;
     }
     try {
@@ -89,16 +89,16 @@ export default function CreateWarehouseScreen() {
         router.replace(`/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
         return;
       }
-      Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" sent to Tally successfully.` });
+      Toast.show({ type: 'success', text1: t('screens.stocksCreateWarehouse.created'), text2: t('screens.stocksCreateWarehouse.sentToTally', { name }) });
       setTimeout(() => router.back(), 1200);
     } catch (err: any) {
       const raw = err?.message || '';
       const msg = raw.includes('does not exist')
-        ? `Parent godown not found in Tally. Choose None (top-level) or an existing godown.`
+        ? t('screens.stocksCreateWarehouse.parentNotFound')
         : raw.includes('timeout')
-        ? 'Tally not responding. Make sure Tally Prime is open.'
-        : raw || 'Could not create warehouse.';
-      Toast.show({ type: 'error', text1: 'Failed', text2: msg });
+        ? t('screens.stocksCreateWarehouse.tallyNotResponding')
+        : raw || t('screens.stocksCreateWarehouse.couldNotCreate');
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateWarehouse.failed'), text2: msg });
     } finally {
       setSubmitting(false);
     }
@@ -122,28 +122,28 @@ export default function CreateWarehouseScreen() {
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={s.label}>Warehouse Name <Text style={s.star}>*</Text></Text>
+          <Text style={s.label}>{t('screens.stocksCreateWarehouse.warehouseName')}{' '}<Text style={s.star}>*</Text></Text>
           <ThemedInput
-            placeholder="e.g. Delhi Warehouse"
+            placeholder={t('screens.stocksCreateWarehouse.namePlaceholder')}
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
           />
-          <Text style={s.hint}>This name will be created as a Godown in Tally</Text>
+          <Text style={s.hint}>{t('screens.stocksCreateWarehouse.nameHint')}</Text>
 
           <FormDropdown
-            label="Parent Godown"
+            label={t('screens.stocksCreateWarehouse.parentGodown')}
             value={parent}
             options={parentOptions}
-            placeholder={parentOptions.length > 1 ? 'Select parent godown' : 'Loading...'}
+            placeholder={parentOptions.length > 1 ? t('screens.stocksCreateWarehouse.selectParent') : t('common.loading')}
             onSelect={o => setParent(o.value)}
             containerStyle={s.parentDropdown}
           />
-          <Text style={s.hint}>Choose None for a top-level warehouse, or pick an existing godown as parent.</Text>
+          <Text style={s.hint}>{t('screens.stocksCreateWarehouse.parentHint')}</Text>
 
-          <Text style={s.label}>Address <Text style={s.optional}>(optional)</Text></Text>
+          <Text style={s.label}>{t('screens.stocksCreateWarehouse.address')}{' '}<Text style={s.optional}>{t('screens.stocksCreateWarehouse.optional')}</Text></Text>
           <ThemedInput
-            placeholder="e.g. Plot 42, Industrial Area, Delhi"
+            placeholder={t('screens.stocksCreateWarehouse.addressPlaceholder')}
             value={address}
             onChangeText={setAddress}
             multiline
@@ -162,7 +162,7 @@ export default function CreateWarehouseScreen() {
             disabled={submitting}
           >
             {submitting && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
-            <Text style={s.saveBtnTxt}>{submitting ? 'Saving...' : 'Create Warehouse'}</Text>
+            <Text style={s.saveBtnTxt}>{submitting ? t('screens.stocksCreateWarehouse.saving') : t('screens.stocksCreateWarehouse.createWarehouse')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

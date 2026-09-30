@@ -4,6 +4,7 @@
  * never evidence of IRP trust.
  */
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { parseEinvoiceQr, einvoiceDateToFormDate } from '../src/utils/einvoiceQr.ts';
 
 const b64u = (s) => Buffer.from(s, 'utf8').toString('base64url');

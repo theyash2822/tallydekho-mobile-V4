@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -27,6 +28,7 @@ export function BulkTransferModal({
 }: {
   visible: boolean; preselectedItems: StockItem[]; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { company } = useAuth();
   const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const scrollRef = useRef<ScrollView>(null);
@@ -43,10 +45,26 @@ export function BulkTransferModal({
     }, 250);
   }, []);
 
-  useEffect(() => {
+  const companyGuid = company?.guid;
+  const [prevOpenDeps, setPrevOpenDeps] = useState<{
+    visible: boolean; preselectedItems: StockItem[]; companyGuid?: string; scopeGodowns: typeof scopeGodowns;
+  } | null>(null);
+  if (
+    !prevOpenDeps
+    || prevOpenDeps.visible !== visible
+    || prevOpenDeps.preselectedItems !== preselectedItems
+    || prevOpenDeps.companyGuid !== companyGuid
+    || prevOpenDeps.scopeGodowns !== scopeGodowns
+  ) {
+    setPrevOpenDeps({ visible, preselectedItems, companyGuid, scopeGodowns });
     if (visible) {
       setRows(preselectedItems.map(i => ({ item: i, qty: 1 })));
       setSearch(''); setDestWhId(''); setNarration('');
+    }
+  }
+
+  useEffect(() => {
+    if (visible) {
       if (company?.guid) {
         getWarehouses(company.guid)
           .then((res: any) => {
@@ -71,11 +89,11 @@ export function BulkTransferModal({
   const validate = () => {
     if (!assertCanCreate('stock_transfer.create')) return false;
     if (rows.length === 0) {
-      Toast.show({ type: 'error', text1: 'No Items', text2: 'No items selected for transfer.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsBulkTransferModal.noItems'), text2: t('screens.componentsFormsBulkTransferModal.noItemsSelected') });
       return false;
     }
     if (!destWhId) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select destination warehouse.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsBulkTransferModal.selectDestination') });
       return false;
     }
     return true;
@@ -105,13 +123,15 @@ export function BulkTransferModal({
       clearStockListCache();
       Toast.show({
         type: 'success',
-        text1: queued ? 'Transfer Queued ⏳' : 'Transfer Created ✅',
+        text1: queued ? t('screens.componentsFormsBulkTransferModal.transferQueued') : t('screens.componentsFormsBulkTransferModal.transferCreated'),
         text2: queued
-          ? 'Will push to Tally when desktop connects.'
-          : `${rows.length} item${rows.length !== 1 ? 's' : ''} → ${toLabel}`,
+          ? t('screens.componentsFormsBulkTransferModal.willPush')
+          : rows.length !== 1
+            ? t('screens.componentsFormsBulkTransferModal.itemsTo', { count: rows.length, to: toLabel })
+            : t('screens.componentsFormsBulkTransferModal.itemTo', { count: rows.length, to: toLabel }),
       });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Transfer Failed', text2: err?.message || 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsBulkTransferModal.transferFailed'), text2: err?.message || t('screens.componentsFormsBulkTransferModal.pleaseTryAgain') });
     }
   };
 
@@ -130,8 +150,8 @@ export function BulkTransferModal({
       }}
       titleNode={(
         <View>
-          <Text style={ms.title}>Bulk Transfer</Text>
-          <Text style={bt.subtitle}>{rows.length} item{rows.length !== 1 ? 's' : ''} selected</Text>
+          <Text style={ms.title}>{t('screens.componentsFormsBulkTransferModal.title')}</Text>
+          <Text style={bt.subtitle}>{rows.length !== 1 ? t('screens.componentsFormsBulkTransferModal.itemsSelected', { count: rows.length }) : t('screens.componentsFormsBulkTransferModal.itemSelected', { count: rows.length })}</Text>
         </View>
       )}
       headerExtra={(
@@ -141,7 +161,7 @@ export function BulkTransferModal({
             style={bt.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder={`Search ${rows.length} selected items...`}
+            placeholder={t('screens.componentsFormsBulkTransferModal.searchSelected', { count: rows.length })}
             placeholderTextColor={COLORS.textTertiary}
           />
           {search.length > 0 && (
@@ -153,9 +173,9 @@ export function BulkTransferModal({
       )}
       footer={(
         <SubmitButton
-          idleLabel={`Transfer ${rows.length} Item${rows.length !== 1 ? 's' : ''}`}
-          loadingLabel="Transferring..."
-          successLabel="✓ Transferred"
+          idleLabel={rows.length !== 1 ? t('screens.componentsFormsBulkTransferModal.transferItems', { count: rows.length }) : t('screens.componentsFormsBulkTransferModal.transferItem', { count: rows.length })}
+          loadingLabel={t('screens.componentsFormsBulkTransferModal.transferring')}
+          successLabel={t('screens.componentsFormsBulkTransferModal.transferred')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -166,7 +186,7 @@ export function BulkTransferModal({
           <View style={bt.itemHeader}>
             <View style={{ flex: 1, justifyContent: 'flex-end' }}>
               <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
-              <Text style={bt.itemSku}>{r.item.sku} · {r.item.qty} {r.item.unit || 'units'} on hand</Text>
+              <Text style={bt.itemSku}>{t('screens.componentsFormsBulkTransferModal.onHand', { sku: r.item.sku, qty: r.item.qty, unit: r.item.unit || t('screens.componentsFormsBulkTransferModal.units') })}</Text>
             </View>
             <TouchableOpacity
               onPress={() => removeItem(r.item.id)}
@@ -176,7 +196,7 @@ export function BulkTransferModal({
             </TouchableOpacity>
           </View>
           <QtyStepperField
-            label="Qty to Transfer"
+            label={t('screens.componentsFormsBulkTransferModal.qtyToTransfer')}
             value={r.qty}
             onChange={q => updQty(r.item.id, q)}
           />
@@ -184,25 +204,25 @@ export function BulkTransferModal({
       ))}
 
       {filteredRows.length === 0 && search.trim() && (
-        <Text style={bt.emptyTxt}>No items match "{search}"</Text>
+        <Text style={bt.emptyTxt}>{t('screens.componentsFormsBulkTransferModal.noMatch', { query: search })}</Text>
       )}
 
       <View style={ms.divider} />
 
       <InlineDropdownField
-        label="Destination Warehouse"
+        label={t('screens.componentsFormsBulkTransferModal.destinationWarehouse')}
         options={warehouseOptions}
         value={destWhId}
-        placeholder={warehouseOptions.length > 0 ? 'Select destination' : 'Loading...'}
+        placeholder={warehouseOptions.length > 0 ? t('screens.componentsFormsBulkTransferModal.selectDestinationPh') : t('common.loading')}
         onSelect={setDestWhId}
         icon="home-outline"
         required
       />
       <InlineField
-        label="Narration"
+        label={t('voucher.narration')}
         value={narration}
         onChange={setNarration}
-        placeholder="Optional note"
+        placeholder={t('screens.componentsFormsBulkTransferModal.optionalNote')}
         multiline
         onFocus={scrollNoteIntoView}
       />

@@ -36,6 +36,7 @@ import {
   BankLedgerRow,
 } from '../../src/utils/voucherPdfConfig';
 import QRCodeSvg from 'react-native-qrcode-svg';
+import { useTranslation } from 'react-i18next';
 
 // Bank options are fetched from Tally (see useEffect in component)
 const FALLBACK_BANK_OPTS = [
@@ -43,18 +44,18 @@ const FALLBACK_BANK_OPTS = [
 ];
 
 const VOUCHER_TYPES = [
-  { id: 'sales_inv',      label: 'Sales Invoice',    icon: 'receipt-outline'          },
-  { id: 'purchase_inv',   label: 'Purchase Invoice',  icon: 'cart-outline'             },
-  { id: 'sales_order',    label: 'Sales Order',       icon: 'bag-outline'              },
-  { id: 'purchase_order', label: 'Purchase Order',    icon: 'cube-outline'             },
-  { id: 'credit_note',    label: 'Credit Note',       icon: 'arrow-undo-outline'       },
-  { id: 'debit_note',     label: 'Debit Note',        icon: 'arrow-redo-outline'       },
-  { id: 'delivery_note',  label: 'Delivery Note',     icon: 'bicycle-outline'          },
-  { id: 'payment',        label: 'Payment Voucher',   icon: 'arrow-up-circle-outline'  },
-  { id: 'receipt',        label: 'Receipt Voucher',   icon: 'arrow-down-circle-outline'},
-  { id: 'expense',        label: 'Expense Voucher',   icon: 'wallet-outline'           },
-  { id: 'journal',        label: 'Journal Voucher',   icon: 'book-outline'             },
-  { id: 'contra',         label: 'Contra Voucher',    icon: 'swap-horizontal-outline'  },
+  { id: 'sales_inv',      labelKey: 'screens.settingsVoucherConfig.salesInvoice', icon: 'receipt-outline'          },
+  { id: 'purchase_inv',   labelKey: 'quickActions.purchaseInvoice',                icon: 'cart-outline'             },
+  { id: 'sales_order',    labelKey: 'screens.settingsVoucherConfig.salesOrder',   icon: 'bag-outline'              },
+  { id: 'purchase_order', labelKey: 'quickActions.purchaseOrder',                  icon: 'cube-outline'             },
+  { id: 'credit_note',    labelKey: 'sales.creditNote',                            icon: 'arrow-undo-outline'       },
+  { id: 'debit_note',     labelKey: 'purchase.debitNote',                          icon: 'arrow-redo-outline'       },
+  { id: 'delivery_note',  labelKey: 'sales.deliveryNote',                          icon: 'bicycle-outline'          },
+  { id: 'payment',        labelKey: 'quickActions.paymentVoucher',                 icon: 'arrow-up-circle-outline'  },
+  { id: 'receipt',        labelKey: 'quickActions.receiptVoucher',                 icon: 'arrow-down-circle-outline'},
+  { id: 'expense',        labelKey: 'quickActions.expenseVoucher',                 icon: 'wallet-outline'           },
+  { id: 'journal',        labelKey: 'voucher.journalTitle',                        icon: 'book-outline'             },
+  { id: 'contra',         labelKey: 'voucher.contraTitle',                         icon: 'swap-horizontal-outline'  },
 ];
 
 const DEFAULT_TERMS: Record<string, string[]> = {
@@ -121,6 +122,7 @@ const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
 
 /** Live QR preview when Generate from UPI is selected and UPI ID is filled. */
 function GeneratedQrPreview({ cfg }: { cfg: VConfig }) {
+  const { t } = useTranslation();
   if (!cfg.qrEnabled || resolveQrMode(cfg) !== 'generate') return null;
 
   const payload = getQrPayloadFromConfig({
@@ -139,7 +141,7 @@ function GeneratedQrPreview({ cfg }: { cfg: VConfig }) {
       <View style={s.qrPreviewFooter}>
         <View style={s.qrPreviewStatus}>
           <Ionicons name="checkmark-circle" size={14} color={COLORS.brandPrimary} />
-          <Text style={s.qrPreviewStatusTxt}>Generated from UPI · ready for PDF</Text>
+          <Text style={s.qrPreviewStatusTxt}>{t('screens.settingsVoucherConfig.generatedReady')}</Text>
         </View>
       </View>
     </View>
@@ -218,7 +220,7 @@ function FormatThumb({ type }: { type: DocumentFormat }) {
 
 // ── Custom Themed Toggle ───────────────────────────────────────────────────────
 function CustomToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
   useEffect(() => {
     Animated.spring(anim, { toValue: value ? 1 : 0, useNativeDriver: false, tension: 60, friction: 7 }).start();
   }, [value, anim]);
@@ -285,8 +287,12 @@ const pk = StyleSheet.create({
   rowSubActive:  { color: 'rgba(255,255,255,0.65)' },
 });
 
+// Only called from event handlers; the compiler cannot tell and flags inline Date.now().
+const nowMs = () => Date.now();
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function VoucherConfigScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const [expanded,      setExpanded]      = useState<string | null>('sales_inv');
@@ -403,9 +409,9 @@ export default function VoucherConfigScreen() {
         e_way_bill_mode: eWayBillMode,
       });
       setComplianceDirty(false);
-      Toast.show({ type: 'success', text1: 'Settings Saved' });
+      Toast.show({ type: 'success', text1: t('screens.settingsVoucherConfig.settingsSaved') });
     } catch {
-      Toast.show({ type: 'error', text1: 'Save Failed' });
+      Toast.show({ type: 'error', text1: t('screens.settingsVoucherConfig.saveFailed') });
     }
   };
 
@@ -435,8 +441,8 @@ export default function VoucherConfigScreen() {
         if (!perm.canAskAgain) {
           Toast.show({
             type: 'error',
-            text1: 'Permission Required',
-            text2: 'Allow photo library access in Settings to upload a QR.',
+            text1: t('screens.settingsVoucherConfig.permissionRequired'),
+            text2: t('screens.settingsVoucherConfig.allowPhotoSettings'),
           });
           return;
         }
@@ -444,8 +450,8 @@ export default function VoucherConfigScreen() {
         if (!perm.granted) {
           Toast.show({
             type: 'error',
-            text1: 'Permission Required',
-            text2: 'Please allow photo library access.',
+            text1: t('screens.settingsVoucherConfig.permissionRequired'),
+            text2: t('screens.settingsVoucherConfig.allowPhoto'),
           });
           return;
         }
@@ -480,7 +486,7 @@ export default function VoucherConfigScreen() {
     try {
       const stamped = {
         ...sanitizeVConfig({ ...configs[id], format }, makeDefault(id)),
-        _updatedAt: Date.now(),
+        _updatedAt: nowMs(),
       };
       const updated = { ...configs, [id]: stamped };
       setConfigs(updated);
@@ -488,9 +494,9 @@ export default function VoucherConfigScreen() {
       await updateUserSettings({ voucher_config: updated }).catch(() => {});
       clearVoucherConfigCache();
       const formatLabel = FORMAT_OPTIONS.find(f => f.id === format)?.label || format;
-      Toast.show({ type: 'success', text1: `${label} Updated`, text2: `${formatLabel} format applied and saved.` });
+      Toast.show({ type: 'success', text1: t('screens.settingsVoucherConfig.labelUpdated', { label }), text2: t('screens.settingsVoucherConfig.formatApplied', { format: formatLabel }) });
     } catch {
-      Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not save format selection.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsVoucherConfig.saveFailed'), text2: t('screens.settingsVoucherConfig.formatSaveFailed') });
     } finally {
       setSaving(null);
     }
@@ -508,7 +514,7 @@ export default function VoucherConfigScreen() {
     await updateUserSettings({ voucher_config: stamped }).catch(() => {});
     clearVoucherConfigCache();
     setIsDirty(false);
-    Toast.show({ type: 'success', text1: 'All Configurations Saved', text2: 'Voucher settings updated for all types.' });
+    Toast.show({ type: 'success', text1: t('screens.settingsVoucherConfig.allSaved'), text2: t('screens.settingsVoucherConfig.allSavedDesc') });
   };
 
   const handlePDFPreview = async (id: string, label: string) => {
@@ -591,14 +597,14 @@ export default function VoucherConfigScreen() {
           if (mode === 'generate' && String(cfg.qrUpiId || '').trim()) {
             Toast.show({
               type: 'error',
-              text1: 'QR generate failed',
-              text2: 'Could not build QR for PDF. Check UPI ID and try again.',
+              text1: t('screens.settingsVoucherConfig.qrGenerateFailed'),
+              text2: t('screens.settingsVoucherConfig.qrGenerateFailedDesc'),
             });
           } else if (mode === 'upload') {
             Toast.show({
               type: 'info',
-              text1: 'No QR image',
-              text2: 'Upload a QR image, or switch to Generate from UPI.',
+              text1: t('screens.settingsVoucherConfig.noQrImage'),
+              text2: t('screens.settingsVoucherConfig.noQrImageDesc'),
             });
           }
         }
@@ -619,23 +625,23 @@ export default function VoucherConfigScreen() {
       const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.settingsVoucherConfig.labelPreview', { label }) });
       } else {
-        Toast.show({ type: 'info', text1: 'PDF Generated', text2: 'Sharing not available on this device.' });
+        Toast.show({ type: 'info', text1: t('screens.settingsVoucherConfig.pdfGenerated'), text2: t('screens.settingsVoucherConfig.sharingUnavailable') });
       }
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'PDF Error', text2: 'Could not generate preview.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsVoucherConfig.pdfError'), text2: t('screens.settingsVoucherConfig.previewFailed') });
     } finally {
       setPreviewLoading(null);
     }
   };
 
-  const bankLabel = (id: string) => bankOpts.find(b => b.value === configs[id].bank)?.label || configs[id].bank || 'Select Bank';
+  const bankLabel = (id: string) => bankOpts.find(b => b.value === configs[id].bank)?.label || configs[id].bank || t('screens.settingsVoucherConfig.selectBank');
 
   const applicabilityStatus = (v: 'not_applicable' | 'applicable_not_configured' | 'applicable_configured') => {
-    if (v === 'not_applicable') return { label: 'Not Applicable', bg: COLORS.activeBg, fg: COLORS.textSecondary };
-    if (v === 'applicable_configured') return { label: 'Configured', bg: COLORS.positiveBg, fg: COLORS.positive };
-    return { label: 'Not Configured', bg: COLORS.warningBg, fg: COLORS.warning };
+    if (v === 'not_applicable') return { label: t('screens.settingsVoucherConfig.notApplicable'), bg: COLORS.activeBg, fg: COLORS.textSecondary };
+    if (v === 'applicable_configured') return { label: t('screens.settingsVoucherConfig.configured'), bg: COLORS.positiveBg, fg: COLORS.positive };
+    return { label: t('screens.settingsVoucherConfig.notConfigured'), bg: COLORS.warningBg, fg: COLORS.warning };
   };
 
   return (
@@ -645,13 +651,13 @@ export default function VoucherConfigScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Voucher Configuration</Text>
+        <Text style={s.hdrTitle}>{t('settings.voucher')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-        <Text style={s.subtitle}>Configure PDF format and settings for each voucher type</Text>
+        <Text style={s.subtitle}>{t('screens.settingsVoucherConfig.subtitle')}</Text>
 
         {/* ── Section 1: Voucher Numbering Policy ── */}
         <View style={s.section}>
@@ -663,10 +669,10 @@ export default function VoucherConfigScreen() {
             <View style={s.typeIcon}>
               <Ionicons name="pricetags-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">Voucher Numbering Policy</Text>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">{t('screens.settingsVoucherConfig.numberingPolicy')}</Text>
             <View style={[cs.statusPill, { backgroundColor: COLORS.activeBg }]}>
               <Text style={[cs.statusPillTxt, { color: COLORS.textPrimary }]}>
-                {numberingPolicy === 'tally_prime_series' ? 'TallyPrime Series' : 'TallyDekho Series'}
+                {numberingPolicy === 'tally_prime_series' ? t('screens.settingsVoucherConfig.tallyPrimeSeries') : t('screens.settingsVoucherConfig.tallyDekhoSeries')}
               </Text>
             </View>
             <Ionicons name={complianceOpen === 'numbering' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
@@ -674,11 +680,11 @@ export default function VoucherConfigScreen() {
 
           {complianceOpen === 'numbering' && (
             <View style={s.sectionBody}>
-              <Text style={cs.sectionSub}>Controls how invoice/voucher numbers are assigned</Text>
+              <Text style={cs.sectionSub}>{t('screens.settingsVoucherConfig.numberingSub')}</Text>
 
               {[
-                { value: 'tally_prime_series', label: 'Follow TallyPrime Series', sub: 'TallyPrime assigns the final number (recommended)' },
-                { value: 'tallydekho_series',  label: 'TallyDekho Series',        sub: 'TallyDekho generates number, pushes to Tally' },
+                { value: 'tally_prime_series', label: t('screens.settingsVoucherConfig.followTallyPrime'), sub: t('screens.settingsVoucherConfig.followTallyPrimeSub') },
+                { value: 'tallydekho_series',  label: t('screens.settingsVoucherConfig.tallyDekhoSeries'), sub: t('screens.settingsVoucherConfig.tallyDekhoSeriesSub') },
               ].map(opt => (
                 <TouchableOpacity
                   key={opt.value}
@@ -699,7 +705,7 @@ export default function VoucherConfigScreen() {
               {numberingPolicy === 'tallydekho_series' && (
                 <View style={cs.warningBox}>
                   <Ionicons name="warning-outline" size={14} color="#D97706" />
-                  <Text style={cs.warningTxt}>Only use if TallyDekho series is reserved exclusively for this app. E-Invoice & E-Way Bill always use TallyPrime series.</Text>
+                  <Text style={cs.warningTxt}>{t('screens.settingsVoucherConfig.seriesWarning')}</Text>
                 </View>
               )}
             </View>
@@ -716,7 +722,7 @@ export default function VoucherConfigScreen() {
             <View style={s.typeIcon}>
               <Ionicons name="document-attach-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">E-Invoice (IRN)</Text>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">{t('settings.eInvoice')}</Text>
             {(() => { const st = applicabilityStatus(eInvoiceApplicable); return (
               <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
                 <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
@@ -727,12 +733,12 @@ export default function VoucherConfigScreen() {
 
           {complianceOpen === 'einvoice' && (
             <View style={s.sectionBody}>
-              <Text style={cs.sectionSub}>For businesses with annual turnover ≥ ₹5 Cr</Text>
+              <Text style={cs.sectionSub}>{t('screens.settingsVoucherConfig.einvoiceSub')}</Text>
 
               {[
-                { value: 'not_applicable',            label: 'Not Applicable',            sub: 'E-Invoice not required for this business' },
-                { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but IRP credentials not set up yet' },
-                { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'IRP integrated, IRN generation enabled' },
+                { value: 'not_applicable',            label: t('screens.settingsVoucherConfig.notApplicable'),            sub: t('screens.settingsVoucherConfig.einvoiceNotRequired') },
+                { value: 'applicable_not_configured', label: t('screens.settingsVoucherConfig.applicableNotConfigured'), sub: t('screens.settingsVoucherConfig.einvoiceNotSetUp') },
+                { value: 'applicable_configured',     label: t('screens.settingsVoucherConfig.applicableConfigured'),    sub: t('screens.settingsVoucherConfig.einvoiceEnabled') },
               ].map(opt => (
                 <TouchableOpacity
                   key={opt.value}
@@ -752,9 +758,9 @@ export default function VoucherConfigScreen() {
 
               {eInvoiceApplicable === 'applicable_configured' && (
                 <View style={cs.modeRow}>
-                  <Text style={cs.modeLabel}>IRN Generation Mode</Text>
+                  <Text style={cs.modeLabel}>{t('screens.settingsVoucherConfig.irnMode')}</Text>
                   <View style={cs.modeChips}>
-                    {[{v:'manual',l:'Manual'},{v:'auto',l:'Auto after Tally sync'}].map(m => (
+                    {[{v:'manual',l:t('screens.settingsVoucherConfig.manual')},{v:'auto',l:t('screens.settingsVoucherConfig.autoAfterSync')}].map(m => (
                       <TouchableOpacity key={m.v}
                         style={[cs.modeChip, eInvoiceMode === m.v && cs.modeChipActive]}
                         onPress={() => { setEInvoiceMode(m.v as any); setComplianceDirty(true); }}
@@ -768,7 +774,7 @@ export default function VoucherConfigScreen() {
                     onPress={() => safePush(router, '/settings/einvoice' as any)}
                     activeOpacity={0.7}>
                     <Ionicons name="settings-outline" size={14} color={COLORS.brandPrimary} />
-                    <Text style={cs.configLinkTxt}>Configure IRP Credentials →</Text>
+                    <Text style={cs.configLinkTxt}>{t('screens.settingsVoucherConfig.configureIrp')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -786,7 +792,7 @@ export default function VoucherConfigScreen() {
             <View style={s.typeIcon}>
               <Ionicons name="car-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">E-Way Bill</Text>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">{t('screens.settingsVoucherConfig.eWayBill')}</Text>
             {(() => { const st = applicabilityStatus(eWayBillApplicable); return (
               <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
                 <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
@@ -797,12 +803,12 @@ export default function VoucherConfigScreen() {
 
           {complianceOpen === 'ewaybill' && (
             <View style={s.sectionBody}>
-              <Text style={cs.sectionSub}>For goods movement where consignment value exceeds ₹50,000</Text>
+              <Text style={cs.sectionSub}>{t('screens.settingsVoucherConfig.ewbSub')}</Text>
 
               {[
-                { value: 'not_applicable',            label: 'Not Applicable',            sub: 'No goods movement or below threshold' },
-                { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but NIC EWB credentials not set up yet' },
-                { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'EWB portal integrated, generation enabled' },
+                { value: 'not_applicable',            label: t('screens.settingsVoucherConfig.notApplicable'),            sub: t('screens.settingsVoucherConfig.ewbNotRequired') },
+                { value: 'applicable_not_configured', label: t('screens.settingsVoucherConfig.applicableNotConfigured'), sub: t('screens.settingsVoucherConfig.ewbNotSetUp') },
+                { value: 'applicable_configured',     label: t('screens.settingsVoucherConfig.applicableConfigured'),    sub: t('screens.settingsVoucherConfig.ewbEnabled') },
               ].map(opt => (
                 <TouchableOpacity
                   key={opt.value}
@@ -822,12 +828,12 @@ export default function VoucherConfigScreen() {
 
               {eWayBillApplicable === 'applicable_configured' && (
                 <View style={cs.modeRow}>
-                  <Text style={cs.modeLabel}>E-Way Bill Mode</Text>
+                  <Text style={cs.modeLabel}>{t('screens.settingsVoucherConfig.ewbMode')}</Text>
                   <View style={cs.modeChips}>
                     {[
-                      {v:'manual',l:'Manual'},
-                      {v:'auto',l:'Auto when details ready'},
-                      {v:'ask_after_irn',l:'Ask after IRN'},
+                      {v:'manual',l:t('screens.settingsVoucherConfig.manual')},
+                      {v:'auto',l:t('screens.settingsVoucherConfig.autoWhenReady')},
+                      {v:'ask_after_irn',l:t('screens.settingsVoucherConfig.askAfterIrn')},
                     ].map(m => (
                       <TouchableOpacity key={m.v}
                         style={[cs.modeChip, eWayBillMode === m.v && cs.modeChipActive]}
@@ -847,7 +853,7 @@ export default function VoucherConfigScreen() {
         {complianceDirty && (
           <TouchableOpacity style={cs.saveBtn} onPress={saveComplianceSettings} activeOpacity={0.85}>
             <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
-            <Text style={cs.saveBtnTxt}>Save Compliance Settings</Text>
+            <Text style={cs.saveBtnTxt}>{t('screens.settingsVoucherConfig.saveCompliance')}</Text>
           </TouchableOpacity>
         )}
 
@@ -863,7 +869,7 @@ export default function VoucherConfigScreen() {
                 <View style={s.typeIcon}>
                   <Ionicons name={vt.icon as any} size={18} color={COLORS.textSecondary} />
                 </View>
-                <Text style={s.sectionTitle}>{vt.label}</Text>
+                <Text style={s.sectionTitle}>{t(vt.labelKey)}</Text>
                 <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
               </TouchableOpacity>
 
@@ -872,7 +878,7 @@ export default function VoucherConfigScreen() {
 
                   {/* ① PDF Format Selector */}
                   <View style={s.block}>
-                    <Text style={s.blockLabel}>PDF FORMAT</Text>
+                    <Text style={s.blockLabel}>{t('screens.settingsVoucherConfig.pdfFormat')}</Text>
                     <View style={s.formatRow}>
                       {FORMAT_OPTIONS.map(opt => {
                         const active = resolveDocumentFormat(cfg.format) === opt.id;
@@ -890,7 +896,7 @@ export default function VoucherConfigScreen() {
                           )}
                           <FormatThumb type={opt.id} />
                           <Text style={[s.formatLbl, active && s.formatLblActive]}>
-                            {opt.label}{opt.id === 'tally_classic_v1' ? ' (Default)' : ''}
+                            {opt.label}{opt.id === 'tally_classic_v1' ? ` ${t('screens.settingsVoucherConfig.defaultSuffix')}` : ''}
                           </Text>
                         </TouchableOpacity>
                         );
@@ -901,11 +907,11 @@ export default function VoucherConfigScreen() {
                   {/* Thermal paper width — only when Thermal selected */}
                   {isThermalTemplateId(resolveDocumentFormat(cfg.format)) && (
                     <View style={s.block}>
-                      <Text style={s.blockLabel}>THERMAL PAPER</Text>
+                      <Text style={s.blockLabel}>{t('screens.settingsVoucherConfig.thermalPaper')}</Text>
                       <View style={s.qrTypeRow}>
                         {([
-                          { v: 80 as ThermalPaperWidth, l: '80mm — Recommended' },
-                          { v: 58 as ThermalPaperWidth, l: '58mm — Compact' },
+                          { v: 80 as ThermalPaperWidth, l: t('screens.settingsVoucherConfig.thermal80') },
+                          { v: 58 as ThermalPaperWidth, l: t('screens.settingsVoucherConfig.thermal58') },
                         ]).map(opt => {
                           const active = normalizeThermalWidth(cfg.thermalPaperWidth) === opt.v;
                           return (
@@ -921,14 +927,14 @@ export default function VoucherConfigScreen() {
                         })}
                       </View>
                       <Text style={s.qrSub}>
-                        PDF Preview uses this roll width. On-screen cream sheets stay unchanged.
+                        {t('screens.settingsVoucherConfig.thermalHint')}
                       </Text>
                     </View>
                   )}
 
                   {/* ② Default Bank Account */}
                   <View style={s.block}>
-                    <Text style={s.blockLabel}>DEFAULT BANK ACCOUNT</Text>
+                    <Text style={s.blockLabel}>{t('screens.settingsVoucherConfig.defaultBank')}</Text>
                     <TouchableOpacity style={s.dropdownTrigger} onPress={() => setBankPickerFor(vt.id)} activeOpacity={0.75}>
                       <Text style={s.dropdownValue} numberOfLines={1}>{bankLabel(vt.id)}</Text>
                       <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
@@ -941,8 +947,8 @@ export default function VoucherConfigScreen() {
                       <View style={s.qrToggleLeft}>
                         <Ionicons name="qr-code-outline" size={18} color={COLORS.textSecondary} />
                         <View style={{ gap: 2 }}>
-                          <Text style={s.qrTitle}>QR Code</Text>
-                          <Text style={s.qrSub}>Include payment QR in PDF</Text>
+                          <Text style={s.qrTitle}>{t('screens.settingsVoucherConfig.qrCode')}</Text>
+                          <Text style={s.qrSub}>{t('screens.settingsVoucherConfig.qrIncludeSub')}</Text>
                         </View>
                       </View>
                       <CustomToggle value={cfg.qrEnabled} onChange={v => update(vt.id, 'qrEnabled', v)} />
@@ -950,11 +956,11 @@ export default function VoucherConfigScreen() {
 
                     {cfg.qrEnabled && (
                       <>
-                        <Text style={s.fieldHint}>Choose how the QR is added to the PDF</Text>
+                        <Text style={s.fieldHint}>{t('screens.settingsVoucherConfig.qrChooseHint')}</Text>
                         <View style={s.qrTypeRow}>
                           {([
-                            { v: 'upload' as const, l: 'Upload QR', icon: 'cloud-upload-outline' as const },
-                            { v: 'generate' as const, l: 'Generate from UPI', icon: 'qr-code-outline' as const },
+                            { v: 'upload' as const, l: t('screens.settingsVoucherConfig.uploadQr'), icon: 'cloud-upload-outline' as const },
+                            { v: 'generate' as const, l: t('screens.settingsVoucherConfig.generateFromUpi'), icon: 'qr-code-outline' as const },
                           ]).map(opt => {
                             const active = resolveQrMode(cfg) === opt.v;
                             return (
@@ -1001,7 +1007,7 @@ export default function VoucherConfigScreen() {
                         {resolveQrMode(cfg) === 'generate' ? (
                           <>
                             <Text style={s.fieldHint}>
-                              Enter UPI ID — QR is generated on this device (not sent to any third party).
+                              {t('screens.settingsVoucherConfig.upiHint')}
                             </Text>
                             <TextInput
                               style={s.termInput}
@@ -1018,7 +1024,7 @@ export default function VoucherConfigScreen() {
                                 }));
                                 setIsDirty(true);
                               }}
-                              placeholder="e.g. business@upi / shop@oksbi"
+                              placeholder={t('screens.settingsVoucherConfig.upiPlaceholder')}
                               placeholderTextColor={COLORS.textTertiary}
                               autoCapitalize="none"
                               keyboardType="email-address"
@@ -1028,20 +1034,20 @@ export default function VoucherConfigScreen() {
                             {!String(cfg.qrUpiId || '').trim() && (
                               <View style={s.qrEmptyHint}>
                                 <Ionicons name="qr-code-outline" size={22} color={COLORS.textTertiary} />
-                                <Text style={s.qrEmptyHintTxt}>QR preview appears here after you enter a UPI ID</Text>
+                                <Text style={s.qrEmptyHintTxt}>{t('screens.settingsVoucherConfig.qrEmptyHint')}</Text>
                               </View>
                             )}
                           </>
                         ) : (
                           <>
-                            <Text style={s.fieldHint}>Upload a QR image from your gallery to print on the PDF.</Text>
+                            <Text style={s.fieldHint}>{t('screens.settingsVoucherConfig.uploadHint')}</Text>
                             {cfg.qrImage ? (
                               <View style={s.qrPreviewCard}>
                                 <Image source={{ uri: cfg.qrImage }} style={s.qrPreviewImg} resizeMode="contain" />
                                 <View style={s.qrPreviewFooter}>
                                   <View style={s.qrPreviewStatus}>
                                     <Ionicons name="checkmark-circle" size={14} color={COLORS.brandPrimary} />
-                                    <Text style={s.qrPreviewStatusTxt}>Uploaded QR · ready for PDF</Text>
+                                    <Text style={s.qrPreviewStatusTxt}>{t('screens.settingsVoucherConfig.uploadedReady')}</Text>
                                   </View>
                                   <TouchableOpacity
                                     onPress={() => update(vt.id, 'qrImage', null)}
@@ -1049,12 +1055,12 @@ export default function VoucherConfigScreen() {
                                     style={s.qrRemoveBtn}
                                   >
                                     <Ionicons name="trash-outline" size={13} color={COLORS.negative} />
-                                    <Text style={s.qrRemoveTxt}>Remove</Text>
+                                    <Text style={s.qrRemoveTxt}>{t('common.remove')}</Text>
                                   </TouchableOpacity>
                                 </View>
                                 <TouchableOpacity style={s.qrReuploadBtn} onPress={() => handlePickQR(vt.id)} activeOpacity={0.7}>
                                   <Ionicons name="refresh-outline" size={14} color={COLORS.textSecondary} />
-                                  <Text style={s.qrReuploadTxt}>Replace QR</Text>
+                                  <Text style={s.qrReuploadTxt}>{t('screens.settingsVoucherConfig.replaceQr')}</Text>
                                 </TouchableOpacity>
                               </View>
                             ) : (
@@ -1065,8 +1071,8 @@ export default function VoucherConfigScreen() {
                                 delayPressIn={0}
                               >
                                 <Ionicons name="cloud-upload-outline" size={28} color={COLORS.textTertiary} />
-                                <Text style={s.uploadMainTxt}>Upload QR Code Image</Text>
-                                <Text style={s.uploadSubTxt}>Tap to select from gallery · PNG or JPG</Text>
+                                <Text style={s.uploadMainTxt}>{t('screens.settingsVoucherConfig.uploadQrImage')}</Text>
+                                <Text style={s.uploadSubTxt}>{t('screens.settingsVoucherConfig.uploadQrImageSub')}</Text>
                               </TouchableOpacity>
                             )}
                           </>
@@ -1077,7 +1083,7 @@ export default function VoucherConfigScreen() {
 
                   {/* ④ Terms & Conditions */}
                   <View style={s.block}>
-                    <Text style={s.blockLabel}>TERMS & CONDITIONS</Text>
+                    <Text style={s.blockLabel}>{t('screens.settingsVoucherConfig.termsLabel')}</Text>
                     {cfg.terms.map((term, idx) => (
                       <View key={idx} style={s.termRow}>
                         <View style={s.termBullet} />
@@ -1087,7 +1093,7 @@ export default function VoucherConfigScreen() {
                           onChangeText={text => updateTerm(vt.id, idx, text)}
                           multiline
                           selectionColor={COLORS.brandPrimary}
-                          placeholder="Enter term..."
+                          placeholder={t('screens.settingsVoucherConfig.enterTerm')}
                           placeholderTextColor={COLORS.textTertiary}
                         />
                         <TouchableOpacity onPress={() => removeTerm(vt.id, idx)} style={s.termDeleteBtn} activeOpacity={0.7}>
@@ -1097,7 +1103,7 @@ export default function VoucherConfigScreen() {
                     ))}
                     <TouchableOpacity style={s.addTermBtn} onPress={() => addTerm(vt.id)} activeOpacity={0.7}>
                       <Ionicons name="add-circle-outline" size={16} color={COLORS.brandPrimary} />
-                      <Text style={s.addTermTxt}>Add New</Text>
+                      <Text style={s.addTermTxt}>{t('screens.settingsVoucherConfig.addNew')}</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1105,22 +1111,22 @@ export default function VoucherConfigScreen() {
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TouchableOpacity
                       style={s.previewBtn}
-                      onPress={() => handlePDFPreview(vt.id, vt.label)}
+                      onPress={() => handlePDFPreview(vt.id, t(vt.labelKey))}
                       disabled={previewLoading === vt.id}
                       activeOpacity={0.85}
                     >
                       <Ionicons name="document-outline" size={15} color={COLORS.brandPrimary} />
                       <Text style={s.previewBtnTxt} numberOfLines={1}>
-                        {previewLoading === vt.id ? 'Generating…' : 'PDF Preview'}
+                        {previewLoading === vt.id ? t('pdf.generating') : t('screens.settingsVoucherConfig.pdfPreview')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[s.useBtn, { flex: 1 }, isSaving && s.useBtnSaving]}
-                      onPress={() => { handleUseFormat(vt.id, vt.label, cfg.format); markDirty(); }}
+                      onPress={() => { handleUseFormat(vt.id, t(vt.labelKey), cfg.format); markDirty(); }}
                       disabled={isSaving}
                       activeOpacity={0.85}
                     >
-                      <Text style={s.useBtnTxt}>{isSaving ? 'Saving...' : 'Use this format'}</Text>
+                      <Text style={s.useBtnTxt}>{isSaving ? t('common.saving') : t('screens.settingsVoucherConfig.useFormat')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1132,7 +1138,7 @@ export default function VoucherConfigScreen() {
         {/* Global Save */}
         {isDirty && (
         <TouchableOpacity style={s.saveAllBtn} onPress={handleSaveAll} activeOpacity={0.85}>
-          <Text style={s.saveAllTxt}>Save All Configurations</Text>
+          <Text style={s.saveAllTxt}>{t('screens.settingsVoucherConfig.saveAll')}</Text>
         </TouchableOpacity>
         )}
         <View style={{ height: 40 }} />
@@ -1143,7 +1149,7 @@ export default function VoucherConfigScreen() {
       {/* Bank Picker — single instance at root level */}
       <PickerSheet
         visible={bankPickerFor !== null}
-        title="Select Bank Account"
+        title={t('screens.settingsVoucherConfig.selectBankAccount')}
         items={bankOpts}
         selected={bankPickerFor ? configs[bankPickerFor].bank : ''}
         onSelect={v => { if (bankPickerFor) update(bankPickerFor, 'bank', v); }}

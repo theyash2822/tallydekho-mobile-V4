@@ -52,6 +52,7 @@ function TransferCard({
   entry: TransferEntry;
   formatAmount: (v: number) => string;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   // Aggregate unique from→to pairs for the header
@@ -80,7 +81,7 @@ function TransferCard({
         </View>
         {/* Summary + chevron */}
         <View style={s.cardRight}>
-          <Text style={s.cardItemCount}>{entry.item_count} item{entry.item_count !== 1 ? 's' : ''}</Text>
+          <Text style={s.cardItemCount}>{t(entry.item_count !== 1 ? 'screens.stocksTransferHistory.itemCountOther' : 'screens.stocksTransferHistory.itemCountOne', { count: entry.item_count })}</Text>
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={16}
@@ -111,7 +112,7 @@ function TransferCard({
                 <Text style={s.itemName} numberOfLines={2}>{item.item}</Text>
               </View>
               <View style={s.itemRight}>
-                <Text style={s.itemQty}>{item.qty} units</Text>
+                <Text style={s.itemQty}>{t('screens.stocksTransferHistory.qtyUnits', { qty: item.qty })}</Text>
                 {item.value > 0 && (
                   <Text style={s.itemValue}>{formatAmount(item.value)}</Text>
                 )}
@@ -146,43 +147,62 @@ export default function TransferHistoryScreen() {
   const [dateFrom,    setDateFrom]    = useState('');
   const [dateTo,      setDateTo]      = useState('');
   // Home FY change clears custom range (year switcher is Home only)
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState({ start: selectedFY?.startDate, end: selectedFY?.endDate });
+  if (prevFyRange.start !== selectedFY?.startDate || prevFyRange.end !== selectedFY?.endDate) {
+    setPrevFyRange({ start: selectedFY?.startDate, end: selectedFY?.endDate });
     setDateFrom('');
     setDateTo('');
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
+  }
   const [showDatePick,setShowDatePick]= useState(false);
 
-  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} — ${formatDate(dateTo)}` : 'All Dates';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} — ${formatDate(dateTo)}` : t('screens.stocksTransferHistory.allDates');
   const hasCustomDate = !!(dateFrom && dateTo);
 
-  const load = useCallback(async (pg = 1, reset = false) => {
+  const fetchPage = useCallback((pg: number, reset: boolean) => {
+    if (!companyGuid) return;
+    const params: Record<string, string> = { page: String(pg), limit: String(PAGE_LIMIT) };
+    if (hasCustomDate) {
+      // explicit date range overrides FY
+      params.from = dateFrom;
+      params.to   = dateTo;
+    } else if (fyParam) {
+      params.fy = fyParam;
+    }
+    getTransferHistory(companyGuid, params)
+      .then((res: any) => {
+        const rows: TransferEntry[] = res?.data ?? [];
+        setEntries(prev => (reset || pg === 1) ? rows : [...prev, ...rows]);
+        setTotal(res?.total ?? 0);
+        setPage(pg);
+      })
+      .catch((e: any) => {
+        setApiError(e?.message || t('screens.stocksTransferHistory.loadFailed'));
+      })
+      .finally(() => {
+        setIsLoading(false);
+        setIsMore(false);
+      });
+  }, [companyGuid, fyParam, hasCustomDate, dateFrom, dateTo, t]);
+
+  const load = (pg = 1, reset = false) => {
     if (!companyGuid) return;
     if (pg === 1) setIsLoading(true);
     else setIsMore(true);
     setApiError(null);
-    try {
-      const params: Record<string, string> = { page: String(pg), limit: String(PAGE_LIMIT) };
-      if (hasCustomDate) {
-        // explicit date range overrides FY
-        params.from = dateFrom;
-        params.to   = dateTo;
-      } else if (fyParam) {
-        params.fy = fyParam;
-      }
-      const res = await getTransferHistory(companyGuid, params);
-      const rows: TransferEntry[] = res?.data ?? [];
-      setEntries(prev => (reset || pg === 1) ? rows : [...prev, ...rows]);
-      setTotal(res?.total ?? 0);
-      setPage(pg);
-    } catch (e: any) {
-      setApiError(e?.message || 'Failed to load transfer history');
-    } finally {
-      setIsLoading(false);
-      setIsMore(false);
-    }
-  }, [companyGuid, fyParam, hasCustomDate, dateFrom, dateTo]);
+    fetchPage(pg, reset);
+  };
 
-  useEffect(() => { load(1, true); }, [load]);
+  const loadKey = `${companyGuid}|${fyParam}|${hasCustomDate}|${dateFrom}|${dateTo}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (loadedKey !== loadKey) {
+    setLoadedKey(loadKey);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchPage(1, true); }, [fetchPage]);
 
   const loadMore = () => {
     if (isMore || isLoading) return;
@@ -215,11 +235,11 @@ export default function TransferHistoryScreen() {
         <View style={s.iconWrap}>
           <Ionicons name="swap-horizontal-outline" size={48} color={COLORS.textTertiary} />
         </View>
-        <Text style={s.emptyTitle}>No Stock Transfers Found</Text>
+        <Text style={s.emptyTitle}>{t('screens.stocksTransferHistory.emptyTitle')}</Text>
         <Text style={s.emptyDesc}>
           {search.trim()
-            ? 'No transfers match your search. Try a different item name.'
-            : 'Stock transfer history will appear here once Stock Journal entries are synced from Tally.'}
+            ? t('screens.stocksTransferHistory.emptySearch')
+            : t('screens.stocksTransferHistory.emptyDesc')}
         </Text>
       </View>
     );
@@ -258,14 +278,14 @@ export default function TransferHistoryScreen() {
       <SearchBar
         value={search}
         onChangeText={setSearch}
-        placeholder="Search by item or voucher no..."
+        placeholder={t('screens.stocksTransferHistory.searchPlaceholder')}
         inputProps={{ returnKeyType: 'search' }}
       />
 
       {/* Summary strip */}
       {!isLoading && total > 0 && (
         <View style={s.summaryStrip}>
-          <Text style={s.summaryText}>{total} transfer{total !== 1 ? 's' : ''} found</Text>
+          <Text style={s.summaryText}>{t(total !== 1 ? 'screens.stocksTransferHistory.foundOther' : 'screens.stocksTransferHistory.foundOne', { count: total })}</Text>
           {selectedFY && (
             <Text style={s.summaryFY}>{selectedFY.label ?? ''}</Text>
           )}
@@ -306,7 +326,7 @@ export default function TransferHistoryScreen() {
         visible={showDatePick}
         fromDate={dateFrom || fyFrom}
         toDate={dateTo || fyTo}
-        onApply={(f, t) => { setDateFrom(f); setDateTo(t); setShowDatePick(false); }}
+        onApply={(f, to) => { setDateFrom(f); setDateTo(to); setShowDatePick(false); }}
         onClose={() => setShowDatePick(false)}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}

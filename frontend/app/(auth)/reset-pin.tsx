@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { setPreAuthToken, getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
@@ -55,6 +56,7 @@ function CodeBox({
 type Step = 'otp' | 'new_pin' | 'confirm_pin';
 
 export default function ResetPinScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const { signIn, setCompany } = useAuth();
@@ -95,22 +97,22 @@ export default function ResetPinScreen() {
 
   const handleNext = async (code?: string) => {
     const val = code || current.join('');
-    if (val.length < BOX_LENGTH) { setError(`Enter all ${BOX_LENGTH} digits`); return; }
+    if (val.length < BOX_LENGTH) { setError(t('screens.authResetPin.enterAllDigits', { count: BOX_LENGTH })); return; }
 
     if (step === 'otp') {
       setLoading(true); setError('');
       try {
         // Verify OTP with reset_pin=true — backend skips 2FA check and issues pre_auth_token
         const r = await verifyOTP(phone || '', val, { reset_pin: true });
-        if (!r?.success) throw new Error('Invalid OTP');
+        if (!r?.success) throw new Error(t('screens.authResetPin.invalidOtp'));
         // For reset flow, backend always returns pre_auth_token
         const token = r?.data?.pre_auth_token || r?.data?.access_token || '';
-        if (!token) throw new Error('Could not verify OTP');
+        if (!token) throw new Error(t('screens.authResetPin.couldNotVerifyOtp'));
         setPreToken(token);
         await setPreAuthToken(token);
         setStep('new_pin');
       } catch (err: any) {
-        setError(err?.message || 'Invalid OTP. Try again.');
+        setError(err?.message || t('screens.authResetPin.invalidOtpRetry'));
         setOtp(Array(BOX_LENGTH).fill(''));
         setFocused(0);
       } finally { setLoading(false); }
@@ -120,7 +122,7 @@ export default function ResetPinScreen() {
 
     } else if (step === 'confirm_pin') {
       if (newPin.join('') !== val) {
-        setError("PINs don't match. Try again.");
+        setError(t('screens.authResetPin.pinMismatch'));
         setConfirm(Array(BOX_LENGTH).fill(''));
         setFocused(0);
         return;
@@ -140,18 +142,18 @@ export default function ResetPinScreen() {
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           await navigateAfterAuth(router);
         } else {
-          throw new Error(res?.error?.message || 'Reset failed');
+          throw new Error(res?.error?.message || t('screens.authResetPin.resetFailed'));
         }
       } catch (err: any) {
-        setError(err?.message || 'Could not reset PIN');
+        setError(err?.message || t('screens.authResetPin.couldNotReset'));
       } finally { setLoading(false); }
     }
   };
 
   const titles: Record<Step, { heading: string; sub: string; btn: string }> = {
-    otp:         { heading: 'Verify Your Identity',   sub: `Enter the OTP sent to ${phone}`, btn: 'Verify OTP' },
-    new_pin:     { heading: 'Set New PIN',             sub: 'Enter a new 4-digit passkey',    btn: 'Continue' },
-    confirm_pin: { heading: 'Confirm New PIN',         sub: 'Re-enter your new passkey',      btn: 'Reset PIN' },
+    otp:         { heading: t('screens.authResetPin.otpHeading'),        sub: t('screens.authResetPin.otpSub', { phone }), btn: t('auth.verifyOtp') },
+    new_pin:     { heading: t('screens.authResetPin.newPinHeading'),     sub: t('screens.authResetPin.newPinSub'),         btn: t('common.continue') },
+    confirm_pin: { heading: t('screens.authResetPin.confirmPinHeading'), sub: t('screens.authResetPin.confirmPinSub'),     btn: t('screens.authResetPin.resetPinBtn') },
   };
   const { heading, sub, btn } = titles[step];
 
@@ -165,7 +167,7 @@ export default function ResetPinScreen() {
           <View style={s.iconBox}>
             <Ionicons name="key-outline" size={28} color={COLORS.white} />
           </View>
-          <Text style={s.appName}>Reset Passkey</Text>
+          <Text style={s.appName}>{t('screens.authResetPin.title')}</Text>
           <View style={s.card}>
             <Text style={s.heading}>{heading}</Text>
             <Text style={s.subText}>{sub}</Text>

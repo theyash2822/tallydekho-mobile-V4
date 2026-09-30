@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Alert,
@@ -143,6 +143,14 @@ function mapDocLine(l: any): TxEntry {
   };
 }
 
+const TYPE_LABEL_KEYS: Record<TxnType, string> = {
+  Sales: 'voucher.sales',
+  Purchase: 'voucher.purchase',
+  Transfer: 'screens.stocksStockLedger.typeTransfer',
+  Adjustment: 'screens.stocksStockLedger.typeAdjustment',
+  Opening: 'screens.stocksStockLedger.typeOpening',
+};
+
 const TYPE_COLOR: Record<TxnType, string> = {
   Sales: '#A89060', Purchase: COLORS.textPrimary, Transfer: '#7C3AED', Adjustment: '#D97706', Opening: '#3A3A3A',
 };
@@ -156,6 +164,7 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
   whOptions: { id: string; label: string }[];
   typeOptions: { id: string; label: string }[];
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'Warehouse' | 'Type'>('Warehouse');
   const [selWh, setSelWh] = useState<string[]>([]);
   const [selTypes, setSelTypes] = useState<string[]>([]);
@@ -168,13 +177,15 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
   useMultiFilterHydration(visible, initWh, whIds, setSelWh);
   useMultiFilterHydration(visible, initTypes, typeIds, setSelTypes);
 
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) {
       setWhSearch('');
       setTypeSearch('');
       setTab('Warehouse');
     }
-  }, [visible]);
+  }
 
   const isAllWh = isFilterAllSelected(selWh, whIds);
   const isAllTypes = isFilterAllSelected(selTypes, typeIds);
@@ -206,18 +217,18 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Stock Ledger"
+      title={t('screens.stocksStockLedger.filterTitle')}
       activeCount={activeCount}
       onClear={() => { setSelWh([...whIds]); setSelTypes([...typeIds]); }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.stocksStockLedger.applyFilters')}
       applyDisabled={!canApply}
       heightFraction={0.68}
     >
       <View style={fm.tabs}>
         {(['Warehouse', 'Type'] as const).map(cat => (
           <TouchableOpacity key={cat} style={[fm.tab, tab === cat && fm.tabActive]} onPress={() => setTab(cat)} activeOpacity={0.7}>
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Type' ? 'Transaction Type' : cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Type' ? t('screens.stocksStockLedger.transactionType') : t('screens.stocksStockLedger.warehouse')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -225,13 +236,13 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
         <View style={fm.panel}>
           <View style={fm.searchBox}>
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-            <TextInput style={fm.searchInput} placeholder="Search warehouse..." placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
+            <TextInput style={fm.searchInput} placeholder={t('screens.stocksStockLedger.searchWarehouse')} placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
           </View>
-          <FilterCheckRow label="All warehouses" selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
+          <FilterCheckRow label={t('screens.stocksStockLedger.allWarehouses')} selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
           {whOptions.length === 0 ? (
-            <Text style={fm.hint}>No warehouses available</Text>
+            <Text style={fm.hint}>{t('screens.stocksStockLedger.noWarehouses')}</Text>
           ) : filteredWh.length === 0 ? (
-            <Text style={fm.hint}>No warehouses match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksStockLedger.noWarehousesMatch')}</Text>
           ) : filteredWh.map(w => (
             <FilterCheckRow key={w.id} label={w.label} selected={isFilterOptionChecked(selWh, w.id)} onPress={() => setSelWh(prev => toggleFilterFromAll(prev, w.id, whIds))} />
           ))}
@@ -240,13 +251,13 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
         <View style={fm.panel}>
           <View style={fm.searchBox}>
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-            <TextInput style={fm.searchInput} placeholder="Search transaction type..." placeholderTextColor={COLORS.textTertiary} value={typeSearch} onChangeText={setTypeSearch} />
+            <TextInput style={fm.searchInput} placeholder={t('screens.stocksStockLedger.searchType')} placeholderTextColor={COLORS.textTertiary} value={typeSearch} onChangeText={setTypeSearch} />
           </View>
-          <FilterCheckRow label="All types" selected={isAllTypes} onPress={() => setSelTypes(prev => toggleFilterAll(prev, typeIds))} />
+          <FilterCheckRow label={t('screens.stocksStockLedger.allTypes')} selected={isAllTypes} onPress={() => setSelTypes(prev => toggleFilterAll(prev, typeIds))} />
           {typeOptions.length === 0 ? (
-            <Text style={fm.hint}>No transaction types found</Text>
+            <Text style={fm.hint}>{t('screens.stocksStockLedger.noTypes')}</Text>
           ) : filteredTypes.length === 0 ? (
-            <Text style={fm.hint}>No types match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksStockLedger.noTypesMatch')}</Text>
           ) : filteredTypes.map(t => (
             <FilterCheckRow key={t.id} label={t.label} selected={isFilterOptionChecked(selTypes, t.id)} onPress={() => setSelTypes(prev => toggleFilterFromAll(prev, t.id, typeIds))} />
           ))}
@@ -300,7 +311,7 @@ export default function StockLedgerScreen() {
     try {
       await shareStockRegisterPdf({
         company: companyFromAuth(company),
-        title: 'Stock Ledger',
+        title: t('stocks.stockLedger'),
         period: `${dateFrom} – ${dateTo}`,
         rows: rows.map(tx => ({
           date: tx.date,
@@ -313,7 +324,7 @@ export default function StockLedgerScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       setSelected(new Set());
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksStockLedger.couldNotShare'));
     } finally {
       setIsSharing(false);
     }
@@ -323,12 +334,16 @@ export default function StockLedgerScreen() {
   const { company, selectedFY } = useAuth();
 
   // Sync date range to selected FY whenever FY changes
-  useEffect(() => {
-    if (selectedFY?.startDate && selectedFY?.endDate) {
-      setDateFrom(isoToDdmmyy(selectedFY.startDate));
-      setDateTo(isoToDdmmyy(selectedFY.endDate));
+  const fyStart = selectedFY?.startDate;
+  const fyEnd = selectedFY?.endDate;
+  const [syncedFy, setSyncedFy] = useState<{ start?: string; end?: string } | null>(null);
+  if (!syncedFy || syncedFy.start !== fyStart || syncedFy.end !== fyEnd) {
+    setSyncedFy({ start: fyStart, end: fyEnd });
+    if (fyStart && fyEnd) {
+      setDateFrom(isoToDdmmyy(fyStart));
+      setDateTo(isoToDdmmyy(fyEnd));
     }
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -350,35 +365,36 @@ export default function StockLedgerScreen() {
   const [apiVoucherTypes, setApiVoucherTypes] = useState<string[]>([]);
   const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
 
-  const [voucherTypesLoading, setVoucherTypesLoading] = useState(false);
+  const voucherTypesLoadingRef = useRef(false);
+  const companyGuid = company?.guid;
 
   const whOptions = useMemo(() => warehouses.map(w => ({ id: w, label: w })), [warehouses]);
   const typeOptions = useMemo(() => apiVoucherTypes.map(v => ({ id: v, label: v })), [apiVoucherTypes]);
   const activeFilterCount = (selWH.length > 0 ? selWH.length : 0) + (selVouchers.length > 0 ? selVouchers.length : 0);
 
   // Load voucher types independently — called on mount + FY change so filter is always ready
-  const loadVoucherTypes = useCallback(async () => {
-    if (!company?.guid || voucherTypesLoading) return;
-    setVoucherTypesLoading(true);
-    try {
-      const fyParam = fyInfoToParam(selectedFY);
-      const params: Record<string, any> = { mode: 'chronological', page: 1, limit: 1 };
-      if (fyParam) params.fy = fyParam;
-      const res = await getStockLedger(company.guid, params);
-      if (res?.data?.voucherTypes?.length) {
-        setApiVoucherTypes(res.data.voucherTypes);
-      }
-    } catch {}
-    finally { setVoucherTypesLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, selectedFY]);
+  const loadVoucherTypes = () => {
+    if (!companyGuid || voucherTypesLoadingRef.current) return;
+    voucherTypesLoadingRef.current = true;
+    const fyParam = fyInfoToParam(selectedFY);
+    const params: Record<string, any> = { mode: 'chronological', page: 1, limit: 1 };
+    if (fyParam) params.fy = fyParam;
+    getStockLedger(companyGuid, params)
+      .then((res) => {
+        if (res?.data?.voucherTypes?.length) {
+          setApiVoucherTypes(res.data.voucherTypes);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { voucherTypesLoadingRef.current = false; });
+  };
 
   // Map viewMode → API mode param
   const apiMode = viewMode === 'byItem' ? 'by_item' : viewMode === 'byDocument' ? 'by_document' : 'chronological';
 
   // Fetch ledger from API — pg=1 resets list for active mode
-  const fetchLedger = useCallback(async (pg: number, reset = false) => {
-    if (!company?.guid) return;
+  const fetchLedger = async (pg: number, reset = false) => {
+    if (!companyGuid) return;
     pg === 1 ? setLoading(true) : setIsLoadMore(true);
     setError(null);
     try {
@@ -391,7 +407,7 @@ export default function StockLedgerScreen() {
       if (selWH.length > 0)    params.warehouse   = selWH.join(',');
       if (selVouchers.length > 0) params.voucherType = selVouchers.join(',');
 
-      const res = await getStockLedger(company.guid, params);
+      const res = await getStockLedger(companyGuid, params);
       if (res?.data) {
         const d = res.data;
 
@@ -428,13 +444,12 @@ export default function StockLedgerScreen() {
         setPage(pg);
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to load stock ledger');
+      setError(e?.message || t('screens.stocksStockLedger.loadFailed'));
     } finally {
       setLoading(false);
       setIsLoadMore(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, debouncedSearch, selWH, selVouchers]);
+  };
 
   // Always keep a ref to the latest fetchLedger so effects never call a stale closure
   const fetchLedgerRef = useRef(fetchLedger);
@@ -506,13 +521,13 @@ export default function StockLedgerScreen() {
         {isExp && (
           <View style={s.expandBody}>
             <View style={s.expandDivider} />
-            {tx.batch  && tx.batch  !== '' && <DetailRow label="Batch/Serial" value={tx.batch} />}
-            {tx.unitCost && <DetailRow label="Unit cost" value={tx.unitCost} label2="Value" value2={tx.value} />}
-            <DetailRow label="Document" value={tx.docRef || '—'} label2="Type" value2={tx.docType || '—'} />
-            <DetailRow label="Warehouse" value={tx.warehouse || '—'} />
-            {tx.note && tx.note !== '' && <DetailRow label="Note" value={tx.note} />}
+            {tx.batch  && tx.batch  !== '' && <DetailRow label={t('screens.stocksStockLedger.batchSerial')} value={tx.batch} />}
+            {tx.unitCost && <DetailRow label={t('screens.stocksStockLedger.unitCost')} value={tx.unitCost} label2={t('screens.stocksStockLedger.value')} value2={tx.value} />}
+            <DetailRow label={t('screens.stocksStockLedger.document')} value={tx.docRef || '—'} label2={t('screens.stocksStockLedger.type')} value2={tx.docType || '—'} />
+            <DetailRow label={t('screens.stocksStockLedger.warehouse')} value={tx.warehouse || '—'} />
+            {tx.note && tx.note !== '' && <DetailRow label={t('screens.stocksStockLedger.note')} value={tx.note} />}
             <View style={[s.typePill, { backgroundColor: tc + '18', alignSelf: 'flex-start', marginTop: 6 }]}>
-              <Text style={[s.typePillTxt, { color: tc }]}>{tx.type}</Text>
+              <Text style={[s.typePillTxt, { color: tc }]}>{t(TYPE_LABEL_KEYS[tx.type])}</Text>
             </View>
           </View>
         )}
@@ -545,7 +560,7 @@ export default function StockLedgerScreen() {
           <View style={s.cardInfo}>
             <Text style={s.cardTitle} numberOfLines={1}>{grp.item || '—'}</Text>
             <Text style={s.cardSub} numberOfLines={1}>
-              {grp.sku ? `SKU: ${grp.sku}  ·  ` : ''}{grp.items.length} movement{grp.items.length !== 1 ? 's' : ''}
+              {grp.sku ? t('screens.stocksStockLedger.skuPrefix', { sku: grp.sku }) : ''}{grp.items.length !== 1 ? t('screens.stocksStockLedger.movements', { count: grp.items.length }) : t('screens.stocksStockLedger.movement', { count: grp.items.length })}
             </Text>
           </View>
           <View style={s.cardRight}>
@@ -559,9 +574,9 @@ export default function StockLedgerScreen() {
               <View key={`bi-${tx.id || grp.key}-${i}`}>
                 {i > 0 && <View style={s.innerDivider} />}
                 <View style={s.expandDivider} />
-                <DetailRow label="Date"     value={tx.date}    label2="Doc Ref"  value2={tx.docRef || '—'}   />
-                <DetailRow label="Qty"      value={`${tx.qty > 0 ? '+' : '−'}${Math.abs(tx.qty)}`} label2="Warehouse" value2={tx.warehouse || '—'} />
-                <DetailRow label="Type"     value={tx.docType || '—'} />
+                <DetailRow label={t('voucher.date')} value={tx.date} label2={t('screens.stocksStockLedger.docRef')} value2={tx.docRef || '—'} />
+                <DetailRow label={t('pdf.qty')} value={`${tx.qty > 0 ? '+' : '−'}${Math.abs(tx.qty)}`} label2={t('screens.stocksStockLedger.warehouse')} value2={tx.warehouse || '—'} />
+                <DetailRow label={t('screens.stocksStockLedger.type')} value={tx.docType || '—'} />
               </View>
             ))}
           </View>
@@ -599,7 +614,7 @@ export default function StockLedgerScreen() {
             </View>
             <View style={s.cardInfo}>
               <Text style={s.cardTitle}>{grp.docRef}</Text>
-              <Text style={s.cardSub}>{grp.items.length} item{grp.items.length !== 1 ? 's' : ''}{grp.note ? ` · ${grp.note}` : ''}</Text>
+              <Text style={s.cardSub}>{grp.items.length !== 1 ? t('screens.stocksStockLedger.items', { count: grp.items.length }) : t('screens.stocksStockLedger.item', { count: grp.items.length })}{grp.note ? ` · ${grp.note}` : ''}</Text>
             </View>
             <View style={s.cardRight}>
               <Text style={s.cardValue}>{grp.value}</Text>
@@ -612,10 +627,10 @@ export default function StockLedgerScreen() {
                 <View key={`dl-${tx.id || tx.item}-${i}`}>
                   {i > 0 && <View style={s.innerDivider} />}
                   <View style={s.expandDivider} />
-                  <DetailRow label="Item"      value={tx.item}      label2="Batch/Serial" value2={tx.batch}    />
-                  <DetailRow label="Unit cost" value={tx.unitCost}  label2="Balance"      value2={tx.balance}  />
-                  <DetailRow label="Posted-by" value={tx.postedBy}                                              />
-                  <DetailRow label="Note"      value={tx.note}                                                  />
+                  <DetailRow label={t('screens.stocksStockLedger.itemLabel')} value={tx.item} label2={t('screens.stocksStockLedger.batchSerial')} value2={tx.batch} />
+                  <DetailRow label={t('screens.stocksStockLedger.unitCost')} value={tx.unitCost} label2={t('ledger.balance')} value2={tx.balance} />
+                  <DetailRow label={t('screens.stocksStockLedger.postedBy')} value={tx.postedBy} />
+                  <DetailRow label={t('screens.stocksStockLedger.note')} value={tx.note} />
                 </View>
               ))}
             </View>
@@ -658,9 +673,9 @@ export default function StockLedgerScreen() {
       <View style={s.tabRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabScroll}>
           {([
-            { key: 'chronological', icon: 'time-outline',        label: 'Chronological' },
-            { key: 'byItem',        icon: 'cube-outline',         label: 'By Item'       },
-            { key: 'byDocument',    icon: 'document-text-outline', label: 'By Document'  },
+            { key: 'chronological', icon: 'time-outline',        label: t('screens.stocksStockLedger.chronological') },
+            { key: 'byItem',        icon: 'cube-outline',         label: t('screens.stocksStockLedger.byItem')        },
+            { key: 'byDocument',    icon: 'document-text-outline', label: t('screens.stocksStockLedger.byDocument')    },
           ] as { key: ViewMode; icon: string; label: string }[]).map(tab => (
             <TouchableOpacity
               key={tab.key}
@@ -683,21 +698,21 @@ export default function StockLedgerScreen() {
       <View style={s.summaryStrip}>
         <View style={s.summaryItem}>
           <Text style={s.summaryVal}>{summary.entries}</Text>
-          <Text style={s.summaryLbl}>Entries</Text>
+          <Text style={s.summaryLbl}>{t('screens.stocksStockLedger.entries')}</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
           <Text style={[s.summaryVal, { color: COLORS.positive }]}>
             +{summary.totalIn % 1 === 0 ? summary.totalIn : summary.totalIn.toFixed(2)}
           </Text>
-          <Text style={s.summaryLbl}>Total In</Text>
+          <Text style={s.summaryLbl}>{t('screens.stocksStockLedger.totalIn')}</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
           <Text style={[s.summaryVal, { color: COLORS.negative }]}>
             -{summary.totalOut % 1 === 0 ? summary.totalOut : summary.totalOut.toFixed(2)}
           </Text>
-          <Text style={s.summaryLbl}>Total Out</Text>
+          <Text style={s.summaryLbl}>{t('screens.stocksStockLedger.totalOut')}</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
@@ -708,15 +723,15 @@ export default function StockLedgerScreen() {
               ? `₹${(summary.value/1000).toFixed(1)}K`
               : `₹${summary.value.toFixed(0)}`}
           </Text>
-          <Text style={s.summaryLbl}>Value</Text>
+          <Text style={s.summaryLbl}>{t('screens.stocksStockLedger.value')}</Text>
         </View>
       </View>
 
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search items, documents..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder={t('screens.stocksStockLedger.searchPlaceholder')} />
 
       {/* List */}
       {loading ? (
-        <View style={{ flex: 1 }}><LoadingState message="Loading stock ledger..." /></View>
+        <View style={{ flex: 1 }}><LoadingState message={t('screens.stocksStockLedger.loading')} /></View>
       ) : error ? (
         <View style={{ flex: 1 }}>
           <ErrorState message={error} onRetry={() => fetchLedger(1, true)} />
@@ -729,9 +744,9 @@ export default function StockLedgerScreen() {
           {activeCount === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
-              <Text style={s.emptyTxt}>No stock movements found</Text>
+              <Text style={s.emptyTxt}>{t('screens.stocksStockLedger.noMovements')}</Text>
               <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24 }}>
-                Try adjusting your filters or date range
+                {t('screens.stocksStockLedger.tryAdjusting')}
               </Text>
             </View>
           )}
@@ -744,7 +759,7 @@ export default function StockLedgerScreen() {
             >
               {isLoadMore
                 ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                : <Text style={s.loadMoreTxt}>Load More</Text>}
+                : <Text style={s.loadMoreTxt}>{t('screens.stocksStockLedger.loadMore')}</Text>}
             </TouchableOpacity>
           )}
           <View style={{ height: 100 }} />
@@ -756,7 +771,7 @@ export default function StockLedgerScreen() {
         <View style={[s.selBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity onPress={() => setSelected(new Set())} activeOpacity={0.7} style={s.selCancel}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selCancelTxt}>{selected.size} selected</Text>
+            <Text style={s.selCancelTxt}>{t('common.selected', { count: selected.size })}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.selShare, isSharing && { opacity: 0.6 }]}
@@ -768,7 +783,7 @@ export default function StockLedgerScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={16} color="#fff" />
             }
-            <Text style={s.selShareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.selShareTxt}>{isSharing ? t('screens.stocksStockLedger.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

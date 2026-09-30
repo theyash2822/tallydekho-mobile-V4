@@ -79,6 +79,21 @@ function CollapsibleSection({ title, expanded, onToggle, children }: SectionProp
 
 const NATURE_OPTIONS = ['Assets', 'Liabilities', 'Income', 'Expenses', 'Equity'];
 
+const NATURE_LABEL_KEYS: Record<string, string> = {
+  Assets: 'screens.tabsLedger.natureAssets',
+  Liabilities: 'screens.tabsLedger.natureLiabilities',
+  Income: 'screens.tabsLedger.natureIncome',
+  Expense: 'screens.tabsLedger.natureExpense',
+  Expenses: 'screens.tabsLedger.natureExpenses',
+  Equity: 'screens.tabsLedger.natureEquity',
+};
+
+const FILTER_LABEL_KEYS: Record<FilterType, string> = {
+  All: 'common.all',
+  Debit: 'ledger.debit',
+  Credit: 'ledger.credit',
+};
+
 interface CreateLedgerModalProps {
   visible: boolean;
   onClose: () => void;
@@ -86,6 +101,7 @@ interface CreateLedgerModalProps {
 }
 
 function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps) {
+  const { t } = useTranslation();
   const { company } = useAuth();
   const [ledgerName, setLedgerName] = useState('');
   const [nature, setNature] = useState('Assets');
@@ -122,7 +138,7 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
   const handleSave = async () => {
     if (!ledgerName) return;
     if (!company?.guid) {
-      Alert.alert('Error', 'No company selected. Please sync from desktop first.');
+      Alert.alert(t('common.error'), t('screens.tabsLedger.noCompanySelected'));
       return;
     }
     setSaving(true);
@@ -141,10 +157,10 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
         setLedgerName(''); setGroup(''); setOpeningBalance(''); setNarration('');
         setTimeout(() => { setSaved(false); onClose(); }, 800);
       } else {
-        Alert.alert('Error', res?.message || 'Failed to create ledger. Ensure desktop is connected.');
+        Alert.alert(t('common.error'), res?.message || t('screens.tabsLedger.createFailedDesktop'));
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to create ledger.');
+      Alert.alert(t('common.error'), e.message || t('screens.tabsLedger.createFailed'));
     } finally {
       setSaving(false);
     }
@@ -164,8 +180,8 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
             {/* Header */}
             <View style={cs.header}>
               <View>
-                <Text style={cs.sheetTitle}>Ledger Creation</Text>
-                <Text style={cs.sheetSubtitle}>Fill The Form For Information</Text>
+                <Text style={cs.sheetTitle}>{t('screens.tabsLedger.ledgerCreation')}</Text>
+                <Text style={cs.sheetSubtitle}>{t('screens.tabsLedger.fillForm')}</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={cs.closeBtn} activeOpacity={0.7}>
                 <Ionicons name="close" size={20} color={COLORS.textSecondary} />
@@ -178,33 +194,33 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
               keyboardShouldPersistTaps="handled"
             >
               {/* Ledger Name */}
-              <Text style={cs.label}>Ledger Name</Text>
+              <Text style={cs.label}>{t('screens.tabsLedger.ledgerName')}</Text>
               <TextInput
                 style={cs.input}
-                placeholder="Enter ledger name"
+                placeholder={t('screens.tabsLedger.enterLedgerName')}
                 placeholderTextColor={COLORS.textTertiary}
                 value={ledgerName}
                 onChangeText={setLedgerName}
               />
 
               {/* Nature */}
-              <Text style={cs.label}>Nature</Text>
+              <Text style={cs.label}>{t('screens.tabsLedger.nature')}</Text>
               <TouchableOpacity
                 style={cs.selectBox}
                 onPress={() => setShowNatureModal(true)}
                 activeOpacity={0.7}
               >
-                <Text style={cs.selectText}>{nature}</Text>
+                <Text style={cs.selectText}>{NATURE_LABEL_KEYS[nature] ? t(NATURE_LABEL_KEYS[nature]) : nature}</Text>
                 <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
 
               {/* Group */}
-              <Text style={cs.label}>Group</Text>
+              <Text style={cs.label}>{t('screens.tabsLedger.group')}</Text>
               <View style={cs.searchBox}>
                 <Ionicons name="search" size={14} color={COLORS.textTertiary} />
                 <TextInput
                   style={cs.searchInput}
-                  placeholder="Search Group"
+                  placeholder={t('screens.tabsLedger.searchGroup')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={group}
                   onChangeText={setGroup}
@@ -212,7 +228,7 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
               </View>
 
               {/* Opening Balance */}
-              <Text style={cs.label}>Opening Balance</Text>
+              <Text style={cs.label}>{t('ledger.opening')}</Text>
               <View style={cs.balanceRow}>
                 <TextInput
                   style={[cs.input, { flex: 1 }]}
@@ -227,23 +243,23 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
                     style={[cs.drCrBtn, balanceType === 'Dr' && cs.drCrBtnActive]}
                     onPress={() => setBalanceType('Dr')}
                   >
-                    <Text style={[cs.drCrText, balanceType === 'Dr' && cs.drCrTextActive]}>Dr</Text>
+                    <Text style={[cs.drCrText, balanceType === 'Dr' && cs.drCrTextActive]}>{t('screens.tabsLedger.dr')}</Text>
                   </TouchableOpacity>
                   <View style={cs.drCrDivider} />
                   <TouchableOpacity
                     style={[cs.drCrBtn, balanceType === 'Cr' && cs.drCrBtnActive]}
                     onPress={() => setBalanceType('Cr')}
                   >
-                    <Text style={[cs.drCrText, balanceType === 'Cr' && cs.drCrTextActive]}>Cr</Text>
+                    <Text style={[cs.drCrText, balanceType === 'Cr' && cs.drCrTextActive]}>{t('screens.tabsLedger.cr')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Narration */}
-              <Text style={cs.label}>Narration</Text>
+              <Text style={cs.label}>{t('voucher.narration')}</Text>
               <TextInput
                 style={[cs.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 10 }]}
-                placeholder="Enter Notes"
+                placeholder={t('screens.tabsLedger.enterNotes')}
                 placeholderTextColor={COLORS.textTertiary}
                 value={narration}
                 onChangeText={setNarration}
@@ -251,57 +267,57 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
               />
 
               {/* Party Section */}
-              <CollapsibleSection title="Party" expanded={showParty} onToggle={() => setShowParty(!showParty)}>
-                <Text style={cs.label}>Name</Text>
-                <TextInput style={cs.input} placeholder="Party A" placeholderTextColor={COLORS.textTertiary} value={partyName} onChangeText={setPartyName} />
+              <CollapsibleSection title={t('voucher.party')} expanded={showParty} onToggle={() => setShowParty(!showParty)}>
+                <Text style={cs.label}>{t('screens.tabsLedger.name')}</Text>
+                <TextInput style={cs.input} placeholder={t('screens.tabsLedger.partyPlaceholder')} placeholderTextColor={COLORS.textTertiary} value={partyName} onChangeText={setPartyName} />
                 <View style={cs.formRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={cs.label}>Contact number</Text>
-                    <TextInput style={cs.input} placeholder="Enter phone number" placeholderTextColor={COLORS.textTertiary} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                    <Text style={cs.label}>{t('screens.tabsLedger.contactNumber')}</Text>
+                    <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterPhone')} placeholderTextColor={COLORS.textTertiary} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={cs.label}>Email</Text>
-                    <TextInput style={cs.input} placeholder="Enter email" placeholderTextColor={COLORS.textTertiary} value={email} onChangeText={setEmail} keyboardType="email-address" />
+                    <Text style={cs.label}>{t('profile.email')}</Text>
+                    <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterEmail')} placeholderTextColor={COLORS.textTertiary} value={email} onChangeText={setEmail} keyboardType="email-address" />
                   </View>
                 </View>
-                <Text style={cs.label}>Address</Text>
-                <TextInput style={[cs.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline />
-                <Text style={cs.label}>Credit Limit</Text>
+                <Text style={cs.label}>{t('screens.tabsLedger.address')}</Text>
+                <TextInput style={[cs.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder={t('screens.tabsLedger.enterAddress')} placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline />
+                <Text style={cs.label}>{t('screens.tabsLedger.creditLimit')}</Text>
                 <TextInput style={cs.input} placeholder="—" placeholderTextColor={COLORS.textTertiary} value={creditLimit} onChangeText={setCreditLimit} keyboardType="numeric" />
               </CollapsibleSection>
 
               {/* Bank Section */}
-              <CollapsibleSection title="Bank" expanded={showBank} onToggle={() => setShowBank(!showBank)}>
-                <Text style={cs.label}>Beneficiary Name</Text>
-                <TextInput style={cs.input} placeholder="Enter beneficiary name" placeholderTextColor={COLORS.textTertiary} value={beneficiary} onChangeText={setBeneficiary} />
-                <Text style={cs.label}>A/C Number</Text>
-                <TextInput style={cs.input} placeholder="Enter A/C number" placeholderTextColor={COLORS.textTertiary} value={acNo} onChangeText={setAcNo} keyboardType="numeric" />
+              <CollapsibleSection title={t('screens.tabsLedger.bank')} expanded={showBank} onToggle={() => setShowBank(!showBank)}>
+                <Text style={cs.label}>{t('screens.tabsLedger.beneficiaryName')}</Text>
+                <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterBeneficiaryName')} placeholderTextColor={COLORS.textTertiary} value={beneficiary} onChangeText={setBeneficiary} />
+                <Text style={cs.label}>{t('screens.tabsLedger.acNumber')}</Text>
+                <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterAcNumber')} placeholderTextColor={COLORS.textTertiary} value={acNo} onChangeText={setAcNo} keyboardType="numeric" />
                 <View style={cs.formRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={cs.label}>IFSC</Text>
-                    <TextInput style={cs.input} placeholder="Enter IFSC number" placeholderTextColor={COLORS.textTertiary} value={ifsc} onChangeText={setIfsc} autoCapitalize="characters" />
+                    <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterIfsc')} placeholderTextColor={COLORS.textTertiary} value={ifsc} onChangeText={setIfsc} autoCapitalize="characters" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={cs.label}>SWIFT</Text>
-                    <TextInput style={cs.input} placeholder="Enter phone number" placeholderTextColor={COLORS.textTertiary} value={swift} onChangeText={setSwift} />
+                    <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterPhone')} placeholderTextColor={COLORS.textTertiary} value={swift} onChangeText={setSwift} />
                   </View>
                 </View>
                 <View style={cs.formRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={cs.label}>Branch</Text>
+                    <Text style={cs.label}>{t('screens.tabsLedger.branch')}</Text>
                     <TextInput style={cs.input} placeholder="—" placeholderTextColor={COLORS.textTertiary} value={branch} onChangeText={setBranch} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={cs.label}>Bank Name</Text>
+                    <Text style={cs.label}>{t('screens.tabsLedger.bankName')}</Text>
                     <TextInput style={cs.input} placeholder="—" placeholderTextColor={COLORS.textTertiary} value={bankName} onChangeText={setBankName} />
                   </View>
                 </View>
               </CollapsibleSection>
 
               {/* Duties & Taxes */}
-              <CollapsibleSection title="Duties & Taxes" expanded={showDuties} onToggle={() => setShowDuties(!showDuties)}>
-                <Text style={cs.label}>GSTIN</Text>
-                <TextInput style={cs.input} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={setGstin} autoCapitalize="characters" />
+              <CollapsibleSection title={t('quickActions.dutiesTaxes')} expanded={showDuties} onToggle={() => setShowDuties(!showDuties)}>
+                <Text style={cs.label}>{t('company.gstin')}</Text>
+                <TextInput style={cs.input} placeholder={t('screens.tabsLedger.enterGstin')} placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={setGstin} autoCapitalize="characters" />
               </CollapsibleSection>
 
               <View style={{ height: 24 }} />
@@ -317,15 +333,15 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
                 {saving ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Ionicons name="sync" size={18} color={COLORS.white} />
-                    <Text style={cs.saveBtnText}>Saving...</Text>
+                    <Text style={cs.saveBtnText}>{t('common.saving')}</Text>
                   </View>
                 ) : saved ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-                    <Text style={cs.saveBtnText}>Saved!</Text>
+                    <Text style={cs.saveBtnText}>{t('screens.tabsLedger.savedExclaim')}</Text>
                   </View>
                 ) : (
-                  <Text style={cs.saveBtnText}>Save</Text>
+                  <Text style={cs.saveBtnText}>{t('common.save')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -338,7 +354,7 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
         <View style={cs.pickerOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setShowNatureModal(false)} activeOpacity={1} />
           <View style={cs.pickerBox}>
-            <Text style={cs.pickerTitle}>Select Nature</Text>
+            <Text style={cs.pickerTitle}>{t('screens.tabsLedger.selectNature')}</Text>
             {NATURE_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt}
@@ -346,7 +362,7 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
                 onPress={() => { setNature(opt); setShowNatureModal(false); }}
                 activeOpacity={0.7}
               >
-                <Text style={[cs.pickerItemText, nature === opt && cs.pickerItemTextActive]}>{opt}</Text>
+                <Text style={[cs.pickerItemText, nature === opt && cs.pickerItemTextActive]}>{t(NATURE_LABEL_KEYS[opt])}</Text>
                 {nature === opt && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
               </TouchableOpacity>
             ))}
@@ -369,6 +385,7 @@ interface FilterModalProps {
 }
 
 function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, onApply }: FilterModalProps) {
+  const { t } = useTranslation();
   const [selectedCategory, setSelectedCategory] = useState<'Nature' | 'Group'>('Nature');
   const [localNatures, setLocalNatures] = useState<string[]>(NATURE_IDS);
   const [localGroups, setLocalGroups] = useState<string[]>([]);
@@ -378,13 +395,15 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
   useMultiFilterHydration(visible, activeNatures, NATURE_IDS, setLocalNatures);
   useMultiFilterHydration(visible, activeGroups, groups, setLocalGroups);
 
-  React.useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) {
       setNatureSearch('');
       setGroupSearch('');
       setSelectedCategory('Nature');
     }
-  }, [visible]);
+  }
 
   const CATEGORIES = ['Nature', 'Group'] as const;
   const isAllNatures = isFilterAllSelected(localNatures, NATURE_IDS);
@@ -419,8 +438,8 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
     if (nextGroups.length) parts.push(...nextGroups);
     Toast.show({
       type: 'success',
-      text1: parts.length ? 'Filters applied' : 'Filters cleared',
-      text2: parts.length ? parts.join(' · ') : 'Showing all ledgers',
+      text1: parts.length ? t('screens.tabsLedger.filtersApplied') : t('screens.tabsLedger.filtersCleared'),
+      text2: parts.length ? parts.join(' · ') : t('screens.tabsLedger.showingAllLedgers'),
       visibilityTime: 2000,
     });
   };
@@ -434,11 +453,11 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Ledgers"
+      title={t('screens.tabsLedger.filterLedgers')}
       activeCount={activeCount}
       onClear={handleClear}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.tabsLedger.applyFilters')}
       applyDisabled={!canApply}
     >
       <View style={fm.tabs}>
@@ -449,7 +468,9 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
             onPress={() => setSelectedCategory(cat)}
             activeOpacity={0.7}
           >
-            <Text style={[fm.tabTxt, selectedCategory === cat && fm.tabTxtActive]}>{cat}</Text>
+            <Text style={[fm.tabTxt, selectedCategory === cat && fm.tabTxtActive]}>
+              {cat === 'Nature' ? t('screens.tabsLedger.nature') : t('screens.tabsLedger.group')}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -460,14 +481,14 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search Nature..."
+              placeholder={t('screens.tabsLedger.searchNature')}
               placeholderTextColor={COLORS.textTertiary}
               value={natureSearch}
               onChangeText={setNatureSearch}
             />
           </View>
           <FilterCheckRow
-            label="All"
+            label={t('common.all')}
             selected={isAllNatures}
             onPress={() => {
               // When searching, All only toggles visible rows (not the whole catalog)
@@ -485,12 +506,12 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
             }}
           />
           {filteredNatures.length === 0 ? (
-            <Text style={fm.groupHint}>No natures match your search</Text>
+            <Text style={fm.groupHint}>{t('screens.tabsLedger.noNaturesMatch')}</Text>
           ) : (
             filteredNatures.map((opt) => (
               <FilterCheckRow
                 key={opt}
-                label={opt}
+                label={t(NATURE_LABEL_KEYS[opt])}
                 selected={isFilterOptionChecked(localNatures, opt)}
                 onPress={() => setLocalNatures((prev) => toggleFilterFromAll(prev, opt))}
               />
@@ -503,14 +524,14 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search Group..."
+              placeholder={t('screens.tabsLedger.searchGroupEllipsis')}
               placeholderTextColor={COLORS.textTertiary}
               value={groupSearch}
               onChangeText={setGroupSearch}
             />
           </View>
           <FilterCheckRow
-            label="All groups"
+            label={t('screens.tabsLedger.allGroups')}
             selected={isAllGroups}
             onPress={() => {
               const visible = filteredGroups;
@@ -527,7 +548,7 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
             }}
           />
           {filteredGroups.length === 0 ? (
-            <Text style={fm.groupHint}>No groups found in loaded ledgers</Text>
+            <Text style={fm.groupHint}>{t('screens.tabsLedger.noGroupsFound')}</Text>
           ) : (
             filteredGroups.map((g) => (
               <FilterCheckRow
@@ -635,11 +656,11 @@ export default function LedgerScreen() {
 
             return {
               company: companyBlock,
-              title: 'Ledger Account',
+              title: t('screens.tabsLedger.ledgerAccount'),
               partyName: ledger?.name || item.name,
               partyAddress: ledger?.address,
               period,
-              openingLabel: 'Opening Balance',
+              openingLabel: t('ledger.opening'),
               openingAmount: openingBal,
               openingSide,
               rows: txns.map((t: any) => ({
@@ -650,7 +671,7 @@ export default function LedgerScreen() {
                 debit: t.dr_cr === 'Dr' ? Math.abs(t.debit || t.credit || 0) : null,
                 credit: t.dr_cr === 'Dr' ? null : Math.abs(t.debit || t.credit || 0),
               })),
-              closingLabel: 'Closing Balance',
+              closingLabel: t('ledger.closing'),
               closingAmount: closingBal,
               closingSide,
             };
@@ -664,17 +685,17 @@ export default function LedgerScreen() {
       const inputs = results.filter((x): x is StatementInput => x != null);
       const failed = ledgers.length - inputs.length;
       if (!inputs.length) {
-        Alert.alert('Error', 'Could not load ledger statements for PDF. Please try again.');
+        Alert.alert(t('common.error'), t('screens.tabsLedger.statementsLoadFailed'));
         return;
       }
       if (failed > 0) {
         Alert.alert(
-          'Partial export',
-          `${failed} of ${ledgers.length} ledger(s) could not be loaded and were skipped. Share the remaining ${inputs.length}?`,
+          t('screens.tabsLedger.partialExport'),
+          t('screens.tabsLedger.partialExportMessage', { failed, total: ledgers.length, remaining: inputs.length }),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Share partial',
+              text: t('screens.tabsLedger.sharePartial'),
               onPress: async () => {
                 try {
                   const fileName = inputs.length === 1
@@ -683,7 +704,7 @@ export default function LedgerScreen() {
                   await shareMultiStatementPdf(inputs, { fileName });
                   cancelSelectMode();
                 } catch (err: any) {
-                  Alert.alert('Error', err?.message || 'Could not generate PDF. Please try again.');
+                  Alert.alert(t('common.error'), err?.message || t('screens.tabsLedger.pdfFailed'));
                 }
               },
             },
@@ -699,7 +720,7 @@ export default function LedgerScreen() {
       await shareMultiStatementPdf(inputs, { fileName });
       cancelSelectMode();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not generate PDF. Please try again.');
+      Alert.alert(t('common.error'), err?.message || t('screens.tabsLedger.pdfFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -731,6 +752,11 @@ export default function LedgerScreen() {
   }, [search]);
 
   const hasListRef = useRef(false);
+  const [hasList, setHasList] = useState(false);
+  const markHasList = (value: boolean) => {
+    hasListRef.current = value;
+    setHasList(value);
+  };
   const requestGenRef = useRef(0);
 
   const mapLedger = (r: any): LedgerItem => {
@@ -776,6 +802,11 @@ export default function LedgerScreen() {
     const soft = opts?.soft ?? hasListRef.current;
     if (!soft) setIsLoading(true);
 
+    return fetchLedgerList(soft);
+  };
+
+  const fetchLedgerList = (soft: boolean) => Promise.resolve().then(async () => {
+    if (!companyGuid) return;
     const filterParams: Record<string, string> = {};
     // Always send joined multi filters — backend supports comma-separated nature/group
     if (activeNatures.length > 0) filterParams.nature = activeNatures.join(',');
@@ -792,7 +823,7 @@ export default function LedgerScreen() {
       if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
         setData(cached.data);
         setTotalLedgers(cached.total);
-        hasListRef.current = cached.data.length > 0;
+        markHasList(cached.data.length > 0);
         setAllGroups(prev => {
           const merged = new Set(prev);
           cached.data.forEach(d => {
@@ -830,7 +861,7 @@ export default function LedgerScreen() {
         return true;
       });
       setData(uniqueRows);
-      hasListRef.current = uniqueRows.length > 0 || soft;
+      markHasList(uniqueRows.length > 0 || soft);
       const _total = res?.meta?.total ?? res?.total ?? 0;
       setHasMore(_total > 0 ? uniqueRows.length < _total : Array.isArray(rows) && rows.length === PAGE_SIZE);
       const total = res?.meta?.total ?? res?.total ?? null;
@@ -850,7 +881,7 @@ export default function LedgerScreen() {
       }
     } catch (err: any) {
       if (gen !== requestGenRef.current) return;
-      const msg = err?.message || 'Failed to load ledgers';
+      const msg = err?.message || t('screens.tabsLedger.loadFailed');
       // Don't banner auth races / logged-out; root layout will redirect
       if (msg === 'Not authenticated' || msg === 'No token provided') {
         console.warn('[Ledgers]', msg);
@@ -861,7 +892,7 @@ export default function LedgerScreen() {
     } finally {
       if (gen === requestGenRef.current) setIsLoading(false);
     }
-  };
+  });
 
   const loadMoreLedgers = async () => {
     if (authLoading || !isAuthenticated || !companyGuid || isLoadingMore || !hasMore || isLoading) return;
@@ -933,26 +964,52 @@ export default function LedgerScreen() {
     }
   };
 
-  useEffect(() => {
+  const fyStartDate = selectedFY?.startDate;
+  const [listLoadKey, setListLoadKey] = useState<{
+    companyGuid?: string; fyStartDate?: string; lastSyncAt: typeof lastSyncAt; debouncedSearch: string;
+    activeNatures: string[]; activeGroups: string[]; isAuthenticated: boolean; authLoading: boolean;
+  } | null>(null);
+  if (
+    !listLoadKey
+    || listLoadKey.companyGuid !== companyGuid
+    || listLoadKey.fyStartDate !== fyStartDate
+    || listLoadKey.lastSyncAt !== lastSyncAt
+    || listLoadKey.debouncedSearch !== debouncedSearch
+    || listLoadKey.activeNatures !== activeNatures
+    || listLoadKey.activeGroups !== activeGroups
+    || listLoadKey.isAuthenticated !== isAuthenticated
+    || listLoadKey.authLoading !== authLoading
+  ) {
+    setListLoadKey({
+      companyGuid, fyStartDate, lastSyncAt, debouncedSearch,
+      activeNatures, activeGroups, isAuthenticated, authLoading,
+    });
     if (authLoading) {
-      if (!hasListRef.current) setIsLoading(true);
-      return;
-    }
-    if (!isAuthenticated) {
+      if (!hasList) setIsLoading(true);
+    } else if (!isAuthenticated) {
       setApiError(null);
       setData([]);
-      hasListRef.current = false;
+      setHasList(false);
       setIsLoading(false);
-      return;
-    }
-    if (!companyGuid) {
+    } else if (!companyGuid) {
       // Paired/auth ready but company not hydrated yet — keep loading, avoid API spam
-      if (!hasListRef.current) setIsLoading(true);
-      return;
+      if (!hasList) setIsLoading(true);
+    } else {
+      // Soft when list already showing (search / filter / lastSync); hard only first paint
+      setApiError(null);
+      setPage(1);
+      setHasMore(false);
+      setIsLoadingMore(false);
+      if (!hasList) setIsLoading(true);
     }
-    // Soft when list already showing (search / filter / lastSync); hard only first paint
-    loadLedgers({ soft: hasListRef.current });
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt, debouncedSearch, activeNatures, activeGroups, isAuthenticated, authLoading]);
+  }
+
+  useEffect(() => { hasListRef.current = hasList; }, [hasList]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || !companyGuid) return;
+    fetchLedgerList(hasListRef.current);
+  }, [companyGuid, fyStartDate, lastSyncAt, debouncedSearch, activeNatures, activeGroups, isAuthenticated, authLoading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -1080,7 +1137,7 @@ export default function LedgerScreen() {
         <View style={lp.card}>
           <View style={lp.headRow}>
             <Text style={[lp.net, { color: position.net >= 0 ? COLORS.positive : COLORS.negative }]}>
-              {position.net >= 0 ? 'Net Receivable ' : 'Net Payable '}
+              {position.net >= 0 ? t('screens.tabsLedger.netReceivable') : t('screens.tabsLedger.netPayable')}{' '}
               {formatAmountCompact(Math.abs(position.net))}
             </Text>
           </View>
@@ -1088,12 +1145,12 @@ export default function LedgerScreen() {
           <View style={lp.legendRow}>
             <View style={lp.legendItem}>
               <View style={[lp.dot, { backgroundColor: COLORS.positive }]} />
-              <Text style={lp.legTxt}>Receivable {formatAmountCompact(position.recv)}</Text>
+              <Text style={lp.legTxt}>{t('screens.tabsLedger.receivableAmount', { amount: formatAmountCompact(position.recv) })}</Text>
               <Text style={lp.legCount}>· {position.dCount}</Text>
             </View>
             <View style={lp.legendItem}>
               <View style={[lp.dot, { backgroundColor: COLORS.negative }]} />
-              <Text style={lp.legTxt}>Payable {formatAmountCompact(position.pay)}</Text>
+              <Text style={lp.legTxt}>{t('screens.tabsLedger.payableAmount', { amount: formatAmountCompact(position.pay) })}</Text>
               <Text style={lp.legCount}>· {position.cCount}</Text>
             </View>
           </View>
@@ -1102,11 +1159,11 @@ export default function LedgerScreen() {
               <TouchableOpacity
                 style={lp.chip}
                 activeOpacity={0.75}
-                onPress={() => safePush(router, `/ledger/${position.topDebtor.id}` as any)}
+                onPress={() => safePush(router, `/ledger/${encodeURIComponent(String(position.topDebtor.id))}` as any)}
               >
                 <Ionicons name="arrow-down-circle" size={16} color={COLORS.positive} />
                 <View style={{ flex: 1 }}>
-                  <Text style={lp.chipLbl}>Top Debtor</Text>
+                  <Text style={lp.chipLbl}>{t('screens.tabsLedger.topDebtor')}</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topDebtor.name}</Text>
                   <Text style={lp.chipAmt}>{formatAmountCompact(parseBalance(position.topDebtor.balance))}</Text>
                 </View>
@@ -1116,11 +1173,11 @@ export default function LedgerScreen() {
               <TouchableOpacity
                 style={lp.chip}
                 activeOpacity={0.75}
-                onPress={() => safePush(router, `/ledger/${position.topCreditor.id}` as any)}
+                onPress={() => safePush(router, `/ledger/${encodeURIComponent(String(position.topCreditor.id))}` as any)}
               >
                 <Ionicons name="arrow-up-circle" size={16} color={COLORS.negative} />
                 <View style={{ flex: 1 }}>
-                  <Text style={lp.chipLbl}>Top Creditor</Text>
+                  <Text style={lp.chipLbl}>{t('screens.tabsLedger.topCreditor')}</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topCreditor.name}</Text>
                   <Text style={lp.chipAmt}>{formatAmountCompact(parseBalance(position.topCreditor.balance))}</Text>
                 </View>
@@ -1153,7 +1210,7 @@ export default function LedgerScreen() {
             style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}
             numberOfLines={1}
           >
-            {filter}
+            {t(FILTER_LABEL_KEYS[filter])}
           </Text>
           <Ionicons
             name={showFilterDrop ? 'chevron-up' : 'chevron-down'}
@@ -1177,7 +1234,7 @@ export default function LedgerScreen() {
               color={hideZero ? '#fff' : COLORS.textSecondary}
             />
             <Text style={[styles.hideZeroChipTxt, hideZero && styles.hideZeroChipTxtOn]}>
-              Hide ₹0
+              {t('screens.tabsLedger.hideZero')}
             </Text>
           </TouchableOpacity>
 
@@ -1221,7 +1278,7 @@ export default function LedgerScreen() {
         <View style={styles.activeBadgeRow}>
           {activeNatures.map((n) => (
             <View key={`n:${n}`} style={styles.activeBadge}>
-              <Text style={styles.activeBadgeTxt}>{n}</Text>
+              <Text style={styles.activeBadgeTxt}>{NATURE_LABEL_KEYS[n] ? t(NATURE_LABEL_KEYS[n]) : n}</Text>
               <TouchableOpacity
                 onPress={() => setActiveNatures((prev) => prev.filter((x) => x !== n))}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1258,9 +1315,9 @@ export default function LedgerScreen() {
         >
           <View style={[styles.floatDropCard, { top: filterDropPos.y, left: filterDropPos.x }]}>
             {[
-              { v: 'All' as FilterType, icon: 'list', label: 'All' },
-              { v: 'Credit' as FilterType, icon: 'arrow-down-circle-outline', label: 'Credit' },
-              { v: 'Debit' as FilterType, icon: 'arrow-up-circle-outline', label: 'Debit' },
+              { v: 'All' as FilterType, icon: 'list' },
+              { v: 'Credit' as FilterType, icon: 'arrow-down-circle-outline' },
+              { v: 'Debit' as FilterType, icon: 'arrow-up-circle-outline' },
             ].map((opt, idx) => (
               <TouchableOpacity
                 key={opt.v}
@@ -1274,7 +1331,7 @@ export default function LedgerScreen() {
                   color={filter === opt.v ? COLORS.brandPrimary : COLORS.textSecondary}
                 />
                 <Text style={[styles.floatDropTxt, filter === opt.v && styles.floatDropTxtActive]}>
-                  {opt.label}
+                  {t(FILTER_LABEL_KEYS[opt.v])}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1284,7 +1341,7 @@ export default function LedgerScreen() {
 
       {/* Ledger List */}
       <FlatList
-        data={isLoading && !hasListRef.current ? [] : filtered}
+        data={isLoading && !hasList ? [] : filtered}
         keyExtractor={(item, index) => item.id || `ledger-${index}`}
         style={styles.scroll}
         contentContainerStyle={styles.list}
@@ -1292,18 +1349,20 @@ export default function LedgerScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />
         }
-        ListHeaderComponent={!(isLoading && !hasListRef.current) ? (
+        ListHeaderComponent={!(isLoading && !hasList) ? (
           <View style={styles.listHeader}>
             <Text style={styles.sectionLabel}>
               {(() => {
                 const hasLocal = filter !== 'All' || hideZero || !!search.trim();
                 const count = hasLocal ? filtered.length : (totalLedgers ?? filtered.length);
-                return `${count} ledger${count !== 1 ? 's' : ''}`;
+                return count !== 1
+                  ? t('screens.tabsLedger.ledgerCountOther', { count })
+                  : t('screens.tabsLedger.ledgerCountOne', { count });
               })()}
             </Text>
           </View>
         ) : null}
-        ListEmptyComponent={isLoading && !hasListRef.current ? (
+        ListEmptyComponent={isLoading && !hasList ? (
           <View style={styles.list}>
             {Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)}
           </View>
@@ -1331,7 +1390,7 @@ export default function LedgerScreen() {
               </View>
             )}
             {!isLoading && !isLoadingMore && !hasMore && data.length > 0 && (
-              <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
+              <Text style={styles.endTxt}>{t('screens.tabsLedger.allLedgersLoaded', { count: data.length })}</Text>
             )}
             <View style={{ height: selectMode ? TAB_BAR_CLEARANCE + 90 : 80 }} />
           </>
@@ -1348,13 +1407,13 @@ export default function LedgerScreen() {
                   style={styles.callAction}
                   onPress={() => {
                     const digits = (item.phone||'').replace(/[^0-9+]/g,'');
-                    if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
-                    Linking.openURL(`tel:${digits}`).catch(() => Alert.alert('Error', 'Could not open phone app'));
+                    if (!digits) { Alert.alert(t('screens.tabsLedger.noPhone'), t('screens.tabsLedger.phoneNotAvailable')); return; }
+                    Linking.openURL(`tel:${digits}`).catch(() => Alert.alert(t('common.error'), t('screens.tabsLedger.cannotOpenPhone')));
                   }}
                   activeOpacity={0.85}
                 >
                   <Ionicons name="call" size={22} color="#fff" />
-                  <Text style={styles.actionLabel}>Call</Text>
+                  <Text style={styles.actionLabel}>{t('screens.tabsLedger.call')}</Text>
                 </TouchableOpacity>
                 {/* WhatsApp button */}
                 <TouchableOpacity
@@ -1362,8 +1421,8 @@ export default function LedgerScreen() {
                   onPress={() => {
                     const digits = (item.phone||'').replace(/[^0-9]/g,'');
                     const num = digits.startsWith('91') && digits.length > 10 ? digits : `91${digits}`;
-                    if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
-                    Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
+                    if (!digits) { Alert.alert(t('screens.tabsLedger.noPhone'), t('screens.tabsLedger.phoneNotAvailable')); return; }
+                    Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert(t('common.error'), t('screens.tabsLedger.cannotOpenWhatsApp')));
                   }}
                   activeOpacity={0.85}
                 >
@@ -1383,7 +1442,7 @@ export default function LedgerScreen() {
               selected={isSelected}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { safePush(router, `/ledger/${item.id}` as any); }
+                else { safePush(router, `/ledger/${encodeURIComponent(String(item.id))}` as any); }
               }}
               onLongPress={() => enterSelectMode(item.id)}
               delayLongPress={500}
@@ -1398,7 +1457,7 @@ export default function LedgerScreen() {
                       styles.typeText,
                       { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
                     ]}>
-                      {item.type === 'credit' ? 'Cr' : 'Dr'}
+                      {item.type === 'credit' ? t('screens.tabsLedger.cr') : t('screens.tabsLedger.dr')}
                     </Text>
                   </View>
                 </View>
@@ -1426,7 +1485,7 @@ export default function LedgerScreen() {
       {selectMode && (
         <View style={[styles.shareBar, { bottom: TAB_BAR_CLEARANCE }]}>
           <View style={styles.shareLeft}>
-            <Text style={styles.shareCount}>{selected.length} selected</Text>
+            <Text style={styles.shareCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity
               onPress={selectAll}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1439,7 +1498,7 @@ export default function LedgerScreen() {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
             >
-              <Text style={styles.shareCancelTxt}>Cancel</Text>
+              <Text style={styles.shareCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -1452,7 +1511,7 @@ export default function LedgerScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={styles.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={styles.shareActionTxt}>{isSharing ? t('screens.tabsLedger.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1483,13 +1542,13 @@ export default function LedgerScreen() {
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
           <View style={fm.tsSheet}>
             <View style={fm.tsHandle} />
-            <Text style={fm.tsTitle}>Add Ledger</Text>
-            <Text style={fm.tsSubtitle}>Select ledger group type</Text>
+            <Text style={fm.tsTitle}>{t('screens.tabsLedger.addLedger')}</Text>
+            <Text style={fm.tsSubtitle}>{t('screens.tabsLedger.selectGroupType')}</Text>
             {[
-              { type: 'sundry_creditor', label: 'Sundry Creditors', icon: 'person-add-outline', color: COLORS.positive, desc: 'Vendor/supplier accounts' },
-              { type: 'sundry_debtor', label: 'Sundry Debtors', icon: 'person-outline', color: COLORS.info, desc: 'Customer/party accounts' },
-              { type: 'duties_taxes', label: 'Duties and Taxes', icon: 'receipt-outline', color: COLORS.warning, desc: 'GST, TDS and duty accounts' },
-              { type: 'custom', label: 'Custom Groups', icon: 'settings-outline', color: COLORS.textSecondary, desc: 'Custom ledger under any group' },
+              { type: 'sundry_creditor', label: t('quickActions.sundryCreditors'), icon: 'person-add-outline', color: COLORS.positive, desc: t('screens.tabsLedger.vendorAccounts') },
+              { type: 'sundry_debtor', label: t('quickActions.sundryDebtors'), icon: 'person-outline', color: COLORS.info, desc: t('screens.tabsLedger.customerAccounts') },
+              { type: 'duties_taxes', label: t('screens.tabsLedger.dutiesAndTaxes'), icon: 'receipt-outline', color: COLORS.warning, desc: t('screens.tabsLedger.dutyAccounts') },
+              { type: 'custom', label: t('quickActions.customGroups'), icon: 'settings-outline', color: COLORS.textSecondary, desc: t('screens.tabsLedger.customLedgerDesc') },
             ].map(opt => (
               <TouchableOpacity key={opt.type} style={fm.tsOption} onPress={() => { setShowTypeSheet(false); safePush(router, `/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
                 <View style={[fm.tsIconWrap, { backgroundColor: opt.color + '18' }]}>
@@ -1826,8 +1885,8 @@ const fm = StyleSheet.create({
 });
 
 function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
-  const r = useRef(new Animated.Value(0)).current;
-  const p = useRef(new Animated.Value(0)).current;
+  const r = useState(() => new Animated.Value(0))[0];
+  const p = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     Animated.parallel([
       Animated.timing(r, { toValue: recvPct * 100, duration: 700, useNativeDriver: false }),

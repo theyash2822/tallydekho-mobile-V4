@@ -13,7 +13,9 @@ import {
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlertSettings, updateAlertSettings, getLedgers } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
@@ -22,6 +24,13 @@ import { useAuth } from '../../src/context/AuthContext';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 type Channels = { email: boolean; whatsapp: boolean; sms: boolean };
+
+const REMINDER_PLACEHOLDER_KEYS = ['screens.settingsPaymentReminders.reminderFirst', 'screens.settingsPaymentReminders.reminderSecond', 'screens.settingsPaymentReminders.reminderThird', 'screens.settingsPaymentReminders.reminderFourth'];
+const CHANNEL_LABEL_KEYS: Record<keyof Channels, string> = {
+  email: 'screens.settingsPaymentReminders.channelEmail',
+  whatsapp: 'screens.settingsPaymentReminders.channelWhatsapp',
+  sms: 'screens.settingsPaymentReminders.channelSms',
+};
 
 interface Reminder {
   id: string;
@@ -39,7 +48,7 @@ interface Reminder {
 // 1. CustomToggle
 // ─────────────────────────────────────────────────────────────────────────────
 function CustomToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
   useEffect(() => {
     Animated.spring(anim, {
       toValue: value ? 1 : 0, useNativeDriver: false, tension: 60, friction: 7,
@@ -162,13 +171,16 @@ function TimePickerSheet({ visible, label, initialTime, onClose, onConfirm }: {
   visible: boolean; label: string; initialTime: string;
   onClose: () => void; onConfirm: (t: string) => void;
 }) {
+  const { t } = useTranslation();
   const { h: ih, mi: im, p: ip } = parseTime(initialTime);
   const [selH, setSelH] = useState(ih);
   const [selM, setSelM] = useState(im);
   const [selP, setSelP] = useState(ip);
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) { const { h, mi, p } = parseTime(initialTime); setSelH(h); setSelM(mi); setSelP(p); }
-  }, [visible]);
+  }
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={tp.overlay}>
@@ -185,10 +197,10 @@ function TimePickerSheet({ visible, label, initialTime, onClose, onConfirm }: {
           </View>
           <View style={tp.btnRow}>
             <TouchableOpacity style={tp.cancelBtn} onPress={onClose} activeOpacity={0.75}>
-              <Text style={tp.cancelTxt}>Cancel</Text>
+              <Text style={tp.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={tp.doneBtn} onPress={() => onConfirm(`${selH}:${selM} ${selP}`)} activeOpacity={0.85}>
-              <Text style={tp.doneTxt}>Done</Text>
+              <Text style={tp.doneTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ height: 24 }} />
@@ -219,6 +231,7 @@ type PartySelectorHandle = { present: (selection: string[]) => void; dismiss: ()
 const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
   onClose: () => void; onConfirm: (sel: string[]) => void;
 }>(function PartySelectorSheet({ onClose, onConfirm }, ref) {
+  const { t } = useTranslation();
   const { company } = useAuth();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -241,9 +254,15 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
     dismiss: () => sheetRef.current?.dismiss(),
   }), []);
 
+  const partiesLoadKey = opened && company?.guid ? company.guid : null;
+  const [prevPartiesLoadKey, setPrevPartiesLoadKey] = useState<string | null>(null);
+  if (partiesLoadKey !== prevPartiesLoadKey) {
+    setPrevPartiesLoadKey(partiesLoadKey);
+    if (partiesLoadKey) setLoading(true);
+  }
+
   useEffect(() => {
     if (!opened || !company?.guid) return;
-    setLoading(true);
     // Exception parties = Sundry Debtors / Creditors (API filter key is `group`, not `parent`)
     Promise.all([
       getLedgers(company.guid, { group: 'Sundry Debtors', limit: '200' }),
@@ -321,7 +340,7 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
       onDismiss={handleDismiss}
     >
       <View style={ps.sheetHdr}>
-        <Text style={ps.title}>Select Exception Parties</Text>
+        <Text style={ps.title}>{t('screens.settingsPaymentReminders.selectParties')}</Text>
         <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={ps.closeBtn} activeOpacity={0.7}>
           <Ionicons name="close" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
@@ -333,7 +352,7 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
           style={ps.searchInput as any}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search parties…"
+          placeholder={t('screens.settingsPaymentReminders.searchParties')}
           placeholderTextColor={COLORS.textTertiary}
           selectionColor={COLORS.brandPrimary}
           autoFocus={false}
@@ -350,7 +369,7 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
 
       {checked.size > 0 && (
         <View style={ps.countPill}>
-          <Text style={ps.countTxt}>{checked.size} selected</Text>
+          <Text style={ps.countTxt}>{t('common.selected', { count: checked.size })}</Text>
         </View>
       )}
 
@@ -363,7 +382,7 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
           <View style={ps.empty}>
             <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
             <Text style={ps.emptyTxt}>
-              {loading ? 'Loading parties…' : search ? `No parties for "${search}"` : 'No parties found'}
+              {loading ? t('screens.settingsPaymentReminders.loadingParties') : search ? t('screens.settingsPaymentReminders.noPartiesFor', { search }) : t('screens.settingsPaymentReminders.noParties')}
             </Text>
           </View>
         }
@@ -382,10 +401,10 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
 
       <View style={[ps.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <TouchableOpacity style={ps.cancelBtn} onPress={() => sheetRef.current?.dismiss()} activeOpacity={0.7}>
-          <Text style={ps.cancelTxt}>Cancel</Text>
+          <Text style={ps.cancelTxt}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={ps.doneBtn} onPress={handleDone} activeOpacity={0.85}>
-          <Text style={ps.doneTxt}>Done{checked.size > 0 ? ` (${checked.size})` : ''}</Text>
+          <Text style={ps.doneTxt}>{checked.size > 0 ? t('screens.settingsPaymentReminders.doneCount', { n: checked.size }) : t('common.done')}</Text>
         </TouchableOpacity>
       </View>
     </BottomSheetModal>
@@ -443,6 +462,7 @@ function ReminderCard({
   canRemove: boolean;
   onOpenPartyPicker: (current: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const upd = (patch: Partial<Reminder>) => onUpdate({ ...reminder, ...patch });
@@ -455,8 +475,6 @@ function ReminderCard({
   const removeException = (name: string) =>
     upd({ exceptions: reminder.exceptions.filter(e => e !== name) });
 
-  const ordinals = ['First', 'Second', 'Third', 'Fourth'];
-
   return (
     <View style={rc.card}>
       {/* ── Header row ── */}
@@ -467,7 +485,7 @@ function ReminderCard({
           style={rc.nameInput}
           value={reminder.name}
           onChangeText={v => upd({ name: v })}
-          placeholder={`${ordinals[index]} Reminder`}
+          placeholder={REMINDER_PLACEHOLDER_KEYS[index] ? t(REMINDER_PLACEHOLDER_KEYS[index]) : undefined}
           placeholderTextColor={COLORS.textTertiary}
           selectionColor={COLORS.brandPrimary}
         />
@@ -490,7 +508,7 @@ function ReminderCard({
           <View style={rc.dayTimeRow}>
             {/* Day stepper */}
             <View style={rc.halfBox}>
-              <Text style={rc.fieldLabel}>Day</Text>
+              <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.day')}</Text>
               <View style={rc.stepper}>
                 <TouchableOpacity
                   style={rc.stepBtn}
@@ -514,7 +532,7 @@ function ReminderCard({
 
             {/* Time picker field */}
             <View style={rc.halfBox}>
-              <Text style={rc.fieldLabel}>Time</Text>
+              <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.time')}</Text>
               <TouchableOpacity
                 style={rc.timeField}
                 onPress={() => setShowTimePicker(true)}
@@ -532,12 +550,12 @@ function ReminderCard({
           <CustomCheckbox
             value={reminder.onDueDate}
             onChange={v => upd({ onDueDate: v })}
-            label="On Due Date"
+            label={t('screens.settingsPaymentReminders.onDueDate')}
           />
 
           {/* Channels */}
           <View style={[rc.divider, { marginVertical: 12 }]} />
-          <Text style={rc.fieldLabel}>Channels</Text>
+          <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.channels')}</Text>
           <View style={rc.chipsRow}>
             {(['email','whatsapp','sms'] as (keyof Channels)[]).map(ch => {
               const active = reminder.channels[ch];
@@ -549,7 +567,7 @@ function ReminderCard({
                   activeOpacity={0.7}
                 >
                   <Text style={[rc.chipTxt, active && rc.chipTxtActive]}>
-                    {ch.charAt(0).toUpperCase() + ch.slice(1)}
+                    {t(CHANNEL_LABEL_KEYS[ch])}
                   </Text>
                 </TouchableOpacity>
               );
@@ -560,7 +578,7 @@ function ReminderCard({
           <View style={[rc.divider, { marginVertical: 12 }]} />
           <View style={rc.exceptHdr}>
             <Text style={rc.fieldLabel}>
-              Exceptions List{reminder.exceptions.length > 0 ? ` (${reminder.exceptions.length})` : ''}
+              {reminder.exceptions.length > 0 ? t('screens.settingsPaymentReminders.exceptionsCount', { n: reminder.exceptions.length }) : t('screens.settingsPaymentReminders.exceptions')}
             </Text>
           </View>
 
@@ -571,7 +589,7 @@ function ReminderCard({
             activeOpacity={0.7}
           >
             <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-            <Text style={rc.exceptSearchTxt}>Search parties…</Text>
+            <Text style={rc.exceptSearchTxt}>{t('screens.settingsPaymentReminders.searchParties')}</Text>
           </TouchableOpacity>
 
           {/* Selected exception chips */}
@@ -592,7 +610,7 @@ function ReminderCard({
           {canRemove && (
             <TouchableOpacity style={rc.removeBtn} onPress={onRemove} activeOpacity={0.7}>
               <Ionicons name="trash-outline" size={14} color={COLORS.negative} />
-              <Text style={rc.removeTxt}>Remove Reminder</Text>
+              <Text style={rc.removeTxt}>{t('screens.settingsPaymentReminders.removeReminder')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -601,10 +619,10 @@ function ReminderCard({
       {/* Modals */}
       <TimePickerSheet
         visible={showTimePicker}
-        label="Select Send Time"
+        label={t('screens.settingsPaymentReminders.selectSendTime')}
         initialTime={reminder.time || '10:00 AM'}
         onClose={() => setShowTimePicker(false)}
-        onConfirm={t => { upd({ time: t }); setShowTimePicker(false); }}
+        onConfirm={time => { upd({ time }); setShowTimePicker(false); }}
       />
     </View>
   );
@@ -717,6 +735,14 @@ const DEFAULT_REMINDERS: Reminder[] = [
 let nextId = 3;
 
 export default function PaymentRemindersScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const [threshold, setThreshold] = useState('500');
+  const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
+  const [templateName, setTemplateName] = useState('payment reminder');
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  const [testSending, setTestSending] = useState(false);
+
   // Load reminder settings from backend
   React.useEffect(() => {
     getAlertSettings().then((res: any) => {
@@ -736,20 +762,13 @@ export default function PaymentRemindersScreen() {
     } catch {}
   };
 
-  const router = useRouter();
-  const [threshold, setThreshold] = useState('500');
-  const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
-  const [templateName, setTemplateName] = useState('payment reminder');
-  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
-  const [testSending, setTestSending] = useState(false);
-
   const sendTestReminder = async () => {
     setTestSending(true);
     try {
       Alert.alert(
-        'Test Reminder',
-        'To test, go to any ledger with a phone number and tap the green WhatsApp "Remind" button. The reminder will be sent using your configured template.',
-        [{ text: 'Got it' }]
+        t('screens.settingsPaymentReminders.testTitle'),
+        t('screens.settingsPaymentReminders.testMsg'),
+        [{ text: t('screens.settingsPaymentReminders.gotIt') }]
       );
     } finally { setTestSending(false); }
   };
@@ -795,7 +814,7 @@ export default function PaymentRemindersScreen() {
     ]);
   };
 
-  const save = () => { saveToBackend(); Toast.show({ type: 'success', text1: 'Saved', text2: 'Payment reminder settings updated.' }); };
+  const save = () => { saveToBackend(); Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsPaymentReminders.savedMsg') }); };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -804,8 +823,14 @@ export default function PaymentRemindersScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.title}>Payment Reminders</Text>
-        <View style={{ width: 40 }} />
+        <Text style={s.title}>{t('settings.paymentReminders')}</Text>
+        <TouchableOpacity
+          onPress={() => safePush(router, '/settings/sent-reminders' as any)}
+          style={s.back}
+          accessibilityLabel={t('screens.settingsPaymentReminders.sentReminders')}
+        >
+          <Ionicons name="time-outline" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -817,9 +842,9 @@ export default function PaymentRemindersScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="filter-outline" size={18} color={COLORS.info} />
-            <Text style={s.cardTitle}>Threshold</Text>
+            <Text style={s.cardTitle}>{t('screens.settingsPaymentReminders.threshold')}</Text>
           </View>
-          <Text style={s.cardSub}>Don't send reminders for invoices below</Text>
+          <Text style={s.cardSub}>{t('screens.settingsPaymentReminders.thresholdSub')}</Text>
           <View style={s.threshRow}>
             <Text style={s.rupee}>₹</Text>
             <TextInput
@@ -835,7 +860,7 @@ export default function PaymentRemindersScreen() {
         </View>
 
         {/* ── List of Reminders ────────────────────────────────── */}
-        <Text style={s.sectionLabel}>List of Reminders</Text>
+        <Text style={s.sectionLabel}>{t('screens.settingsPaymentReminders.listTitle')}</Text>
         {reminders.map((r, idx) => (
           <ReminderCard
             key={r.id}
@@ -852,7 +877,7 @@ export default function PaymentRemindersScreen() {
         {reminders.length < 4 && (
           <TouchableOpacity style={s.addBtn} onPress={addReminder} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={20} color={COLORS.brandPrimary} />
-            <Text style={s.addBtnTxt}>Add Reminder</Text>
+            <Text style={s.addBtnTxt}>{t('screens.settingsPaymentReminders.addReminder')}</Text>
             <Text style={s.addBtnCap}>{reminders.length}/4</Text>
           </TouchableOpacity>
         )}
@@ -860,13 +885,13 @@ export default function PaymentRemindersScreen() {
         {reminders.length >= 4 && (
           <View style={s.maxReached}>
             <Ionicons name="information-circle-outline" size={16} color={COLORS.textTertiary} />
-            <Text style={s.maxReachedTxt}>Maximum 4 reminders reached</Text>
+            <Text style={s.maxReachedTxt}>{t('screens.settingsPaymentReminders.maxReached')}</Text>
           </View>
         )}
 
         {/* ── Save ─────────────────────────────────────────────── */}
         <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.8}>
-          <Text style={s.saveTxt}>Save Settings</Text>
+          <Text style={s.saveTxt}>{t('screens.settingsPaymentReminders.saveSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>
 

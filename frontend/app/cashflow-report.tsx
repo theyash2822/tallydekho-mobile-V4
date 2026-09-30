@@ -11,6 +11,8 @@ import { useAuth } from '../src/context/AuthContext';
 import { useSettings } from '../src/context/SettingsContext';
 import { getCashflow } from '../src/services/api';
 import { ErrorBanner } from '../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
+import i18n from '../src/i18n';
 import {
   CASHFLOW_PERIOD_KEY,
   isSyncPeriod,
@@ -32,11 +34,16 @@ function SegmentedBar({ value, maxValue, color, delay = 0 }: {
 }) {
   const pct    = maxValue > 0 ? Math.min(value / maxValue, 1) : 0;
   const target = Math.round(pct * SEG_COUNT);
-  const [filled, setFilled] = useState(0);
+  const [animFilled, setFilled] = useState(0);
+  const [prevAnim, setPrevAnim] = useState<{ target: number; delay: number } | null>(null);
+  if (Platform.OS !== 'web' && (!prevAnim || prevAnim.target !== target || prevAnim.delay !== delay)) {
+    setPrevAnim({ target, delay });
+    setFilled(0);
+  }
+  const filled = Platform.OS === 'web' ? target : animFilled;
 
   useEffect(() => {
-    if (Platform.OS === 'web') { setFilled(target); return; }
-    setFilled(0);
+    if (Platform.OS === 'web') return;
     if (target === 0) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < target; i++) {
@@ -66,7 +73,7 @@ const b = StyleSheet.create({
 function AnimatedBar({ target, color, delay = 0 }: {
   target: number; color: string; delay?: number;
 }) {
-  const h = useRef(new Animated.Value(0)).current;
+  const h = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     h.setValue(0);
     const anim = Animated.timing(h, {
@@ -137,6 +144,7 @@ const mc = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CashflowReportScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -149,15 +157,16 @@ export default function CashflowReportScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const readStoredPeriod = useCallback(async () => {
-    try {
-      const saved = await AsyncStorage.getItem(CASHFLOW_PERIOD_KEY);
-      if (saved && (PERIODS as readonly string[]).includes(saved)) {
-        setPeriod(saved as Period);
-      } else if (isSyncPeriod(saved) && saved === '6M') {
-        setPeriod('3M');
-      }
-    } catch { /* ignore */ }
+  const readStoredPeriod = useCallback(() => {
+    return AsyncStorage.getItem(CASHFLOW_PERIOD_KEY)
+      .then((saved) => {
+        if (saved && (PERIODS as readonly string[]).includes(saved)) {
+          setPeriod(saved as Period);
+        } else if (isSyncPeriod(saved) && saved === '6M') {
+          setPeriod('3M');
+        }
+      })
+      .catch(() => { /* ignore */ });
   }, []);
 
   useEffect(() => {
@@ -168,25 +177,43 @@ export default function CashflowReportScreen() {
     readStoredPeriod();
   }, [readStoredPeriod]));
 
-  const load = useCallback(async () => {
+  const fyStart = selectedFY?.startDate;
+  const fyEnd = selectedFY?.endDate;
+
+  const fetchCashflow = useCallback(() => {
+    if (!companyGuid || !periodReady) return;
+    new Promise<any>((resolve) => {
+      const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
+        from: fyStart,
+        to: fyEnd,
+      });
+      resolve(getCashflow(companyGuid, period, from, to));
+    })
+      .then((data) => { setCf(data); })
+      .catch((err: any) => { setApiError(err?.message || i18n.t('screens.cashflowReport.loadFailed')); })
+      .finally(() => { setLoading(false); });
+  }, [companyGuid, period, periodReady, fyStart, fyEnd]);
+
+  const load = useCallback(() => {
     if (!companyGuid || !periodReady) return;
     setLoading(true);
     setApiError(null);
-    try {
-      const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
-        from: selectedFY?.startDate,
-        to: selectedFY?.endDate,
-      });
-      const data = await getCashflow(companyGuid, period, from, to);
-      setCf(data);
-    } catch (err: any) {
-      setApiError(err?.message || 'Failed to load cashflow');
-    } finally {
-      setLoading(false);
-    }
-  }, [companyGuid, period, periodReady, selectedFY?.startDate, selectedFY?.endDate]);
+    fetchCashflow();
+  }, [companyGuid, periodReady, fetchCashflow]);
 
-  useEffect(() => { load(); }, [load]);
+  const [loadKey, setLoadKey] = useState({ companyGuid, period, periodReady, fyStart, fyEnd });
+  if (
+    loadKey.companyGuid !== companyGuid || loadKey.period !== period || loadKey.periodReady !== periodReady
+    || loadKey.fyStart !== fyStart || loadKey.fyEnd !== fyEnd
+  ) {
+    setLoadKey({ companyGuid, period, periodReady, fyStart, fyEnd });
+    if (companyGuid && periodReady) {
+      setLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchCashflow(); }, [fetchCashflow]);
 
   const changePeriod = (p: Period) => {
     setPeriod(p);
@@ -209,7 +236,7 @@ export default function CashflowReportScreen() {
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Cashflow Report</Text>
+          <Text style={s.headerTitle}>{t('screens.cashflowReport.title')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -223,7 +250,7 @@ export default function CashflowReportScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Cashflow Report</Text>
+        <Text style={s.headerTitle}>{t('screens.cashflowReport.title')}</Text>
         {/* Period Chips */}
         <View style={s.periodRow}>
           {PERIODS.map(p => (
@@ -247,9 +274,9 @@ export default function CashflowReportScreen() {
         <View style={s.heroCard}>
           <View style={s.heroRow}>
             <View>
-              <Text style={s.heroLabel}>Cash & Bank Balance</Text>
+              <Text style={s.heroLabel}>{t('dashboard.netCash')}</Text>
               <Text style={s.heroValue}>₹{netCash.toLocaleString('en-IN')}</Text>
-              <Text style={s.heroSub}>Updated {cf?.updatedAt || 'just now'}</Text>
+              <Text style={s.heroSub}>{t('screens.cashflowReport.updated', { time: cf?.updatedAt || t('dashboard.justNow') })}</Text>
             </View>
             <View style={[s.statusPill, { backgroundColor: isHealthy ? COLORS.positiveBg : COLORS.negativeBg }]}>
               <Ionicons
@@ -258,7 +285,7 @@ export default function CashflowReportScreen() {
                 color={isHealthy ? COLORS.positive : COLORS.negative}
               />
               <Text style={[s.statusTxt, { color: isHealthy ? COLORS.positive : COLORS.negative }]}>
-                {isHealthy ? '+' : ''}{incomePct}%{'  '}{isHealthy ? 'Healthy' : 'Watch'}
+                {isHealthy ? '+' : ''}{incomePct}%{'  '}{isHealthy ? t('dashboard.healthy') : t('dashboard.watch')}
               </Text>
             </View>
           </View>
@@ -266,13 +293,13 @@ export default function CashflowReportScreen() {
 
         {/* ── Income / Expense Bars ── */}
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Income vs Expense</Text>
+          <Text style={s.sectionTitle}>{t('screens.cashflowReport.incomeVsExpense')}</Text>
 
           {/* Income */}
           <View style={s.barRow}>
             <View style={s.barMeta}>
               <Ionicons name="arrow-up-circle-outline" size={16} color={COLORS.positive} />
-              <Text style={s.barLabel}>Income</Text>
+              <Text style={s.barLabel}>{t('dashboard.income')}</Text>
             </View>
             <SegmentedBar value={income} maxValue={maxVal} color={COLORS.positive} delay={80} />
             <View style={s.barRight}>
@@ -282,7 +309,7 @@ export default function CashflowReportScreen() {
               </View>
             </View>
           </View>
-          <Text style={s.barSubtxt}>Inflows · net {fmt(income - expense)}</Text>
+          <Text style={s.barSubtxt}>{t('screens.cashflowReport.inflowsNet', { amount: fmt(income - expense) })}</Text>
 
           <View style={s.sep} />
 
@@ -290,25 +317,25 @@ export default function CashflowReportScreen() {
           <View style={s.barRow}>
             <View style={s.barMeta}>
               <Ionicons name="arrow-down-circle-outline" size={16} color={COLORS.negative} />
-              <Text style={s.barLabel}>Expense</Text>
+              <Text style={s.barLabel}>{t('dashboard.expense')}</Text>
             </View>
             <SegmentedBar value={expense} maxValue={maxVal} color={COLORS.negative} delay={360} />
             <View style={s.barRight}>
               <Text style={s.barAmt}>{fmt(expense)}</Text>
             </View>
           </View>
-          <Text style={s.barSubtxt}>Outflows</Text>
+          <Text style={s.barSubtxt}>{t('screens.cashflowReport.outflows')}</Text>
         </View>
 
         {/* ── Trend Chart ── */}
         <View style={s.card}>
           <View style={s.chartHeader}>
-            <Text style={s.sectionTitle}>Daily Trend</Text>
+            <Text style={s.sectionTitle}>{t('screens.cashflowReport.dailyTrend')}</Text>
             <View style={s.legend}>
               <View style={[s.legendDot, { backgroundColor: COLORS.positive }]} />
-              <Text style={s.legendTxt}>Income</Text>
+              <Text style={s.legendTxt}>{t('dashboard.income')}</Text>
               <View style={[s.legendDot, { backgroundColor: COLORS.negative, marginLeft: 10 }]} />
-              <Text style={s.legendTxt}>Expense</Text>
+              <Text style={s.legendTxt}>{t('dashboard.expense')}</Text>
             </View>
           </View>
           <TrendChart key={period} days={days} maxVal={maxDayVal} />
@@ -316,34 +343,34 @@ export default function CashflowReportScreen() {
 
         {/* ── Metrics Grid ── */}
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Key Metrics</Text>
+          <Text style={s.sectionTitle}>{t('screens.cashflowReport.keyMetrics')}</Text>
           <View style={s.metricsGrid}>
-            <MetricCard label="Total Income"  value={fmt(income)}  valueColor={COLORS.positive} />
-            <MetricCard label="Total Expense" value={fmt(expense)} valueColor={COLORS.negative} />
+            <MetricCard label={t('screens.cashflowReport.totalIncome')}  value={fmt(income)}  valueColor={COLORS.positive} />
+            <MetricCard label={t('screens.cashflowReport.totalExpense')} value={fmt(expense)} valueColor={COLORS.negative} />
           </View>
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
             <MetricCard
-              label="Gross Profit"
+              label={t('dashboard.grossProfit')}
               value={fmtFull(Number(cf?.grossProfit ?? 0))}
               valueColor={Number(cf?.grossProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
             />
             <MetricCard
-              label="Net Profit"
+              label={t('dashboard.netProfit')}
               value={fmtFull(Number(cf?.netProfit ?? 0))}
               valueColor={Number(cf?.netProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
             />
           </View>
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
             <MetricCard
-              label="Gross Profit vs Sales"
+              label={t('screens.cashflowReport.gpVsSales')}
               value={`${Number(cf?.grossProfitVsSalesPct ?? incomePct)}%`}
               valueColor={Number(cf?.grossProfitVsSalesPct ?? incomePct) >= 0 ? COLORS.positive : COLORS.negative}
             />
-            <MetricCard label="Sales" value={fmt(Number(cf?.sales ?? 0))} />
+            <MetricCard label={t('nav.sales')} value={fmt(Number(cf?.sales ?? 0))} />
           </View>
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
-            <MetricCard label="Gross Cash"     value={fmt(Number(cf?.grossCash ?? netCash))} />
-            <MetricCard label="Net Realisable" value={fmt(Number(cf?.netRealisableBalance ?? netCash))} />
+            <MetricCard label={t('screens.cashflowReport.grossCash')} value={fmt(Number(cf?.grossCash ?? netCash))} />
+            <MetricCard label={t('screens.cashflowReport.netRealisable')} value={fmt(Number(cf?.netRealisableBalance ?? netCash))} />
           </View>
         </View>
 

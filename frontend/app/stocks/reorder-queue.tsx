@@ -41,14 +41,22 @@ function calcPriority(current: number, reorderAt: number): Priority {
   return 'low';
 }
 
-const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string; barColor: string }> = {
-  critical: { label: 'Critical', color: '#DC2626', bg: '#FEF2F2', barColor: '#DC2626' },
-  high:     { label: 'High',     color: '#A89060', bg: '#F8F4EE', barColor: '#1A1A1A' },
-  medium:   { label: 'Medium',   color: '#2D7D46', bg: '#F0FBF4', barColor: '#2D7D46' },
-  low:      { label: 'Low',      color: '#6B7280', bg: '#F3F4F6', barColor: '#AEACA8' },
+const PRIORITY_CONFIG: Record<Priority, { labelKey: string; color: string; bg: string; barColor: string }> = {
+  critical: { labelKey: 'screens.stocksReorderQueue.critical', color: '#DC2626', bg: '#FEF2F2', barColor: '#DC2626' },
+  high:     { labelKey: 'screens.stocksReorderQueue.high', color: '#A89060', bg: '#F8F4EE', barColor: '#1A1A1A' },
+  medium:   { labelKey: 'screens.stocksReorderQueue.medium', color: '#2D7D46', bg: '#F0FBF4', barColor: '#2D7D46' },
+  low:      { labelKey: 'screens.stocksReorderQueue.low', color: '#6B7280', bg: '#F3F4F6', barColor: '#AEACA8' },
 };
 
 type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
+
+const FILTER_LABEL_KEY: Record<FilterType, string> = {
+  All: 'common.all',
+  Critical: 'screens.stocksReorderQueue.critical',
+  High: 'screens.stocksReorderQueue.high',
+  Medium: 'screens.stocksReorderQueue.medium',
+  Low: 'screens.stocksReorderQueue.low',
+};
 
 function stockRateString(r: any): string {
   const n = parseFloat(r.closing_rate ?? r.rate ?? r.opening_rate ?? '');
@@ -67,10 +75,17 @@ export default function ReorderQueueScreen() {
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
 
-  const loadItems = useCallback(() => {
+  const [prevCompanyGuid, setPrevCompanyGuid] = useState(companyGuid);
+  if (companyGuid !== prevCompanyGuid) {
+    setPrevCompanyGuid(companyGuid);
+    if (companyGuid) {
+      setLoading(true);
+      setError(null);
+    }
+  }
+
+  const fetchItems = useCallback(() => {
     if (!companyGuid) return;
-    setLoading(true);
-    setError(null);
     Promise.all([
       getInventorySettings(companyGuid).catch(() => null),
       getStocks(companyGuid, { limit: '5000', stockHealth: 'reorder' }),
@@ -128,11 +143,18 @@ export default function ReorderQueueScreen() {
         });
         setItems(mapped);
       })
-      .catch(() => setError('Failed to load reorder queue'))
+      .catch(() => setError(t('screens.stocksReorderQueue.loadFailed')))
       .finally(() => setLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, t]);
 
-  useEffect(() => { loadItems(); }, [loadItems]);
+  const loadItems = useCallback(() => {
+    if (!companyGuid) return;
+    setLoading(true);
+    setError(null);
+    fetchItems();
+  }, [companyGuid, fetchItems]);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const openPoWithItems = useCallback(async (selected: ReorderItem[]) => {
     if (!companyGuid || !selected.length) return;
@@ -156,9 +178,9 @@ export default function ReorderQueueScreen() {
       );
       safePush(router, '/purchase/create-order' as any);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Could not open PO', text2: e?.message || '' });
+      Toast.show({ type: 'error', text1: t('screens.stocksReorderQueue.openPoFailed'), text2: e?.message || '' });
     }
-  }, [companyGuid, router]);
+  }, [companyGuid, router, t]);
 
   const filtered = activeFilter === 'All'
     ? items
@@ -180,12 +202,12 @@ export default function ReorderQueueScreen() {
 
       <View style={styles.summaryRow}>
         {[
-          { label: 'Critical', count: items.filter(i => i.priority === 'critical').length, color: '#DC2626' },
-          { label: 'High',     count: items.filter(i => i.priority === 'high').length,     color: '#A89060' },
-          { label: 'Medium',   count: items.filter(i => i.priority === 'medium').length,   color: '#2563EB' },
-          { label: 'Total',    count: items.length,                                        color: COLORS.textPrimary },
+          { id: 'critical', label: t('screens.stocksReorderQueue.critical'), count: items.filter(i => i.priority === 'critical').length, color: '#DC2626' },
+          { id: 'high',     label: t('screens.stocksReorderQueue.high'),     count: items.filter(i => i.priority === 'high').length,     color: '#A89060' },
+          { id: 'medium',   label: t('screens.stocksReorderQueue.medium'),   count: items.filter(i => i.priority === 'medium').length,   color: '#2563EB' },
+          { id: 'total',    label: t('screens.stocksReorderQueue.total'),    count: items.length,                                        color: COLORS.textPrimary },
         ].map(s => (
-          <View key={s.label} style={styles.summaryItem}>
+          <View key={s.id} style={styles.summaryItem}>
             <Text style={[styles.summaryCount, { color: s.color }]}>{s.count}</Text>
             <Text style={styles.summaryLabel}>{s.label}</Text>
           </View>
@@ -200,15 +222,15 @@ export default function ReorderQueueScreen() {
             onPress={() => setActiveFilter(f)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+            <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{t(FILTER_LABEL_KEY[f])}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {loading && <LoadingState message="Loading reorder queue…" />}
+      {loading && <LoadingState message={t('screens.stocksReorderQueue.loading')} />}
       {!loading && error && <ErrorState message={error} onRetry={loadItems} />}
       {!loading && !error && items.length === 0 && (
-        <EmptyState title="No items below reorder level" subtitle="All stock levels are healthy" icon="checkmark-circle-outline" />
+        <EmptyState title={t('screens.stocksReorderQueue.emptyTitle')} subtitle={t('screens.stocksReorderQueue.emptySubtitle')} icon="checkmark-circle-outline" />
       )}
       {!loading && !error && items.length > 0 && (
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -223,7 +245,7 @@ export default function ReorderQueueScreen() {
                 borderRadius={RADIUS.lg}
                 trailing={(
                   <View style={[styles.priorityBadge, { backgroundColor: p.bg }]}>
-                    <Text style={[styles.priorityText, { color: p.color }]}>{p.label}</Text>
+                    <Text style={[styles.priorityText, { color: p.color }]}>{t(p.labelKey)}</Text>
                   </View>
                 )}
                 footer={(
@@ -231,10 +253,10 @@ export default function ReorderQueueScreen() {
                     <View style={styles.progressSection}>
                       <View style={styles.statsRow}>
                         <Text style={styles.statLabel}>
-                          Current: <Text style={{ fontWeight: '700', color: item.current === 0 ? '#DC2626' : COLORS.textPrimary }}>{item.current}</Text>
+                          {t('screens.stocksReorderQueue.current')} <Text style={{ fontWeight: '700', color: item.current === 0 ? '#DC2626' : COLORS.textPrimary }}>{item.current}</Text>
                         </Text>
                         <Text style={styles.statLabel}>
-                          Reorder at: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.reorderAt}</Text>
+                          {t('screens.stocksReorderQueue.reorderAt')} <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.reorderAt}</Text>
                         </Text>
                       </View>
                       <View style={styles.progressTrack}>
@@ -246,7 +268,7 @@ export default function ReorderQueueScreen() {
                     </View>
                     <View style={styles.cardActions}>
                       <Text style={styles.suggText}>
-                        Suggest: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.suggest} units</Text>
+                        {t('screens.stocksReorderQueue.suggest')} <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{t('screens.stocksReorderQueue.units', { count: item.suggest })}</Text>
                       </Text>
                       <TouchableOpacity
                         style={styles.reorderBtn}
@@ -254,7 +276,7 @@ export default function ReorderQueueScreen() {
                         onPress={() => openPoWithItems([item])}
                       >
                         <Ionicons name="cart-outline" size={13} color={COLORS.white} />
-                        <Text style={styles.reorderBtnText}>Add to PO</Text>
+                        <Text style={styles.reorderBtnText}>{t('screens.stocksReorderQueue.addToPo')}</Text>
                       </TouchableOpacity>
                     </View>
                   </>

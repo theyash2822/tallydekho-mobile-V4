@@ -305,6 +305,16 @@ check('a 403 or RBAC denial never signs the user out', () => {
   const calls = [...api.matchAll(/notifyAuthFailure\s*\(/g)];
   assert.ok(calls.length > 0, 'the central 401 handler is no longer called at all');
   for (const call of calls) {
+    // The background refresh retry signs out only on a definite /auth/refresh rejection.
+    const args = api.slice(call.index, call.index + 160);
+    if (/status: 401, kind: 'auth', code: 'REFRESH_REJECTED'/.test(args)) {
+      assert.match(
+        api.slice(Math.max(0, call.index - 200), call.index),
+        /outcome === 'rejected'/,
+        'REFRESH_REJECTED sign-out must be gated on a rejected refresh'
+      );
+      continue;
+    }
     const before = api.slice(Math.max(0, call.index - 700), call.index);
     const lastStatusBranch = before.lastIndexOf('res.status === ');
     assert.ok(lastStatusBranch > -1, 'notifyAuthFailure is called outside any status branch');

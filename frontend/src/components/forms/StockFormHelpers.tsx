@@ -3,7 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS, ALL_UNITS, ALL_TAX_RATES, RACK_OPTIONS, ADJ_REASONS, LOW_STOCK_QTY } from '../../data/stockData';
+import { useTranslation } from 'react-i18next';
+import { StockItem, LOW_STOCK_QTY } from '../../data/stockData';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 
 
@@ -158,7 +159,11 @@ export function CompactQtyInput({
   value: number; onChange: (v: number) => void; min?: number;
 }) {
   const [text, setText] = React.useState(String(value));
-  React.useEffect(() => { setText(String(value)); }, [value]);
+  const [prevValue, setPrevValue] = React.useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setText(String(value));
+  }
 
   const commit = (raw: string) => {
     const n = parseInt(raw.replace(/\D/g, ''), 10);
@@ -257,6 +262,7 @@ const sb = StyleSheet.create({
 
 // ─── ITEM HEADER CARD ─────────────────────────────────────────────────────────
 export function ItemHeaderCard({ item }: { item: StockItem }) {
+  const { t } = useTranslation();
   const isLow = item.qty < LOW_STOCK_QTY;
   return (
     <View style={ih.card}>
@@ -270,12 +276,12 @@ export function ItemHeaderCard({ item }: { item: StockItem }) {
       {isLow ? (
         <View style={ih.lowBadge}>
           <Ionicons name="warning-outline" size={11} color={COLORS.warning} />
-          <Text style={ih.lowTxt}>Low stock</Text>
+          <Text style={ih.lowTxt}>{t('screens.componentsFormsStockFormHelpers.lowStock')}</Text>
         </View>
       ) : null}
       <View style={ih.stockBadge}>
         <Text style={ih.stockNum}>{item.qty}</Text>
-        <Text style={ih.stockLbl}> Stock</Text>
+        <Text style={ih.stockLbl}>{' '}{t('screens.componentsFormsStockFormHelpers.stock')}</Text>
       </View>
     </View>
   );

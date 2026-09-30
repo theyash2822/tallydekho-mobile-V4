@@ -4,6 +4,7 @@
  * Recharge / seats / additional Workspace are Web Portal (Owner) only.
  */
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,11 +16,12 @@ const WEB_PORTAL = 'https://app.tallydekho.com';
 
 export default function LicenseScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { workspace, isOwner, access } = useWorkspace();
   const roleLabel =
     access?.membershipType === 'OWNER'
-      ? 'Owner'
-      : access?.role?.displayName || access?.role?.systemKey || 'Member';
+      ? t('screens.settingsLicense.owner')
+      : access?.role?.displayName || access?.role?.systemKey || t('screens.settingsLicense.member');
 
   return (
     <SafeAreaView style={s.safe}>
@@ -27,16 +29,16 @@ export default function LicenseScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>License & Credits</Text>
+        <Text style={s.headerTitle}>{t('settings.license')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.card}>
-          <Text style={s.label}>Workspace</Text>
+          <Text style={s.label}>{t('screens.settingsLicense.workspace')}</Text>
           <Text style={s.value}>{workspace?.name || '—'}</Text>
           <View style={s.divider} />
-          <Text style={s.label}>Your access</Text>
+          <Text style={s.label}>{t('screens.settingsLicense.yourAccess')}</Text>
           <Text style={s.value}>{roleLabel}</Text>
           <TouchableOpacity
             style={{ marginTop: 10 }}
@@ -44,20 +46,19 @@ export default function LicenseScreen() {
             activeOpacity={0.75}
           >
             <Text style={{ color: COLORS.brandPrimary, fontWeight: '700', fontSize: TYPOGRAPHY.sm }}>
-              View full My Access summary →
+              {t('screens.settingsLicense.viewMyAccess')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <View style={s.card}>
-          <Text style={s.title}>Billing is managed on Web</Text>
+          <Text style={s.title}>{t('screens.settingsLicense.billingOnWeb')}</Text>
           <Text style={s.body}>
-            Seat purchase, credit recharge, and additional Workspace checkout are available only
-            on the TallyDekho Web Portal for the Workspace Owner.
+            {t('screens.settingsLicense.billingBody')}
           </Text>
           {!isOwner ? (
             <Text style={[s.body, { marginTop: 10 }]}>
-              If this Workspace needs more credits, ask the Workspace Owner to recharge from the Web Portal.
+              {t('screens.settingsLicense.askOwner')}
             </Text>
           ) : (
             <TouchableOpacity
@@ -65,15 +66,14 @@ export default function LicenseScreen() {
               onPress={() => Linking.openURL(WEB_PORTAL).catch(() => {})}
               activeOpacity={0.85}
             >
-              <Text style={s.linkBtnTxt}>Open Web Portal</Text>
+              <Text style={s.linkBtnTxt}>{t('screens.settingsLicense.openWebPortal')}</Text>
               <Ionicons name="open-outline" size={16} color="#fff" />
             </TouchableOpacity>
           )}
         </View>
 
         <Text style={s.footnote}>
-          Mobile does not sell plans or show a mock Free badge. Credit recharge uses Razorpay on the Web Portal
-          (backend ready). Commercial status comes from the Workspace context.
+          {t('screens.settingsLicense.footnote')}
         </Text>
       </ScrollView>
     </SafeAreaView>

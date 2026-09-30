@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ScrollView, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, getStockGodowns, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -30,6 +31,7 @@ export function StockTransferModal({
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { company } = useAuth();
   const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const scrollRef = useRef<ScrollView>(null);
@@ -42,6 +44,24 @@ export function StockTransferModal({
   const [allWarehouses, setAllWarehouses] = useState<string[]>([]);
   const [itemGodowns,   setItemGodowns]   = useState<string[]>([]);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
+
+  const [prevOpenKey, setPrevOpenKey] = useState<
+    [boolean, string | undefined, string | undefined, typeof scopeGodowns] | null
+  >(null);
+  if (
+    !prevOpenKey ||
+    prevOpenKey[0] !== visible ||
+    prevOpenKey[1] !== item?.id ||
+    prevOpenKey[2] !== company?.guid ||
+    prevOpenKey[3] !== scopeGodowns
+  ) {
+    setPrevOpenKey([visible, item?.id, company?.guid, scopeGodowns]);
+    if (visible && company?.guid && item) {
+      setDestWhName('');
+      setTransferQty(1);
+      setNarration('');
+    }
+  }
 
   const scrollNoteIntoView = useCallback(() => {
     setTimeout(() => {
@@ -72,10 +92,6 @@ export function StockTransferModal({
     }).catch(() => {
       setSourceWhName(item.warehouse || '');
     });
-
-    setDestWhName('');
-    setTransferQty(1);
-    setNarration('');
   }, [visible, item?.id, company?.guid, scopeGodowns]);
 
   const sourceOptions = itemGodowns.map(n => ({ id: n, label: n }));
@@ -91,15 +107,15 @@ export function StockTransferModal({
   const validate = () => {
     if (!assertCanCreate('stock_transfer.create')) return false;
     if (!sourceWhName) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select source warehouse.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsStockTransferModal.selectSourceErr') });
       return false;
     }
     if (!destWhName) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select destination warehouse.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsStockTransferModal.selectDestErr') });
       return false;
     }
     if (transferQty <= 0) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Quantity must be greater than 0.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsStockTransferModal.qtyErr') });
       return false;
     }
     return true;
@@ -129,13 +145,13 @@ export function StockTransferModal({
       reset(); onClose();
       setTimeout(() => Toast.show({
         type: 'success',
-        text1: queued ? 'Queued ⏳' : 'Transfer Created ✅',
+        text1: queued ? t('screens.componentsFormsStockTransferModal.queued') : t('screens.componentsFormsStockTransferModal.created'),
         text2: queued
-          ? 'Saved. Will push to Tally when desktop connects.'
-          : `${transferQty} × ${item.name} → ${destWhName}`,
+          ? t('screens.componentsFormsStockTransferModal.queuedSub')
+          : t('screens.componentsFormsStockTransferModal.createdSub', { qty: transferQty, item: item.name, dest: destWhName }),
       }), 300);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Transfer Failed', text2: err?.message || 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockTransferModal.failed'), text2: err?.message || t('screens.componentsFormsStockTransferModal.tryAgain') });
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +163,7 @@ export function StockTransferModal({
     <BottomModalShell
       visible={visible}
       onClose={handleClose}
-      title="Stock Transfer"
+      title={t('quickActions.stockTransfer')}
       keyboardAvoiding={false}
       scrollRef={scrollRef}
       scrollContentStyle={{ paddingBottom: 56 }}
@@ -157,9 +173,9 @@ export function StockTransferModal({
       }}
       footer={(
         <SubmitButton
-          idleLabel="Transfer"
-          loadingLabel="Transferring..."
-          successLabel="✓ Transferred"
+          idleLabel={t('screens.componentsFormsStockTransferModal.transfer')}
+          loadingLabel={t('screens.componentsFormsStockTransferModal.transferring')}
+          successLabel={t('screens.componentsFormsStockTransferModal.transferred')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -168,43 +184,43 @@ export function StockTransferModal({
       {item ? <ItemHeaderCard item={item} /> : null}
 
       {sourceOptions.length === 1 ? (
-        <ReadonlyField label="Source Warehouse" value={sourceWhName} />
+        <ReadonlyField label={t('screens.componentsFormsStockTransferModal.sourceWarehouse')} value={sourceWhName} />
       ) : (
         <InlineDropdownField
-          label="Source Warehouse"
+          label={t('screens.componentsFormsStockTransferModal.sourceWarehouse')}
           options={sourceOptions}
           value={sourceWhName}
           onSelect={(v) => { setSourceWhName(v); setDestWhName(''); }}
           icon="home-outline"
-          placeholder="Select source warehouse"
+          placeholder={t('screens.componentsFormsStockTransferModal.selectSource')}
           required
         />
       )}
 
-      <ReadonlyField label="On-hand Qty" value={item ? String(item.qty) : '—'} />
+      <ReadonlyField label={t('screens.componentsFormsStockTransferModal.onHandQty')} value={item ? String(item.qty) : '—'} />
 
       <InlineDropdownField
-        label="Destination Warehouse"
+        label={t('screens.componentsFormsStockTransferModal.destWarehouse')}
         options={destOptions}
         value={destWhName}
         onSelect={setDestWhName}
-        placeholder="Select destination"
+        placeholder={t('screens.componentsFormsStockTransferModal.selectDest')}
         icon="home-outline"
         required
       />
 
       <QtyStepperField
-        label="Qty to Transfer"
-        subLabel="(required)"
+        label={t('screens.componentsFormsStockTransferModal.qtyToTransfer')}
+        subLabel={t('screens.componentsFormsStockTransferModal.requiredSub')}
         value={transferQty}
         onChange={setTransferQty}
       />
 
       <InlineField
-        label="Narration"
+        label={t('voucher.narration')}
         value={narration}
         onChange={setNarration}
-        placeholder="Optional note"
+        placeholder={t('screens.componentsFormsStockTransferModal.optionalNote')}
         multiline
         onFocus={scrollNoteIntoView}
       />

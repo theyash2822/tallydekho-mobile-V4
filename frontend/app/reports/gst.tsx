@@ -6,13 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { parseISODate } from '../../src/utils/dateRange';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getGSTDetail, getGSTSummary } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
@@ -31,6 +34,7 @@ function monthLabel(d: Date): string {
 
 interface Invoice {
   id: string;
+  guid?: string;
   invoiceNo: string;
   type: string;
   party: string;
@@ -53,6 +57,7 @@ interface Invoice {
 function mapVoucher(r: any, idx: number, tab: string, fmt: (n: number) => string): Invoice {
   return {
     id: r.guid || r.id ? `${r.guid || r.id}` : `row-${tab}-${idx}`,
+    guid: r.guid || '',
     invoiceNo: r.voucher_number || '',
     type: r.voucher_type || 'Sales',
     party: r.party_name || '',
@@ -94,6 +99,7 @@ function getSectionBadgeStyle(section: string) {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function GSTScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -118,12 +124,14 @@ export default function GSTScreen() {
   const [selected,       setSelected]       = useState<string[]>([]);
   const [isSharing,      setIsSharing]      = useState(false);
 
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ fyFrom, fyTo });
+  if (prevFy.fyFrom !== fyFrom || prevFy.fyTo !== fyTo) {
+    setPrevFy({ fyFrom, fyTo });
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   // ── Collapsible months ────────────────────────────────────────────────────
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
@@ -146,24 +154,46 @@ export default function GSTScreen() {
     });
   }, []);
 
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
   // ── Fetch GST summary card data ───────────────────────────────────────────
   useEffect(() => {
     if (!companyGuid) return;
+    let cancelled = false;
     const fyParam = fyInfoToParam(selectedFY);
     getGSTSummary(companyGuid, fyParam ? { fy: fyParam } : {})
-      .then((res: any) => { if (res?.summary) setGstSummaryData(res.summary); })
-      .catch(() => {});
-  }, [companyGuid, selectedFY]);
+      .then((res: any) => {
+        if (cancelled) return;
+        if (res?.summary) setGstSummaryData(res.summary);
+        setSummaryError(null);
+      })
+      .catch((err: any) => { if (!cancelled) setSummaryError(err?.message || t('screens.reportsGst.loadFailed')); });
+    return () => { cancelled = true; };
+  }, [companyGuid, selectedFY, reloadKey]);
 
   // ── Fetch on tab/FY change ────────────────────────────────────────────────
+  const [detailKey, setDetailKey] = useState<{
+    companyGuid?: string; activeTab: string; selectedFY: typeof selectedFY; reloadKey: number;
+  } | null>(null);
+  if (
+    !detailKey || detailKey.companyGuid !== companyGuid || detailKey.activeTab !== activeTab
+    || detailKey.selectedFY !== selectedFY || detailKey.reloadKey !== reloadKey
+  ) {
+    setDetailKey({ companyGuid, activeTab, selectedFY, reloadKey });
+    if (companyGuid) {
+      setLiveInvoices([]);
+      setApiGroups([]);
+      setGstr3bSummary(null);
+      setLoading(true);
+      setDetailError(null);
+      setCollapsedMonths(new Set());
+    }
+  }
+
   useEffect(() => {
     if (!companyGuid) return;
-    setLiveInvoices([]);
-    setApiGroups([]);
-    setGstr3bSummary(null);
-    setLoading(true);
-    setCollapsedMonths(new Set());
-
     const fyParam = fyInfoToParam(selectedFY);
 
     getGSTDetail(companyGuid, {
@@ -172,7 +202,7 @@ export default function GSTScreen() {
     }).then((res: any) => {
       if (res?.meta?.country_applicable === false) {
         setIsGSTApplicable(false);
-        setGstNotApplicableMsg(res.meta.message || 'GST reports not applicable for your country');
+        setGstNotApplicableMsg(res.meta.message || t('screens.reportsGst.notApplicableMsg'));
         setLoading(false);
         return;
       }
@@ -196,8 +226,11 @@ export default function GSTScreen() {
         setApiGroups([]);
       }
       setLoading(false);
-    }).catch(() => { setLoading(false); });
-  }, [companyGuid, activeTab, selectedFY]);
+    }).catch((err: any) => {
+      setDetailError(err?.message || t('screens.reportsGst.loadFailed'));
+      setLoading(false);
+    });
+  }, [companyGuid, activeTab, selectedFY, reloadKey]);
 
   const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
@@ -258,12 +291,12 @@ export default function GSTScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.iconBtn} hitSlop={{top:8,bottom:8,left:8,right:8}}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>GST Reports</Text>
+          <Text style={s.headerTitle}>{t('screens.reportsGst.gstReports')}</Text>
           <View style={{width:44}} />
         </View>
         <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:24}}>
           <Ionicons name="information-circle-outline" size={48} color={COLORS.textTertiary} />
-          <Text style={{fontSize:16,fontWeight:'700',color:COLORS.textPrimary,marginTop:12,textAlign:'center'}}>Not Applicable</Text>
+          <Text style={{fontSize:16,fontWeight:'700',color:COLORS.textPrimary,marginTop:12,textAlign:'center'}}>{t('screens.reportsGst.notApplicable')}</Text>
           <Text style={{fontSize:14,color:COLORS.textSecondary,marginTop:8,textAlign:'center'}}>{gstNotApplicableMsg}</Text>
         </View>
       </SafeAreaView>
@@ -280,17 +313,17 @@ export default function GSTScreen() {
     setIsSharing(true);
     try {
       const metrics = [
-        { label: 'GST Collected', value: gstSummaryData ? formatAmount(gstSummaryData.gstCollected) : '—' },
-        { label: 'ITC Balance', value: gstSummaryData ? formatAmount(gstSummaryData.itcBalance) : '—' },
-        { label: 'Net Payable', value: gstSummaryData ? formatAmount(gstSummaryData.netPayable) : '—' },
-        { label: 'Tab', value: activeTab },
+        { label: t('screens.reportsGst.gstCollected'), value: gstSummaryData ? formatAmount(gstSummaryData.gstCollected) : '—' },
+        { label: t('screens.reportsGst.itcBalance'), value: gstSummaryData ? formatAmount(gstSummaryData.itcBalance) : '—' },
+        { label: t('screens.reportsGst.netPayable'), value: gstSummaryData ? formatAmount(gstSummaryData.netPayable) : '—' },
+        { label: t('screens.reportsGst.tab'), value: activeTab },
       ];
       await shareSummaryTablePdf({
         company: companyFromAuth(company),
-        title: `GST — ${activeTab}`,
+        title: t('screens.reportsGst.pdfTitle', { tab: activeTab }),
         period: fromDate && toDate ? `${formatDate(fromDate)} → ${formatDate(toDate)}` : undefined,
         metrics,
-        columns: ['Invoice', 'Type', 'Party', 'Date', 'Amount', 'Section'],
+        columns: [t('pdf.invoice'), t('screens.reportsGst.colType'), t('voucher.party'), t('voucher.date'), t('voucher.amount'), t('screens.reportsGst.colSection')],
         rows: items.map(inv => [
           inv.invoiceNo,
           inv.type,
@@ -302,7 +335,7 @@ export default function GSTScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       setSelected([]);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.reportsGst.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -327,7 +360,7 @@ export default function GSTScreen() {
           if (selected.length > 0) {
             toggleSelect(inv.id);
           } else {
-            safePush(router, `/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
+            openVoucherPreview(router, { guid: inv.guid, docType: inv.type });
           }
         }}
         onLongPress={() => toggleSelect(inv.id)}
@@ -370,7 +403,7 @@ export default function GSTScreen() {
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>GST</Text>
+        <Text style={s.headerTitle}>{t('reports.gst')}</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons
             name="calendar-outline"
@@ -384,7 +417,7 @@ export default function GSTScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : t('screens.reportsGst.allDates')}
         </Text>
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
@@ -395,21 +428,24 @@ export default function GSTScreen() {
       </TouchableOpacity>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+        {(detailError || summaryError) && (
+          <ErrorBanner message={(detailError || summaryError) as string} onRetry={() => setReloadKey(k => k + 1)} />
+        )}
 
         {/* ── Summary Card ─────────────────────────────────────────────── */}
         <View style={s.summaryCard}>
           <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>GST Collected</Text>
+            <Text style={s.summaryLabel}>{t('screens.reportsGst.gstCollected')}</Text>
             <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.gstCollected) : '—'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>ITC Balance</Text>
+            <Text style={s.summaryLabel}>{t('screens.reportsGst.itcBalance')}</Text>
             <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.itcBalance) : '—'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Net Payable</Text>
+            <Text style={s.summaryLabel}>{t('screens.reportsGst.netPayable')}</Text>
             <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.netPayable) : '—'}</Text>
           </View>
         </View>
@@ -421,12 +457,12 @@ export default function GSTScreen() {
             onPress={() => safePush(router, '/reports/unmatched-list' as any)}
             activeOpacity={0.85}
           >
-            <Text style={s.unmatchedBtnTxt}>Unmatched {unmatchedCount} Invoices</Text>
+            <Text style={s.unmatchedBtnTxt}>{t('screens.reportsGst.unmatchedInvoices', { count: unmatchedCount })}</Text>
           </TouchableOpacity>
         )}
 
         {/* ── GST Ledger Section ───────────────────────────────────────── */}
-        <Text style={s.sectionLabel}>GST Ledger</Text>
+        <Text style={s.sectionLabel}>{t('screens.reportsGst.gstLedger')}</Text>
 
         {/* ── GSTR Tab Pills ───────────────────────────────────────────── */}
         <ScrollView
@@ -453,11 +489,10 @@ export default function GSTScreen() {
           <View style={s.portalInfoBanner}>
             <View style={s.portalInfoIconRow}>
               <Ionicons name="cloud-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={s.portalInfoTitle}>Portal Reconciliation — Coming Soon</Text>
+              <Text style={s.portalInfoTitle}>{t('screens.reportsGst.portalTitle')}</Text>
             </View>
             <Text style={s.portalInfoTxt}>
-              Currently showing book-side purchase vouchers from registered suppliers in Tally.{' '}
-              Live GST portal 2A/2B reconciliation requires GSP/ASP integration and will be available in a future update.
+              {t('screens.reportsGst.portalInfo')}
             </Text>
           </View>
         )}
@@ -465,15 +500,15 @@ export default function GSTScreen() {
         {/* ── GSTR-3B Summary Card (above voucher list) ────────────────── */}
         {gstr3bSummary && (
           <View style={s.gst3bCard}>
-            <Text style={s.gst3bTitle}>GSTR-3B Summary</Text>
+            <Text style={s.gst3bTitle}>{t('screens.reportsGst.gstr3bSummary')}</Text>
             {[
-              { label: 'Total Outward Supply', value: gstr3bSummary.outwardSupply,  color: COLORS.positive },
-              { label: 'Total Inward Supply',  value: gstr3bSummary.inwardSupply,   color: COLORS.textSecondary },
-              { label: 'Output Tax (~18%)',    value: gstr3bSummary.outputTax,      color: (COLORS as any).negative || '#E53935' },
-              { label: 'Input Tax Credit',     value: gstr3bSummary.inputTaxCredit, color: COLORS.positive },
-              { label: 'Net GST Payable',      value: gstr3bSummary.netTaxPayable,  color: (COLORS as any).negative || '#E53935' },
+              { id: 'outward', label: t('screens.reportsGst.outwardSupply'), value: gstr3bSummary.outwardSupply,  color: COLORS.positive },
+              { id: 'inward', label: t('screens.reportsGst.inwardSupply'),  value: gstr3bSummary.inwardSupply,   color: COLORS.textSecondary },
+              { id: 'outputTax', label: t('screens.reportsGst.outputTax'),    value: gstr3bSummary.outputTax,      color: (COLORS as any).negative || '#E53935' },
+              { id: 'itc', label: t('screens.reportsGst.inputTaxCredit'),     value: gstr3bSummary.inputTaxCredit, color: COLORS.positive },
+              { id: 'netGst', label: t('screens.reportsGst.netGstPayable'),      value: gstr3bSummary.netTaxPayable,  color: (COLORS as any).negative || '#E53935' },
             ].map(row => (
-              <View key={row.label} style={s.gst3bRow}>
+              <View key={row.id} style={s.gst3bRow}>
                 <Text style={s.gst3bLabel}>{row.label}</Text>
                 <Text style={[s.gst3bValue, { color: row.color }]}>
                   ₹{row.value?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -495,10 +530,10 @@ export default function GSTScreen() {
           <View style={s.emptyBox}>
             <Ionicons name="document-outline" size={48} color={COLORS.textTertiary} />
             <Text style={[s.emptyTxt, { fontWeight: '700', color: COLORS.textPrimary, marginTop: 4 }]}>
-              No Vouchers
+              {t('screens.reportsGst.noVouchers')}
             </Text>
             <Text style={[s.emptyTxt, { fontSize: 12, marginTop: 2 }]}>
-              No transactions found for {activeTab}
+              {t('screens.reportsGst.noTransactionsFor', { tab: activeTab })}
             </Text>
           </View>
         )}
@@ -517,7 +552,7 @@ export default function GSTScreen() {
                   <Text style={s.monthHeaderTxt}>{month}</Text>
                   <View style={s.monthHeaderRight}>
                     <Text style={s.monthHeaderCount}>
-                      {monthInvoices.length} voucher{monthInvoices.length !== 1 ? 's' : ''}
+                      {t(monthInvoices.length !== 1 ? 'screens.reportsGst.vouchersCount' : 'screens.reportsGst.voucherCount', { count: monthInvoices.length })}
                     </Text>
                     <Ionicons
                       name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
@@ -539,9 +574,9 @@ export default function GSTScreen() {
       {selected.length > 0 && (
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
-            <Text style={s.shareCount}>{selected.length} selected</Text>
+            <Text style={s.shareCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={() => setSelected([])} hitSlop={{top:8,bottom:8,left:8,right:8}} activeOpacity={0.7}>
-              <Text style={s.shareCancelTxt}>Cancel</Text>
+              <Text style={s.shareCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -554,7 +589,7 @@ export default function GSTScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareActionTxt}>{isSharing ? t('screens.reportsGst.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

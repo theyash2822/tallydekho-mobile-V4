@@ -138,11 +138,9 @@ export default function StockSettingsScreen() {
   const [tallyBatchStats, setTallyBatchStats] = useState<{ batch_enabled_count: number; expiry_enabled_count: number; total_stock_items: number } | null>(null);
 
   // ── Load settings on mount
-  const loadSettings = useCallback(async () => {
-    if (!companyGuid) { setLoading(false); return; }
-    setDrafts({}); // clear any stale drafts on reload
-    try {
-      const res = await getInventorySettings(companyGuid);
+  const fetchSettings = useCallback(() => {
+    if (!companyGuid) return;
+    getInventorySettings(companyGuid).then((res) => {
       if (res?.success && res.data) {
         const { settings: srv, available_uoms, warehouses: wh, tally_derived } = res.data;
         if (tally_derived?.batch_stats) setTallyBatchStats(tally_derived.batch_stats);
@@ -171,15 +169,28 @@ export default function StockSettingsScreen() {
           }));
         }
       }
-    } catch (e) {
+    }).catch((e) => {
       console.warn('[StockSettings] load failed:', e);
       setLoadError(true);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   }, [companyGuid]);
 
-  useEffect(() => { loadSettings(); }, [loadSettings]);
+  const loadSettings = useCallback(() => {
+    if (!companyGuid) { setLoading(false); return; }
+    setDrafts({}); // clear any stale drafts on reload
+    fetchSettings();
+  }, [companyGuid, fetchSettings]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== companyGuid) {
+    setLoadDeps([companyGuid]);
+    if (!companyGuid) setLoading(false);
+    else setDrafts({});
+  }
+
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
   // ── Setters
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
@@ -257,9 +268,9 @@ export default function StockSettingsScreen() {
       await saveInventorySettings(companyGuid, finalSettings);
       setDrafts({});
       setIsDirty(false);
-      Toast.show({ type: 'success', text1: 'Settings saved successfully' });
+      Toast.show({ type: 'success', text1: t('screens.stocksSettings.savedSuccess') });
     } catch {
-      Toast.show({ type: 'error', text1: 'Failed to save settings' });
+      Toast.show({ type: 'error', text1: t('screens.stocksSettings.saveFailed') });
     } finally {
       setSaving(false);
     }
@@ -287,7 +298,7 @@ export default function StockSettingsScreen() {
     onToggle: (ch: keyof AlertChannels) => void,
   ) => (
     <View style={s.chipRow}>
-      {([['inApp','notifications-outline','In-App'], ['email','mail-outline','Email'], ['whatsapp','logo-whatsapp','WA']] as [keyof AlertChannels, string, string][]).map(([k, icon, label]) => (
+      {([['inApp','notifications-outline',t('screens.stocksSettings.chipInApp')], ['email','mail-outline',t('profile.email')], ['whatsapp','logo-whatsapp','WA']] as [keyof AlertChannels, string, string][]).map(([k, icon, label]) => (
         <TouchableOpacity
           key={k}
           style={[s.chip, channels[k] && s.chipActive]}
@@ -314,7 +325,7 @@ export default function StockSettingsScreen() {
         </View>
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color={AMBER} />
-          <Text style={s.loadingText}>Loading settings...</Text>
+          <Text style={s.loadingText}>{t('screens.stocksSettings.loadingSettings')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -324,8 +335,8 @@ export default function StockSettingsScreen() {
 
   // ── Label helpers
   const productDisplayLabel: Record<string, string> = {
-    auto: 'Auto Detect (Recommended)', name: 'Stock Name',
-    alias: 'Alias', part_number: 'Part Number', description: 'Description',
+    auto: t('screens.stocksSettings.autoDetectRecommended'), name: t('screens.stocksSettings.stockName'),
+    alias: t('screens.stocksSettings.alias'), part_number: t('screens.stocksSettings.partNumber'), description: t('pdf.description'),
   };
 
   return (
@@ -343,9 +354,9 @@ export default function StockSettingsScreen() {
       {loadError && (
         <View style={s.errorBanner}>
           <Ionicons name="alert-circle-outline" size={16} color="#B91C1C" />
-          <Text style={s.errorBannerText}>Failed to load settings. Showing defaults — save only if correct.</Text>
+          <Text style={s.errorBannerText}>{t('screens.stocksSettings.loadFailedBanner')}</Text>
           <TouchableOpacity onPress={() => { setLoadError(false); setLoading(true); loadSettings(); }} activeOpacity={0.7}>
-            <Text style={s.errorBannerRetry}>Retry</Text>
+            <Text style={s.errorBannerRetry}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -367,7 +378,7 @@ export default function StockSettingsScreen() {
             <View style={s.sectionIconWrap}>
               <Ionicons name="settings-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle}>General</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksSettings.general')}</Text>
             <Ionicons name={openSections.general ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
@@ -381,22 +392,22 @@ export default function StockSettingsScreen() {
                 activeOpacity={0.7}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Product Display Name</Text>
-                  <Text style={s.fieldSub}>Controls how products appear in TallyDekho</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.productDisplayName')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.productDisplaySub')}</Text>
                 </View>
                 <View style={s.dropdownTrigger}>
-                  <Text style={s.dropdownValue}>{productDisplayLabel[s_obj.product_display_field] || 'Auto Detect'}</Text>
+                  <Text style={s.dropdownValue}>{productDisplayLabel[s_obj.product_display_field] || t('screens.stocksSettings.autoDetect')}</Text>
                   <Ionicons name={productDispOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
                 </View>
               </TouchableOpacity>
               {productDispOpen && (
                 <View style={s.radioGroup}>
                   {([
-                    ['auto',        'Auto Detect (Recommended)', 'Picks the most readable field automatically'],
-                    ['name',        'Stock Name',                undefined],
-                    ['alias',       'Alias',                     undefined],
-                    ['part_number', 'Part Number',               undefined],
-                    ['description', 'Description',               undefined],
+                    ['auto',        t('screens.stocksSettings.autoDetectRecommended'), t('screens.stocksSettings.autoDetectSub')],
+                    ['name',        t('screens.stocksSettings.stockName'),                undefined],
+                    ['alias',       t('screens.stocksSettings.alias'),                     undefined],
+                    ['part_number', t('screens.stocksSettings.partNumber'),               undefined],
+                    ['description', t('pdf.description'),               undefined],
                   ] as [string, string, string | undefined][]).map(([val, label, sub]) => (
                     <RadioRow
                       key={val}
@@ -418,8 +429,8 @@ export default function StockSettingsScreen() {
                 activeOpacity={0.7}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Default Unit</Text>
-                  <Text style={s.fieldSub}>App/web only — used when an item or voucher line has no unit from Tally</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.defaultUnit')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.defaultUnitSub')}</Text>
                 </View>
                 <View style={s.dropdownTrigger}>
                   <Text style={s.dropdownValue}>{s_obj.default_unit_for_new_items || 'Nos'}</Text>
@@ -450,8 +461,8 @@ export default function StockSettingsScreen() {
               {/* Purchase Buffer Days */}
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Purchase Buffer Days</Text>
-                  <Text style={s.fieldSub}>App-only — added into Reorder Queue suggest qty (not written to Tally)</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.purchaseBufferDays')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.purchaseBufferSub')}</Text>
                 </View>
                 <View style={s.inputWithUnit}>
                   <TextInput
@@ -461,7 +472,7 @@ export default function StockSettingsScreen() {
                     keyboardType="numeric"
                     maxLength={4}
                   />
-                  <Text style={s.unitLabel}>Days</Text>
+                  <Text style={s.unitLabel}>{t('screens.stocksSettings.days')}</Text>
                 </View>
               </View>
 
@@ -486,8 +497,8 @@ export default function StockSettingsScreen() {
               {warehouses.length === 0 && (
                 <View style={s.emptyWrap}>
                   <Ionicons name="business-outline" size={28} color={COLORS.textTertiary} />
-                  <Text style={s.emptyText}>No warehouses synced yet</Text>
-                  <Text style={s.emptySub}>Sync from Tally to see your godowns here</Text>
+                  <Text style={s.emptyText}>{t('screens.stocksSettings.noWarehouses')}</Text>
+                  <Text style={s.emptySub}>{t('screens.stocksSettings.noWarehousesSub')}</Text>
                 </View>
               )}
               {warehouses.map((wh, idx) => (
@@ -502,7 +513,7 @@ export default function StockSettingsScreen() {
                     <View style={s.whInfo}>
                       <Text style={s.whName}>{wh.name}</Text>
                       {!!wh.address && <Text style={s.whLoc}>{wh.address}</Text>}
-                      {!wh.address && !!wh.parent && <Text style={s.whLoc}>Under: {wh.parent}</Text>}
+                      {!wh.address && !!wh.parent && <Text style={s.whLoc}>{t('screens.stocksSettings.under', { parent: wh.parent })}</Text>}
                     </View>
                     <Ionicons
                       name={expandedWh === wh.id ? 'chevron-up' : 'chevron-forward'}
@@ -516,18 +527,18 @@ export default function StockSettingsScreen() {
                     <View style={s.whFields}>
                       {/* Warehouse Code → Tally Godown Alias (append-only) */}
                       <View style={s.whFieldColRow}>
-                        <Text style={s.whFieldLabel}>Warehouse Code</Text>
+                        <Text style={s.whFieldLabel}>{t('screens.stocksSettings.warehouseCode')}</Text>
                         <TextInput
                           style={[s.whInput, { maxWidth: undefined, width: '100%', textAlign: 'left', marginTop: 6 }]}
                           value={s_obj.warehouse_code_map[wh.id] || ''}
                           onChangeText={v => updateWhCode(wh.id, v)}
-                          placeholder="e.g. JPR-MAIN"
+                          placeholder={t('screens.stocksSettings.warehouseCodePlaceholder')}
                           placeholderTextColor={COLORS.textTertiary}
                           autoCapitalize="characters"
                           maxLength={20}
                         />
                         <Text style={[s.fieldSub, { marginTop: 6 }]}>
-                          Saved as Tally Godown Alias. Existing aliases are kept — we only add this code.
+                          {t('screens.stocksSettings.warehouseCodeSub')}
                         </Text>
                       </View>
                     </View>
@@ -546,7 +557,7 @@ export default function StockSettingsScreen() {
             <View style={s.sectionIconWrap}>
               <Ionicons name="cube-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle}>Items</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksSettings.items')}</Text>
             <Ionicons name={openSections.items ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
@@ -556,11 +567,11 @@ export default function StockSettingsScreen() {
               {/* Batch / Lot Tracking — UX gate; sync default from Tally */}
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
-                  <Text style={s.fieldLabel}>Batch / Lot Tracking</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.batchTracking')}</Text>
                   <Text style={s.fieldSub}>
-                    Shows batch fields in the app. Enable the same in Tally for books to match.
+                    {t('screens.stocksSettings.batchTrackingSub')}
                     {tallyBatchStats
-                      ? ` Tally: ${tallyBatchStats.batch_enabled_count}/${tallyBatchStats.total_stock_items} items.`
+                      ? t('screens.stocksSettings.tallyItemsSuffix', { count: tallyBatchStats.batch_enabled_count, total: tallyBatchStats.total_stock_items })
                       : ''}
                   </Text>
                 </View>
@@ -572,7 +583,7 @@ export default function StockSettingsScreen() {
               {s_obj.batch_tracking_app_enabled && (
                 <View style={s.tallyPendingWrap}>
                   <Ionicons name="information-circle-outline" size={12} color={AMBER} />
-                  <Text style={s.tallyPendingText}>App preference. We don’t change Tally company features from here.</Text>
+                  <Text style={s.tallyPendingText}>{t('screens.stocksSettings.batchAppPref')}</Text>
                 </View>
               )}
 
@@ -581,11 +592,11 @@ export default function StockSettingsScreen() {
               {/* Expiry-Date Tracking */}
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
-                  <Text style={s.fieldLabel}>Expiry-Date Tracking</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.expiryTracking')}</Text>
                   <Text style={s.fieldSub}>
-                    Shows expiry fields when batch is used.
+                    {t('screens.stocksSettings.expiryTrackingSub')}
                     {tallyBatchStats
-                      ? ` Tally: ${tallyBatchStats.expiry_enabled_count}/${tallyBatchStats.total_stock_items} items.`
+                      ? t('screens.stocksSettings.tallyItemsSuffix', { count: tallyBatchStats.expiry_enabled_count, total: tallyBatchStats.total_stock_items })
                       : ''}
                   </Text>
                 </View>
@@ -597,7 +608,7 @@ export default function StockSettingsScreen() {
               {s_obj.expiry_tracking_app_enabled && (
                 <View style={s.tallyPendingWrap}>
                   <Ionicons name="information-circle-outline" size={12} color={AMBER} />
-                  <Text style={s.tallyPendingText}>App preference. Enable expiry on stock items in Tally Prime for existing items.</Text>
+                  <Text style={s.tallyPendingText}>{t('screens.stocksSettings.expiryAppPref')}</Text>
                 </View>
               )}
 
@@ -606,8 +617,8 @@ export default function StockSettingsScreen() {
               {/* Allow Negative Stock */}
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
-                  <Text style={s.fieldLabel}>Allow Negative Stock</Text>
-                  <Text style={s.fieldSub}>When off, the app warns before an outbound that would go below zero (no hard block)</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.allowNegative')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.allowNegativeSub')}</Text>
                 </View>
                 <BrandSwitch
                   value={s_obj.allow_negative_stock_app}
@@ -620,8 +631,8 @@ export default function StockSettingsScreen() {
               {/* HSN Code Verification */}
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
-                  <Text style={s.fieldLabel}>HSN Code Verification</Text>
-                  <Text style={s.fieldSub}>Flag items whose HSN is missing or not in our GST list. Soft warning only — never blocks save.</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.hsnVerification')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.hsnVerificationSub')}</Text>
                 </View>
                 <BrandSwitch
                   value={s_obj.hsn_verification_enabled !== false}
@@ -634,8 +645,8 @@ export default function StockSettingsScreen() {
               {/* Default Low Stock Level */}
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Default Low Stock Level</Text>
-                  <Text style={s.fieldSub}>Items with qty 1…this level count as Low Stock</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.defaultLowStock')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.defaultLowStockSub')}</Text>
                 </View>
                 <View style={s.inputWithUnit}>
                   <TextInput
@@ -645,7 +656,7 @@ export default function StockSettingsScreen() {
                     keyboardType="numeric"
                     maxLength={6}
                   />
-                  <Text style={s.unitLabel}>Units</Text>
+                  <Text style={s.unitLabel}>{t('screens.stocksSettings.units')}</Text>
                 </View>
               </View>
 
@@ -658,14 +669,14 @@ export default function StockSettingsScreen() {
                 activeOpacity={0.7}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Fast / Slow / Dead Moving</Text>
-                  <Text style={s.fieldSub}>Classification for stock reports (current FY)</Text>
+                  <Text style={s.fieldLabel}>{t('screens.stocksSettings.fastSlowDead')}</Text>
+                  <Text style={s.fieldSub}>{t('screens.stocksSettings.fastSlowDeadSub')}</Text>
                 </View>
                 <Ionicons name={fastSlowOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
               </TouchableOpacity>
               {fastSlowOpen && (
                 <View style={s.fastSlowWrap}>
-                  <Text style={s.fastSlowSectionLabel}>Fast Moving — Top %</Text>
+                  <Text style={s.fastSlowSectionLabel}>{t('screens.stocksSettings.fastMovingTop')}</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
@@ -674,10 +685,10 @@ export default function StockSettingsScreen() {
                       keyboardType="numeric"
                       maxLength={3}
                     />
-                    <Text style={s.unitLabel}>% of active items by outward qty</Text>
+                    <Text style={s.unitLabel}>{t('screens.stocksSettings.fastMovingUnit')}</Text>
                   </View>
 
-                  <Text style={s.fastSlowSectionLabel}>Slow Moving — No movement for</Text>
+                  <Text style={s.fastSlowSectionLabel}>{t('screens.stocksSettings.slowMoving')}</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
@@ -686,10 +697,10 @@ export default function StockSettingsScreen() {
                       keyboardType="numeric"
                       maxLength={4}
                     />
-                    <Text style={s.unitLabel}>Days</Text>
+                    <Text style={s.unitLabel}>{t('screens.stocksSettings.days')}</Text>
                   </View>
 
-                  <Text style={s.fastSlowSectionLabel}>Dead Stock — No movement for</Text>
+                  <Text style={s.fastSlowSectionLabel}>{t('screens.stocksSettings.deadStock')}</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
@@ -698,7 +709,7 @@ export default function StockSettingsScreen() {
                       keyboardType="numeric"
                       maxLength={4}
                     />
-                    <Text style={s.unitLabel}>Days</Text>
+                    <Text style={s.unitLabel}>{t('screens.stocksSettings.days')}</Text>
                   </View>
                 </View>
               )}
@@ -715,19 +726,19 @@ export default function StockSettingsScreen() {
             <View style={s.sectionIconWrap}>
               <Ionicons name="notifications-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle}>Alerts</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksSettings.alerts')}</Text>
             <Ionicons name={openSections.alerts ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
           {openSections.alerts && (
             <View style={s.sectionBody}>
               <Text style={s.alertHint}>
-                In-App shows in the notification inbox and Expo push. Email and WhatsApp use your profile email and mobile — delivery starts once those channels are configured.
+                {t('screens.stocksSettings.alertHint')}
               </Text>
 
               {/* Low Stock Alerts */}
               <View style={s.alertBlock}>
-                <Text style={s.alertLabel}>Low Stock Alerts</Text>
+                <Text style={s.alertLabel}>{t('screens.stocksSettings.lowStockAlerts')}</Text>
                 {renderChips(s_obj.low_stock_alerts, ch => updateAlertChannel('low_stock_alerts', ch))}
               </View>
 
@@ -735,7 +746,7 @@ export default function StockSettingsScreen() {
 
               {/* Negative Stock Alerts */}
               <View style={s.alertBlock}>
-                <Text style={s.alertLabel}>Negative Stock Alerts</Text>
+                <Text style={s.alertLabel}>{t('screens.stocksSettings.negativeStockAlerts')}</Text>
                 {renderChips(s_obj.negative_stock_alerts, ch => updateAlertChannel('negative_stock_alerts', ch))}
               </View>
 
@@ -743,13 +754,13 @@ export default function StockSettingsScreen() {
 
               {/* Expiry Alerts */}
               <View style={s.alertBlock}>
-                <Text style={s.alertLabel}>Expiry Alerts</Text>
+                <Text style={s.alertLabel}>{t('screens.stocksSettings.expiryAlerts')}</Text>
                 {renderChips(
                   { inApp: s_obj.expiry_alerts.inApp, email: s_obj.expiry_alerts.email, whatsapp: s_obj.expiry_alerts.whatsapp },
                   ch => updateExpiryAlert(ch),
                 )}
                 <View style={s.expiryDaysRow}>
-                  <Text style={s.expiryDaysLbl}>Warn</Text>
+                  <Text style={s.expiryDaysLbl}>{t('screens.stocksSettings.warn')}</Text>
                   <TextInput
                     style={s.expiryDaysInput}
                     value={drafts['expiry_days'] !== undefined ? drafts['expiry_days'] : String(s_obj.expiry_alerts.daysBefore ?? 30)}
@@ -765,7 +776,7 @@ export default function StockSettingsScreen() {
                     maxLength={3}
                     selectTextOnFocus
                   />
-                  <Text style={s.expiryDaysLbl}>days before expiry</Text>
+                  <Text style={s.expiryDaysLbl}>{t('screens.stocksSettings.daysBeforeExpiry')}</Text>
                 </View>
               </View>
 
@@ -773,7 +784,7 @@ export default function StockSettingsScreen() {
 
               {/* Fast/Slow Moving Alerts */}
               <View style={s.alertBlock}>
-                <Text style={s.alertLabel}>Fast / Slow Moving Alerts</Text>
+                <Text style={s.alertLabel}>{t('screens.stocksSettings.fastSlowAlerts')}</Text>
                 {renderChips(s_obj.fast_slow_moving_alerts, ch => updateAlertChannel('fast_slow_moving_alerts', ch))}
               </View>
 
@@ -795,7 +806,7 @@ export default function StockSettingsScreen() {
             activeOpacity={0.7}
             disabled={saving}
           >
-            <Text style={s.cancelBtnText}>Cancel</Text>
+            <Text style={s.cancelBtnText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.saveBtn, saving && { opacity: 0.6 }]}
@@ -805,7 +816,7 @@ export default function StockSettingsScreen() {
           >
             {saving
               ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={s.saveBtnText}>Save Settings</Text>
+              : <Text style={s.saveBtnText}>{t('screens.stocksSettings.saveSettings')}</Text>
             }
           </TouchableOpacity>
         </View>

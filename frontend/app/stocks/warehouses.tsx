@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 // ─── RING CHART (outside screen component) ───────────────────────────────────────
 
 function RingChart({ pct, label, size = 82 }: { pct: number; label: string; size?: number }) {
+  const { t } = useTranslation();
   const cx   = size / 2;
   const cy   = size / 2;
   const r    = (size - 16) / 2;
@@ -57,7 +58,7 @@ function RingChart({ pct, label, size = 82 }: { pct: number; label: string; size
         textAnchor="middle" fontSize="7"
         fill={COLORS.textTertiary}
       >
-        items
+        {t('screens.stocksWarehouses.ringItems')}
       </SvgText>
     </Svg>
   );
@@ -76,10 +77,17 @@ export default function WarehousesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [prevCompanyGuid, setPrevCompanyGuid] = useState<typeof companyGuid | null>(null);
+  if (prevCompanyGuid !== companyGuid) {
+    setPrevCompanyGuid(companyGuid);
+    if (companyGuid) {
+      setIsLoading(true);
+      setError(null);
+    }
+  }
+
   useEffect(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setError(null);
     getWarehouses(companyGuid)
       .then((res: any) => {
         const rows = res?.data ?? (Array.isArray(res) ? res : []);
@@ -97,10 +105,10 @@ export default function WarehousesScreen() {
       })
       .catch((err: any) => {
         console.error('[Warehouses]', err?.message);
-        setError(err?.message || 'Failed to load warehouses');
+        setError(err?.message || t('screens.stocksWarehouses.loadFailed'));
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, t]);
 
   const q = query.toLowerCase();
   const filtered = warehouses.filter(
@@ -137,9 +145,9 @@ export default function WarehousesScreen() {
       {/* Summary strip */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'Warehouses',      value: `${warehouses.length}`,  clr: COLORS.textPrimary },
-          { label: 'Avg Utilization', value: `${avgUtil}%`,           clr: utilColor          },
-          { label: 'Locations',       value: `${warehouses.length}`,  clr: COLORS.textPrimary },
+          { label: t('screens.stocksWarehouses.summaryWarehouses'),      value: `${warehouses.length}`,  clr: COLORS.textPrimary },
+          { label: t('screens.stocksWarehouses.summaryAvgUtilization'), value: `${avgUtil}%`,           clr: utilColor          },
+          { label: t('screens.stocksWarehouses.summaryLocations'),       value: `${warehouses.length}`,  clr: COLORS.textPrimary },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
             <Text style={[styles.summaryVal, { color: s.clr }]}>{s.value}</Text>
@@ -149,7 +157,7 @@ export default function WarehousesScreen() {
       </View>
 
       {/* Search */}
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search warehouses..." />
+      <SearchBar value={query} onChangeText={setQuery} placeholder={t('screens.stocksWarehouses.searchPlaceholder')} />
 
       <ScrollView
         style={styles.scroll}
@@ -171,11 +179,11 @@ export default function WarehousesScreen() {
         ) : filtered.length === 0 ? (
           <View style={styles.centerBox}>
             <Ionicons name="business-outline" size={48} color={COLORS.textTertiary} />
-            <Text style={styles.emptyTitle}>No warehouses found</Text>
+            <Text style={styles.emptyTitle}>{t('screens.stocksWarehouses.emptyTitle')}</Text>
             <Text style={styles.emptySubtitle}>
               {warehouses.length === 0
-                ? 'Sync your Tally data to see godowns here'
-                : 'No results match your search'}
+                ? t('screens.stocksWarehouses.emptySync')
+                : t('screens.stocksWarehouses.emptySearch')}
             </Text>
           </View>
         ) : (
@@ -226,7 +234,7 @@ export default function WarehousesScreen() {
               <View style={styles.cardFooter}>
                 <Ionicons name="cube-outline" size={11} color={COLORS.textTertiary} />
                 <Text style={styles.managerTxt}>
-                  {wh.skus} items · qty {Math.round(wh.total_qty).toLocaleString('en-IN')}
+                  {t('screens.stocksWarehouses.footerItemsQty', { skus: wh.skus, qty: Math.round(wh.total_qty).toLocaleString('en-IN') })}
                 </Text>
                 <View style={{ flex: 1 }} />
                 <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />

@@ -14,6 +14,7 @@ import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING, RADIUS } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { getInvoicePreview } from '../../services/api';
@@ -39,46 +40,70 @@ export default function VoucherPreviewScreen({
   fetcher = getInvoicePreview,
   renderFooter,
 }: VoucherPreviewScreenProps) {
+  const { t } = useTranslation();
   const { tdkRef } = useLocalSearchParams<{ tdkRef: string }>();
   const { company } = useAuth();
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
+  const [fetchLoading, setLoading] = useState(true);
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
   const [raw, setRaw] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setError] = useState<string | null>(null);
   const [isProvisional, setIsProvisional] = useState(false);
 
-  const fetchPreview = useCallback(async () => {
-    const ref = Array.isArray(tdkRef) ? tdkRef[0] : tdkRef;
-    if (!ref) {
-      setLoading(false);
-      setError('Missing document reference');
-      return;
-    }
-    if (!company?.guid) {
-      // Company still hydrating — keep spinner; effect re-runs when guid arrives.
-      return;
-    }
-    try {
+  const docRef = Array.isArray(tdkRef) ? tdkRef[0] : tdkRef;
+  const companyGuid = company?.guid;
+  const loading = docRef ? fetchLoading : false;
+  const error = docRef ? fetchError : t('screens.componentsDocumentVoucherPreviewScreen.missingReference');
+
+  const loadPreview = useCallback((ref: string, guid: string, isCancelled: () => boolean) => {
+    return new Promise<any>((resolve) => resolve(fetcher(ref, guid)))
+      .then((res: any) => {
+        if (isCancelled()) return;
+        if (res?.status && res?.data) {
+          setRaw(res.data);
+          setDoc(toVoucherDocument(res.data, documentType ? { documentType } : {}));
+          setIsProvisional(res.data.isProvisional ?? false);
+        } else {
+          setError(t('screens.componentsDocumentVoucherPreviewScreen.couldNotLoad', { title: title.toLowerCase() }));
+        }
+      })
+      .catch((e: any) => {
+        if (isCancelled()) return;
+        setError(e?.message || t('screens.componentsDocumentVoucherPreviewScreen.failedToLoad', { title: title.toLowerCase() }));
+      })
+      .finally(() => {
+        if (!isCancelled()) setLoading(false);
+      });
+  }, [fetcher, documentType, title, t]);
+
+  const fetchPreview = useCallback(() => {
+    // Company still hydrating — keep spinner; effect re-runs when guid arrives.
+    if (!docRef || !companyGuid) return;
+    setLoading(true);
+    setError(null);
+    loadPreview(String(docRef), companyGuid, () => false);
+  }, [docRef, companyGuid, loadPreview]);
+
+  const [prevLoadKey, setPrevLoadKey] = useState({ docRef, companyGuid, loadPreview });
+  if (
+    prevLoadKey.docRef !== docRef
+    || prevLoadKey.companyGuid !== companyGuid
+    || prevLoadKey.loadPreview !== loadPreview
+  ) {
+    setPrevLoadKey({ docRef, companyGuid, loadPreview });
+    if (docRef && companyGuid) {
       setLoading(true);
       setError(null);
-      const res: any = await fetcher(String(ref), company.guid);
-      if (res?.status && res?.data) {
-        setRaw(res.data);
-        setDoc(toVoucherDocument(res.data, documentType ? { documentType } : {}));
-        setIsProvisional(res.data.isProvisional ?? false);
-      } else {
-        setError(`Could not load ${title.toLowerCase()}.`);
-      }
-    } catch (e: any) {
-      setError(e?.message || `Failed to load ${title.toLowerCase()}.`);
-    } finally {
-      setLoading(false);
     }
-  }, [tdkRef, company?.guid, fetcher, documentType, title]);
+  }
 
-  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+  useEffect(() => {
+    if (!docRef || !companyGuid) return;
+    let cancelled = false;
+    loadPreview(String(docRef), companyGuid, () => cancelled);
+    return () => { cancelled = true; };
+  }, [docRef, companyGuid, loadPreview]);
 
   // Refresh once Tally assigns the real voucher number.
   useEffect(() => {
@@ -112,14 +137,14 @@ export default function VoucherPreviewScreen({
           {loading ? (
             <>
               <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-              <Text style={s.loadingTxt}>Loading {title.toLowerCase()}…</Text>
+              <Text style={s.loadingTxt}>{t('screens.componentsDocumentVoucherPreviewScreen.loadingTitle', { title: title.toLowerCase() })}</Text>
             </>
           ) : (
             <>
               <Ionicons name="warning-outline" size={40} color={COLORS.warning} />
-              <Text style={s.errorTxt}>{error || 'Document not found.'}</Text>
+              <Text style={s.errorTxt}>{error || t('screens.componentsDocumentVoucherPreviewScreen.documentNotFound')}</Text>
               <TouchableOpacity style={s.retryBtn} onPress={fetchPreview} activeOpacity={0.8}>
-                <Text style={s.retryTxt}>Retry</Text>
+                <Text style={s.retryTxt}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </>
           )}

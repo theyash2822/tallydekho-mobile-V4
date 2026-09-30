@@ -14,18 +14,21 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import SearchBar from '../../src/components/SearchBar';
 import { safePush } from '../../src/utils/safeNavigation';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 type Filter = 'all' | 'missing' | 'bad_format' | 'unknown' | 'ok';
 
-const STATUS_LABEL: Record<string, string> = {
-  ok: 'OK',
-  missing: 'Missing',
-  bad_format: 'Bad format',
-  unknown: 'Not in list',
+const STATUS_LABEL_KEY: Record<string, string> = {
+  ok: 'common.ok',
+  missing: 'screens.stocksHsnValidation.missing',
+  bad_format: 'screens.stocksHsnValidation.badFormat',
+  unknown: 'screens.stocksHsnValidation.notInList',
 };
 
 export default function HsnValidationScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company } = useAuth();
   const companyGuid = company?.guid;
 
@@ -42,24 +45,40 @@ export default function HsnValidationScreen() {
   const [hsnHint, setHsnHint] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const fetchValidation = useCallback(() => {
+    if (!companyGuid) return;
+    getHsnValidation(companyGuid)
+      .then((res: any) => {
+        const data = res?.data;
+        setEnabled(data?.enabled !== false);
+        setItems(data?.items || []);
+        setCounts(data?.counts || { missing: 0, bad_format: 0, unknown: 0, ok: 0, total: 0 });
+      })
+      .catch((e: any) => {
+        setError(e?.message || i18n.t('screens.stocksHsnValidation.loadFailed'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [companyGuid]);
+
+  const load = () => {
     if (!companyGuid) return;
     setLoading(true);
     setError(null);
-    try {
-      const res: any = await getHsnValidation(companyGuid);
-      const data = res?.data;
-      setEnabled(data?.enabled !== false);
-      setItems(data?.items || []);
-      setCounts(data?.counts || { missing: 0, bad_format: 0, unknown: 0, ok: 0, total: 0 });
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load HSN validation');
-    } finally {
-      setLoading(false);
-    }
-  }, [companyGuid]);
+    fetchValidation();
+  };
 
-  useEffect(() => { load(); }, [load]);
+  const [loadedFor, setLoadedFor] = useState<{ guid: string | undefined } | null>(null);
+  if (!loadedFor || loadedFor.guid !== companyGuid) {
+    setLoadedFor({ guid: companyGuid });
+    if (companyGuid) {
+      setLoading(true);
+      setError(null);
+    }
+  }
+
+  useEffect(() => { fetchValidation(); }, [fetchValidation]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -76,10 +95,10 @@ export default function HsnValidationScreen() {
   }, [items, filter, query]);
 
   const chips: { id: Filter; label: string; count: number }[] = [
-    { id: 'all', label: 'All', count: counts.total },
-    { id: 'missing', label: 'Missing', count: counts.missing },
-    { id: 'unknown', label: 'Not in list', count: counts.unknown },
-    { id: 'bad_format', label: 'Format', count: counts.bad_format },
+    { id: 'all', label: t('common.all'), count: counts.total },
+    { id: 'missing', label: t('screens.stocksHsnValidation.missing'), count: counts.missing },
+    { id: 'unknown', label: t('screens.stocksHsnValidation.notInList'), count: counts.unknown },
+    { id: 'bad_format', label: t('screens.stocksHsnValidation.format'), count: counts.bad_format },
   ];
 
   const openEnterHsn = (it: any) => {
@@ -92,15 +111,15 @@ export default function HsnValidationScreen() {
     if (!companyGuid || !enterItem) return;
     const code = hsnDraft.trim();
     if (!code) {
-      Toast.show({ type: 'error', text1: 'Enter an HSN code' });
+      Toast.show({ type: 'error', text1: t('screens.stocksHsnValidation.enterCode') });
       return;
     }
     setSaving(true);
     try {
       const check: any = await checkHsnCode(code);
       if (check?.data?.valid === false) {
-        setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
-        Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+        setHsnHint(t('screens.stocksHsnValidation.invalidHint'));
+        Toast.show({ type: 'error', text1: t('screens.stocksHsnValidation.invalid'), text2: t('screens.stocksHsnValidation.notAccepted') });
         return;
       }
       const res: any = await alterStockItem({
@@ -122,13 +141,13 @@ export default function HsnValidationScreen() {
       setEnterItem(null);
       Toast.show({
         type: 'success',
-        text1: res?.queued ? 'HSN queued' : 'HSN saved',
+        text1: res?.queued ? t('screens.stocksHsnValidation.queued') : t('screens.stocksHsnValidation.saved'),
         text2: res?.queued
-          ? 'Will update in Tally when desktop connects.'
-          : `${enterItem.displayName || enterItem.name} updated`,
+          ? t('screens.stocksHsnValidation.queuedSub')
+          : t('screens.stocksHsnValidation.updated', { name: enterItem.displayName || enterItem.name }),
       });
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Save failed', text2: e?.message || 'Try again' });
+      Toast.show({ type: 'error', text1: t('screens.stocksHsnValidation.saveFailed'), text2: e?.message || t('screens.stocksHsnValidation.tryAgain') });
     } finally {
       setSaving(false);
     }
@@ -140,7 +159,7 @@ export default function HsnValidationScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>HSN Validation</Text>
+        <Text style={s.headerTitle}>{t('screens.stocksHsnValidation.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -149,14 +168,14 @@ export default function HsnValidationScreen() {
       {!enabled ? (
         <View style={s.empty}>
           <Ionicons name="shield-checkmark-outline" size={40} color={COLORS.textTertiary} />
-          <Text style={s.emptyTitle}>Verification is off</Text>
-          <Text style={s.emptySub}>Turn on HSN Code Verification in Stock Settings to see items that need attention.</Text>
+          <Text style={s.emptyTitle}>{t('screens.stocksHsnValidation.offTitle')}</Text>
+          <Text style={s.emptySub}>{t('screens.stocksHsnValidation.offSub')}</Text>
           <TouchableOpacity
             style={s.cta}
             onPress={() => safePush(router, '/stocks/settings' as any)}
             activeOpacity={0.8}
           >
-            <Text style={s.ctaTxt}>Open Settings</Text>
+            <Text style={s.ctaTxt}>{t('screens.stocksHsnValidation.openSettings')}</Text>
           </TouchableOpacity>
         </View>
       ) : loading ? (
@@ -187,15 +206,15 @@ export default function HsnValidationScreen() {
           </View>
 
           <View style={{ paddingHorizontal: SPACING.md, marginBottom: 8 }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder="Search item or HSN" />
+            <SearchBar value={query} onChangeText={setQuery} placeholder={t('screens.stocksHsnValidation.searchPh')} />
           </View>
 
           <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: 40 }}>
             {filtered.length === 0 ? (
               <View style={s.empty}>
                 <Ionicons name="checkmark-circle-outline" size={40} color={COLORS.positive} />
-                <Text style={s.emptyTitle}>No items</Text>
-                <Text style={s.emptySub}>No items match this filter.</Text>
+                <Text style={s.emptyTitle}>{t('screens.stocksHsnValidation.noItems')}</Text>
+                <Text style={s.emptySub}>{t('screens.stocksHsnValidation.noMatch')}</Text>
               </View>
             ) : (
               filtered.map((it) => (
@@ -207,7 +226,7 @@ export default function HsnValidationScreen() {
                   >
                     <Text style={s.rowName} numberOfLines={1}>{it.displayName || it.name}</Text>
                     <Text style={s.rowMeta} numberOfLines={1}>
-                      {it.hsn ? `HSN ${it.hsn}` : 'No HSN'}
+                      {it.hsn ? t('screens.stocksHsnValidation.hsnLabel', { hsn: it.hsn }) : t('screens.stocksHsnValidation.noHsn')}
                       {it.group ? ` · ${it.group}` : ''}
                     </Text>
                     {!!it.message && <Text style={s.rowMsg}>{it.message}</Text>}
@@ -215,12 +234,12 @@ export default function HsnValidationScreen() {
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
                     <View style={[s.badge, it.status === 'ok' && s.badgeOk]}>
                       <Text style={[s.badgeTxt, it.status === 'ok' && s.badgeTxtOk]}>
-                        {STATUS_LABEL[it.status] || it.status}
+                        {STATUS_LABEL_KEY[it.status] ? t(STATUS_LABEL_KEY[it.status]) : it.status}
                       </Text>
                     </View>
                     {it.status !== 'ok' && (
                       <TouchableOpacity style={s.enterBtn} onPress={() => openEnterHsn(it)} activeOpacity={0.8}>
-                        <Text style={s.enterBtnTxt}>{it.hsn ? 'Edit HSN' : 'Enter HSN'}</Text>
+                        <Text style={s.enterBtnTxt}>{it.hsn ? t('screens.stocksHsnValidation.editHsn') : t('screens.stocksHsnValidation.enterHsn')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -236,13 +255,13 @@ export default function HsnValidationScreen() {
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEnterItem(null)} />
           <View style={s.modalSheet}>
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>Enter HSN</Text>
+            <Text style={s.modalTitle}>{t('screens.stocksHsnValidation.enterHsn')}</Text>
             <Text style={s.modalSub} numberOfLines={2}>{enterItem?.displayName || enterItem?.name}</Text>
             <TextInput
               style={s.modalInput}
               value={hsnDraft}
               onChangeText={(v) => { setHsnDraft(v); setHsnHint(null); }}
-              placeholder="e.g. 38089190"
+              placeholder={t('screens.stocksHsnValidation.codePh')}
               placeholderTextColor={COLORS.textTertiary}
               keyboardType="number-pad"
               maxLength={8}
@@ -253,7 +272,7 @@ export default function HsnValidationScreen() {
                 try {
                   const res: any = await checkHsnCode(code);
                   if (res?.data?.valid === false) {
-                    setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+                    setHsnHint(t('screens.stocksHsnValidation.invalidHint'));
                   } else setHsnHint(null);
                 } catch { setHsnHint(null); }
               }}
@@ -267,7 +286,7 @@ export default function HsnValidationScreen() {
             >
               {saving
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.modalSaveTxt}>Save to Tally</Text>}
+                : <Text style={s.modalSaveTxt}>{t('screens.stocksHsnValidation.saveToTally')}</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

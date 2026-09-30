@@ -1,15 +1,16 @@
 /**
  * barcodePicker.ts
  *
- * Module-level callback store that lets product-scanner.tsx pass its result
- * back to create-invoice.tsx without React navigation params or context.
+ * Module-level callback store that lets barcode-scanner.tsx (mode=pick) pass its
+ * result back to the create-invoice / create-order screens without React
+ * navigation params or context.
  *
  * Usage:
  *   // create-invoice — before navigating to scanner
  *   barcodePicker.set((result) => { ...fill item... });
- *   router.push('/sales/product-scanner');
+ *   router.push('/stocks/barcode-scanner?mode=pick');
  *
- *   // product-scanner — after successful lookup
+ *   // barcode-scanner — after successful lookup
  *   barcodePicker.resolve({ productName, unit });
  *   router.back();
  */

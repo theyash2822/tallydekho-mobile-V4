@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
@@ -17,6 +18,7 @@ import {
 
 export default function ApprovalsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { workspaceId, workspace, isOwnerOrAdmin, refreshContext } = useWorkspace();
   const [loading, setLoading] = useState(true);
   const [hardSync, setHardSync] = useState<any[]>([]);
@@ -50,8 +52,8 @@ export default function ApprovalsScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-      const t = setInterval(load, 8000);
-      return () => clearInterval(t);
+      const timer = setInterval(load, 8000);
+      return () => clearInterval(timer);
     }, [load])
   );
 
@@ -62,10 +64,10 @@ export default function ApprovalsScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Approvals</Text>
+          <Text style={s.headerTitle}>{t('screens.settingsApprovals.title')}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <Text style={s.empty}>Only Owner or Admin can approve Hard Sync and Restore.</Text>
+        <Text style={s.empty}>{t('screens.settingsApprovals.ownerOnly')}</Text>
       </SafeAreaView>
     );
   }
@@ -76,7 +78,7 @@ export default function ApprovalsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Approvals</Text>
+        <Text style={s.headerTitle}>{t('screens.settingsApprovals.title')}</Text>
         <TouchableOpacity onPress={load} style={s.backBtn}>
           <Ionicons name="refresh" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
@@ -86,15 +88,15 @@ export default function ApprovalsScreen() {
         <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.brandPrimary} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: SPACING.md }}>
-          <Text style={s.wsLabel}>{workspace?.name || 'Workspace'}</Text>
+          <Text style={s.wsLabel}>{workspace?.name || t('screens.settingsApprovals.workspace')}</Text>
 
-          <Text style={s.section}>Hard Sync requests</Text>
+          <Text style={s.section}>{t('screens.settingsApprovals.hardSyncRequests')}</Text>
           {hardSync.length === 0 ? (
-            <Text style={s.empty}>No pending Hard Sync requests.</Text>
+            <Text style={s.empty}>{t('screens.settingsApprovals.noHardSync')}</Text>
           ) : hardSync.map((r) => (
             <View key={r.id} style={s.card}>
               <Text style={s.cardTitle}>{r.operation || 'REBUILD'}</Text>
-              <Text style={s.cardMeta}>Device: {r.device_id || r.deviceId || '—'}</Text>
+              <Text style={s.cardMeta}>{t('screens.settingsApprovals.device', { id: r.device_id || r.deviceId || '—' })}</Text>
               <View style={s.row}>
                 <TouchableOpacity
                   style={[s.btn, s.reject]}
@@ -106,13 +108,13 @@ export default function ApprovalsScreen() {
                       await load();
                       await refreshContext();
                     } catch (e: any) {
-                      Alert.alert('Reject failed', e?.message || 'Try again');
+                      Alert.alert(t('screens.settingsApprovals.rejectFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
                     } finally {
                       setBusy(null);
                     }
                   }}
                 >
-                  <Text style={s.rejectTxt}>Reject</Text>
+                  <Text style={s.rejectTxt}>{t('screens.settingsApprovals.reject')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.btn, s.approve]}
@@ -121,14 +123,14 @@ export default function ApprovalsScreen() {
                     setBusy(r.id);
                     try {
                       await approveHardSyncRequest(r.id);
-                      Alert.alert('Approved', 'Hard Sync request approved.');
+                      Alert.alert(t('screens.settingsApprovals.approved'), t('screens.settingsApprovals.hardSyncApproved'));
                       await load();
                       await refreshContext();
                     } catch (e: any) {
                       const already = e?.code === 'HARD_SYNC_ALREADY_APPROVED' || /already approved/i.test(e?.message || '');
                       Alert.alert(
-                        already ? 'Already approved' : 'Approve failed',
-                        already ? 'This Hard Sync request has already been approved.' : (e?.message || e?.code || 'Try again')
+                        already ? t('screens.settingsApprovals.alreadyApproved') : t('screens.settingsApprovals.approveFailed'),
+                        already ? t('screens.settingsApprovals.alreadyApprovedMsg') : (e?.message || e?.code || t('screens.settingsApprovals.tryAgain'))
                       );
                       if (already) await load();
                     } finally {
@@ -136,34 +138,34 @@ export default function ApprovalsScreen() {
                     }
                   }}
                 >
-                  <Text style={s.approveTxt}>Approve</Text>
+                  <Text style={s.approveTxt}>{t('screens.settingsApprovals.approve')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ))}
 
-          <Text style={s.section}>Restore / Replace Computer</Text>
+          <Text style={s.section}>{t('screens.settingsApprovals.restoreSection')}</Text>
           {restoreRequests.length === 0 ? (
-            <Text style={s.empty}>No pending restore requests. Enter code from new Desktop below when one arrives.</Text>
+            <Text style={s.empty}>{t('screens.settingsApprovals.noRestore')}</Text>
           ) : (
             restoreRequests.map((r) => (
               <View key={r.id} style={s.card}>
-                <Text style={s.cardTitle}>Restore request</Text>
-                <Text style={s.cardMeta}>Hint: …{r.request_code_hint || r.codeHint || ''}</Text>
+                <Text style={s.cardTitle}>{t('screens.settingsApprovals.restoreRequest')}</Text>
+                <Text style={s.cardMeta}>{t('screens.settingsApprovals.hint', { hint: r.request_code_hint || r.codeHint || '' })}</Text>
               </View>
             ))
           )}
 
-          <Text style={s.label}>Restore code</Text>
+          <Text style={s.label}>{t('screens.settingsApprovals.restoreCode')}</Text>
           <TextInput
             style={s.input}
             value={restoreCode}
             onChangeText={setRestoreCode}
             autoCapitalize="characters"
-            placeholder="CODE from Desktop"
+            placeholder={t('screens.settingsApprovals.codePlaceholder')}
             placeholderTextColor={COLORS.textTertiary}
           />
-          <Text style={s.label}>Backup</Text>
+          <Text style={s.label}>{t('screens.settingsApprovals.backup')}</Text>
           {backups.map((b) => (
             <TouchableOpacity
               key={b.id}
@@ -189,13 +191,13 @@ export default function ApprovalsScreen() {
                   await rejectRestoreSession(sid);
                   await load();
                 } catch (e: any) {
-                  Alert.alert('Reject failed', e?.message || 'Try again');
+                  Alert.alert(t('screens.settingsApprovals.rejectFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
                 } finally {
                   setBusy(null);
                 }
               }}
             >
-              <Text style={s.rejectTxt}>Reject</Text>
+              <Text style={s.rejectTxt}>{t('screens.settingsApprovals.reject')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.btn, s.approve, { flex: 1 }]}
@@ -207,18 +209,18 @@ export default function ApprovalsScreen() {
                     code: restoreCode.trim().toUpperCase(),
                     backupId: selectedBackupId!,
                   });
-                  Alert.alert('Approved', 'Restore session approved. Desktop can continue.');
+                  Alert.alert(t('screens.settingsApprovals.approved'), t('screens.settingsApprovals.restoreApproved'));
                   setRestoreCode('');
                   await load();
                   await refreshContext();
                 } catch (e: any) {
-                  Alert.alert('Approve failed', e?.message || 'Try again');
+                  Alert.alert(t('screens.settingsApprovals.approveFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
                 } finally {
                   setBusy(null);
                 }
               }}
             >
-              <Text style={s.approveTxt}>Approve Restore</Text>
+              <Text style={s.approveTxt}>{t('screens.settingsApprovals.approveRestore')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

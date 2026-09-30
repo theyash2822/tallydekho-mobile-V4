@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -23,12 +26,22 @@ const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
   Cancelled: { bg: '#F3F4F6', text: '#6B7280', icon: 'close-circle'     },
 };
 
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  Generated: 'screens.reportsEinvoiceList.statusGenerated',
+  Pending:   'screens.reportsEinvoiceList.statusPending',
+  Error:     'screens.reportsEinvoiceList.statusError',
+  Cancelled: 'screens.reportsEinvoiceList.statusCancelled',
+};
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EInvoiceListScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [invoiceData,    setInvoiceData]    = useState<any[]>([]);
   const [loading,        setLoading]        = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
@@ -40,29 +53,44 @@ export default function EInvoiceListScreen() {
   const [isSharing,      setIsSharing]      = useState(false);
 
   // Always sync dates when selectedFY changes (user may switch FY from home screen)
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState<unknown[] | null>(null);
+  if (!prevFyRange || prevFyRange[0] !== selectedFY?.startDate || prevFyRange[1] !== selectedFY?.endDate) {
+    setPrevFyRange([selectedFY?.startDate, selectedFY?.endDate]);
     if (selectedFY?.startDate) {
       setFromDate(selectedFY.startDate);
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
+  }
   const selectMode = selected.length > 0;
+
+  const companyGuid = company?.guid;
+  const [loadDeps, setLoadDeps] = useState<unknown[]>([]);
+  if (
+    loadDeps[0] !== companyGuid || loadDeps[1] !== selectedFY || loadDeps[2] !== fromDate ||
+    loadDeps[3] !== toDate || loadDeps[4] !== reloadKey
+  ) {
+    setLoadDeps([companyGuid, selectedFY, fromDate, toDate, reloadKey]);
+    if (companyGuid) setLoading(true);
+  }
 
   useEffect(() => {
     if (!company?.guid) return;
-    setLoading(true);
+    let cancelled = false;
     const fyParam = fyInfoToParam(selectedFY);
     const dateParams = fromDate && toDate ? { from: fromDate, to: toDate } : (fyParam ? { fy: fyParam } : {});
     // Load both generated + pending and combine
     Promise.all([
-      getEInvoiceGenerated(company.guid, dateParams).catch(() => ({ data: [] })),
-      getEInvoicePending(company.guid, dateParams).catch(() => ({ data: [] })),
+      getEInvoiceGenerated(company.guid, dateParams).catch(() => null),
+      getEInvoicePending(company.guid, dateParams).catch(() => null),
     ]).then(([genRes, pendRes]: any[]) => {
+      if (cancelled) return;
+      setLoadError(genRes && pendRes ? null : t('screens.reportsEinvoiceList.loadFailed'));
         const mapRow = (i: any, idx: number, status: string) => ({
           id: i.guid?.toString() || i.id?.toString() || `${status[0]}${idx}`,
+          guid: i.guid ? String(i.guid) : '',
           irn: i.irn || '',
           invoiceNo: i.voucher_number || i.voucher_no || `INV-${idx}`,
-          party: i.party_name || 'Unknown',
+          party: i.party_name || t('screens.reportsEinvoiceList.unknown'),
           date: i.date || '',
           amount: Math.abs(+i.amount || 0).toLocaleString('en-IN'),
           status,
@@ -81,7 +109,8 @@ export default function EInvoiceListScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [company?.guid, selectedFY, fromDate, toDate]);
+    return () => { cancelled = true; };
+  }, [company?.guid, selectedFY, fromDate, toDate, reloadKey]);
 
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -90,19 +119,22 @@ export default function EInvoiceListScreen() {
 
   // ── Generate IRN handler ───────────────────────────────────────────────────
   const handleGenerateIRN = async (item: any) => {
-    if (!company?.guid || !item.id) return;
+    if (!company?.guid || !item.guid) {
+      openVoucherPreview(router, {});
+      return;
+    }
     setGeneratingIds(prev => [...prev, item.id]);
     try {
       const result = await generateEInvoice({
         companyGuid: company.guid,
-        voucherGuid: item.id,
+        voucherGuid: item.guid,
         voucherNumber: item.invoiceNo,
       });
       if (result?.success) {
         Toast.show({
           type: 'success',
-          text1: 'IRN Generated',
-          text2: result.data?.irn ? result.data.irn.slice(0, 30) + '...' : 'IRN created successfully',
+          text1: t('screens.reportsEinvoiceList.irnGenerated'),
+          text2: result.data?.irn ? result.data.irn.slice(0, 30) + '...' : t('screens.reportsEinvoiceList.irnCreated'),
         });
         // Refresh row in list
         setInvoiceData(prev =>
@@ -113,23 +145,24 @@ export default function EInvoiceListScreen() {
           )
         );
       } else if (result?.locked) {
-        Alert.alert('IRN Locked', result?.error?.message || 'Prerequisites not met');
+        Alert.alert(t('screens.reportsEinvoiceList.irnLocked'), result?.error?.message || t('screens.reportsEinvoiceList.prereqNotMet'));
       } else {
-        Toast.show({ type: 'error', text1: 'Generation Failed', text2: result?.error?.message || 'Unknown error' });
+        Toast.show({ type: 'error', text1: t('screens.reportsEinvoiceList.generationFailed'), text2: result?.error?.message || t('screens.reportsEinvoiceList.unknownError') });
       }
     } catch (err: any) {
-      const msg = err?.message || 'Failed to generate IRN';
-      if (msg.includes('not yet provisioned') || msg.includes('not configured') || msg.includes('IRP credentials')) {
+      const rawMsg = err?.message || '';
+      const msg = rawMsg || t('screens.reportsEinvoiceList.failedGenerateIrn');
+      if (rawMsg.includes('not yet provisioned') || rawMsg.includes('not configured') || rawMsg.includes('IRP credentials')) {
         Alert.alert(
-          'Not Configured',
-          'IRP credentials not set up. Go to Settings > E-Invoice to configure.',
+          t('screens.reportsEinvoiceList.notConfigured'),
+          t('screens.reportsEinvoiceList.notConfiguredMsg'),
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => safePush(router, '/settings/einvoice' as any) },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('screens.reportsEinvoiceList.goToSettings'), onPress: () => safePush(router, '/settings/einvoice' as any) },
           ]
         );
       } else {
-        Toast.show({ type: 'error', text1: 'IRN Failed', text2: msg });
+        Toast.show({ type: 'error', text1: t('screens.reportsEinvoiceList.irnFailed'), text2: msg });
       }
     } finally {
       setGeneratingIds(prev => prev.filter(id => id !== item.id));
@@ -159,7 +192,7 @@ export default function EInvoiceListScreen() {
   const handleShare = async () => {
     const items = invoiceData.filter(i => selected.includes(i.id) && i.status === 'Generated' && !!i.irn);
     if (!items.length) {
-      Toast.show({ type: 'info', text1: 'Nothing to share', text2: 'Select generated e-Invoices with an IRN.' });
+      Toast.show({ type: 'info', text1: t('screens.reportsEinvoiceList.nothingToShare'), text2: t('screens.reportsEinvoiceList.selectGenerated') });
       return;
     }
     if (isSharing) return;
@@ -185,11 +218,11 @@ export default function EInvoiceListScreen() {
         }
       );
       if (failed > 0) {
-        Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be built` });
+        Toast.show({ type: 'info', text1: t('screens.reportsEinvoiceList.sharedOf', { shared, total: items.length }), text2: t('screens.reportsEinvoiceList.couldNotBeBuilt', { failed }) });
       }
       cancelSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.reportsEinvoiceList.couldNotSharePdfs'));
     } finally {
       setIsSharing(false);
     }
@@ -203,7 +236,7 @@ export default function EInvoiceListScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>E-Invoices</Text>
+        <Text style={s.headerTitle}>{t('reports.einvoices')}</Text>
         <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20}
             color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary}
@@ -212,11 +245,12 @@ export default function EInvoiceListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {invoiceData.length === 0 && !loading && (
+        {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
+        {invoiceData.length === 0 && !loading && !loadError && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
             <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Invoices found</Text>
-            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>IRNs generated from Tally Prime will appear here once synced.</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.reportsEinvoiceList.noEinvoices')}</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.reportsEinvoiceList.emptyHint')}</Text>
           </View>
         )}
         {invoiceData.map((item) => {
@@ -229,7 +263,7 @@ export default function EInvoiceListScreen() {
               style={[s.card, isSelected && s.cardSelected]}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { safePush(router, `/document/${item.id}` as any); }
+                else { openVoucherPreview(router, { guid: item.guid }); }
               }}
               onLongPress={() => toggleSelect(item.id)}
               delayLongPress={500}
@@ -242,7 +276,7 @@ export default function EInvoiceListScreen() {
                 <Text style={s.irnTxt} numberOfLines={1}>{item.irn}</Text>
                 <View style={{ flex: 1 }} />
                 <View style={[s.statusBadge, { backgroundColor: cfg.bg }]}>
-                  <Text style={[s.statusTxt, { color: cfg.text }]}>{item.status}</Text>
+                  <Text style={[s.statusTxt, { color: cfg.text }]}>{STATUS_LABEL_KEYS[item.status] ? t(STATUS_LABEL_KEYS[item.status]) : item.status}</Text>
                 </View>
               </View>
 
@@ -271,7 +305,7 @@ export default function EInvoiceListScreen() {
                   ) : (
                     <>
                       <Ionicons name="share-outline" size={14} color={COLORS.brandPrimary} />
-                      <Text style={el.shareBtnTxt}>Share PDF</Text>
+                      <Text style={el.shareBtnTxt}>{t('pdf.sharePdf')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -290,7 +324,7 @@ export default function EInvoiceListScreen() {
                   ) : (
                     <>
                       <Ionicons name="document-attach-outline" size={14} color={COLORS.white} />
-                      <Text style={el.generateBtnTxt}>Generate IRN</Text>
+                      <Text style={el.generateBtnTxt}>{t('screens.reportsEinvoiceList.generateIrn')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -305,12 +339,12 @@ export default function EInvoiceListScreen() {
       {selectMode && (
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
-            <Text style={s.shareCount}>{selected.length} selected</Text>
+            <Text style={s.shareCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={() => setSelected(invoiceData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-              <Text style={s.shareCancelTxt}>Select All</Text>
+              <Text style={s.shareCancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-              <Text style={s.shareCancelTxt}>Cancel</Text>
+              <Text style={s.shareCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -323,7 +357,7 @@ export default function EInvoiceListScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareActionTxt}>{isSharing ? t('screens.reportsEinvoiceList.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

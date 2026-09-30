@@ -1,5 +1,19 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-30 — Overdue Parties: Ledger-style swipe cards (Yash approved)
+
+- New `src/components/OverduePartyTile.tsx`: `EntityListTile` card; swipe left for Call / WhatsApp (`ReanimatedSwipeable`, same look as the Ledger tab); no swipe when the party has no phone. Tap opens the party ledger (`/ledger/<ledgerGuid>` from the AR/AP payload).
+- `app/kpi/receivables.tsx`, `app/kpi/payables.tsx`: Overdue Parties use it; old inline round buttons and their styles removed.
+- Tested: tsc 0 errors; ESLint 0 errors (2 existing `lastSyncAt` warnings); `npm test` verify scripts pass.
+
+## 2026-09-30 — Production readiness (plan phases 2–5)
+
+- Phase 2: real AI weekly chart or empty message; retry banners on report screens; e-Invoice/EWB settings Retry + Save disabled until loaded; socket token refresh with silent retry + banner; GUID-only voucher taps; About shows real version; Create Item batch number + expiry (opening stock into that batch); Sent reminders screen.
+- Phase 3: Receivables/Payables rows carry `olderYear`; tapping an older-year bill shows "Older financial year"; note "Includes N bill(s) from earlier years" under the list.
+- Phase 4: `android/` removed from git (+ `/android`, `/ios`, `.env` ignored); de-duplicated permissions, Face ID usage text, splash image; `eas.json` remote app version + `autoIncrement`; `@sentry/react-native` via `src/services/monitoring.ts` (only active when `EXPO_PUBLIC_SENTRY_DSN` is set; release builds silence console.log/info/debug); root `ErrorBoundary`; 5xx responses reported; `@expo/ngrok` moved to devDependencies.
+- Phase 5: deleted 18 dead screens, mock data, template assets, `reset-project.js`; removed unused deps (jsbarcode, jszip, expo-blur, expo-haptics, react-native-dotenv); tsc 60 → 0 errors, ESLint 457 → 0 errors (4 justified disables); `useApiData` starts in `loading`; EWB `Field` hoisted (fixes focus loss while typing).
+- i18n: ~3,700 hard-coded strings moved to `en.json` under `screens.<screenId>.*` (plus 4 `home.*` fallbacks); English text unchanged; Settings My Access / Approvals / Invitations rows now show labels instead of raw keys; all 10 locales machine-translated (Hindi/Gujarati need a native spot-check). Logic values, Tally field names, PDF titles/file names and brand/acronyms intentionally stay in English.
+
 ## 2026-09-29 — Receivables/Payables filter sheet + unified voucher preview
 
 - Receivables / Payables: header calendar + filter icon; `ArApFilterSheet` (Show: Outstanding bills / Receipts-Payments; Status: Overdue only, disabled for settlements); amber active chips; old chip row removed.

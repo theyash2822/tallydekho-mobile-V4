@@ -3,11 +3,12 @@
  * Wire in/out: ISO YYYY-MM-DD. Display: Settings date_format.
  * Bounds: Home FY (minDate/maxDate). Clear → full FY when bounds exist.
  */
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 import { formatDate } from '../utils/format';
@@ -57,13 +58,34 @@ export function dmyToISO(dmy: string): string {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const MONTHS_CAL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const MONTH_KEYS = [
+  'screens.componentsDateRangePickerModal.monthJanuary',
+  'screens.componentsDateRangePickerModal.monthFebruary',
+  'screens.componentsDateRangePickerModal.monthMarch',
+  'screens.componentsDateRangePickerModal.monthApril',
+  'screens.componentsDateRangePickerModal.monthMay',
+  'screens.componentsDateRangePickerModal.monthJune',
+  'screens.componentsDateRangePickerModal.monthJuly',
+  'screens.componentsDateRangePickerModal.monthAugust',
+  'screens.componentsDateRangePickerModal.monthSeptember',
+  'screens.componentsDateRangePickerModal.monthOctober',
+  'screens.componentsDateRangePickerModal.monthNovember',
+  'screens.componentsDateRangePickerModal.monthDecember',
+];
+const DAY_LABELS = [
+  { id: 'Su', labelKey: 'screens.componentsDateRangePickerModal.daySu' },
+  { id: 'Mo', labelKey: 'screens.componentsDateRangePickerModal.dayMo' },
+  { id: 'Tu', labelKey: 'screens.componentsDateRangePickerModal.dayTu' },
+  { id: 'We', labelKey: 'screens.componentsDateRangePickerModal.dayWe' },
+  { id: 'Th', labelKey: 'screens.componentsDateRangePickerModal.dayTh' },
+  { id: 'Fr', labelKey: 'screens.componentsDateRangePickerModal.dayFr' },
+  { id: 'Sa', labelKey: 'screens.componentsDateRangePickerModal.daySa' },
+];
 
 const QUICK_PRESETS = [
-  { key: 'this_month' as const, label: 'This Month' },
-  { key: 'last_1' as const, label: 'Last 1 Month' },
-  { key: 'last_3' as const, label: 'Last 3 Months' },
+  { key: 'this_month' as const, labelKey: 'screens.componentsDateRangePickerModal.thisMonth' },
+  { key: 'last_1' as const, labelKey: 'screens.componentsDateRangePickerModal.last1Month' },
+  { key: 'last_3' as const, labelKey: 'screens.componentsDateRangePickerModal.last3Months' },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -86,6 +108,7 @@ export default function DateRangePickerModal({
   visible, fromDate, toDate, onApply, onClose, minDate, maxDate,
 }: Props) {
   const { settings } = useSettings();
+  const { t } = useTranslation();
   const fmtSettings = {
     currency: settings.currency,
     number_format: settings.number_format,
@@ -112,19 +135,22 @@ export default function DateRangePickerModal({
   const [selFrom, setSelFrom] = useState<Date | null>(null);
   const [selTo, setSelTo] = useState<Date | null>(null);
   const [step, setStep] = useState<'from' | 'to'>('from');
+  const [prevVisible, setPrevVisible] = useState(false);
 
-  useEffect(() => {
-    if (!visible) return;
-    // Accept ISO (preferred) or legacy DMY from unmigrated callers
-    const f = parseISODate(fromDate) || parseDMY(fromDate);
-    const t = parseISODate(toDate) || parseDMY(toDate);
-    setSelFrom(f);
-    setSelTo(t);
-    setStep(f && !t ? 'to' : 'from');
-    const ref = f || (maxD && maxD < today ? maxD : today);
-    setViewYear(ref.getFullYear());
-    setViewMonth(ref.getMonth());
-  }, [visible]);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) {
+      // Accept ISO (preferred) or legacy DMY from unmigrated callers
+      const f = parseISODate(fromDate) || parseDMY(fromDate);
+      const to = parseISODate(toDate) || parseDMY(toDate);
+      setSelFrom(f);
+      setSelTo(to);
+      setStep(f && !to ? 'to' : 'from');
+      const ref = f || (maxD && maxD < today ? maxD : today);
+      setViewYear(ref.getFullYear());
+      setViewMonth(ref.getMonth());
+    }
+  }
 
   const calDays = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -180,9 +206,9 @@ export default function DateRangePickerModal({
   const setPreset = (key: 'this_month' | 'last_1' | 'last_3') => {
     const { from, to } = resolveFyPreset(key, { from: minDate, to: maxDate });
     const f = parseISODate(from);
-    const t = parseISODate(to);
-    if (!f || !t) return;
-    setSelFrom(f); setSelTo(t); setStep('from');
+    const toD = parseISODate(to);
+    if (!f || !toD) return;
+    setSelFrom(f); setSelTo(toD); setStep('from');
     setViewYear(f.getFullYear()); setViewMonth(f.getMonth());
   };
 
@@ -198,8 +224,8 @@ export default function DateRangePickerModal({
   const handleClear = () => {
     if (minDate && maxDate) {
       const f = parseISODate(minDate);
-      const t = parseISODate(maxDate);
-      setSelFrom(f); setSelTo(t); setStep('from');
+      const toD = parseISODate(maxDate);
+      setSelFrom(f); setSelTo(toD); setStep('from');
       onApply(minDate, maxDate);
     } else {
       setSelFrom(null); setSelTo(null); setStep('from');
@@ -209,9 +235,9 @@ export default function DateRangePickerModal({
   };
 
   const stepHint =
-    !selFrom ? 'Tap any date to set the start' :
-    step === 'to' ? 'Now tap to set the end date' :
-    selTo ? 'Tap a date to start a new range' : '';
+    !selFrom ? t('screens.componentsDateRangePickerModal.hintStart') :
+    step === 'to' ? t('screens.componentsDateRangePickerModal.hintEnd') :
+    selTo ? t('screens.componentsDateRangePickerModal.hintNewRange') : '';
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -219,7 +245,7 @@ export default function DateRangePickerModal({
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={s.sheet}>
           <View style={s.handle} />
-          <Text style={s.title}>Select Date Range</Text>
+          <Text style={s.title}>{t('screens.componentsDateRangePickerModal.title')}</Text>
 
           <ScrollView
             horizontal
@@ -233,7 +259,7 @@ export default function DateRangePickerModal({
                 onPress={() => setPreset(p.key)}
                 activeOpacity={0.7}
               >
-                <Text style={s.presetChipText}>{p.label}</Text>
+                <Text style={s.presetChipText}>{t(p.labelKey)}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -244,7 +270,7 @@ export default function DateRangePickerModal({
               step === 'from' && !selTo && s.rangeDateCurr,
               selFrom && selTo && s.rangeDateDone,
             ]}>
-              <Text style={s.rangeDateLabel}>FROM</Text>
+              <Text style={s.rangeDateLabel}>{t('screens.componentsDateRangePickerModal.from')}</Text>
               <View style={s.rangeDateRow}>
                 <Ionicons name="calendar-outline" size={12} color={selFrom ? COLORS.brandPrimary : COLORS.textTertiary} />
                 <Text style={[s.rangeDateVal, !selFrom && s.rangeDateEmpty]} numberOfLines={1}>
@@ -260,7 +286,7 @@ export default function DateRangePickerModal({
               step === 'to' && s.rangeDateCurr,
               selFrom && selTo && s.rangeDateDone,
             ]}>
-              <Text style={s.rangeDateLabel}>TO</Text>
+              <Text style={s.rangeDateLabel}>{t('screens.componentsDateRangePickerModal.to')}</Text>
               <View style={s.rangeDateRow}>
                 <Ionicons name="calendar-outline" size={12} color={selTo ? COLORS.brandPrimary : COLORS.textTertiary} />
                 <Text style={[s.rangeDateVal, !selTo && s.rangeDateEmpty]} numberOfLines={1}>
@@ -276,14 +302,14 @@ export default function DateRangePickerModal({
             <TouchableOpacity style={s.navBtn} onPress={prevMonth} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            <Text style={s.monthYear}>{MONTHS_CAL[viewMonth]} {viewYear}</Text>
+            <Text style={s.monthYear}>{t(MONTH_KEYS[viewMonth])} {viewYear}</Text>
             <TouchableOpacity style={s.navBtn} onPress={nextMonth} activeOpacity={0.7}>
               <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <View style={s.dayHeaders}>
-            {DAY_LABELS.map(d => <Text key={d} style={s.dayHeader}>{d}</Text>)}
+            {DAY_LABELS.map(d => <Text key={d.id} style={s.dayHeader}>{t(d.labelKey)}</Text>)}
           </View>
 
           <View style={s.calGrid}>
@@ -322,7 +348,7 @@ export default function DateRangePickerModal({
 
           <View style={s.btnRow}>
             <TouchableOpacity style={s.clearBtn} onPress={handleClear} activeOpacity={0.7}>
-              <Text style={s.clearTxt}>Reset to FY</Text>
+              <Text style={s.clearTxt}>{t('screens.componentsDateRangePickerModal.resetToFy')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.applyBtn, !canApply && s.applyBtnDis]}
@@ -331,7 +357,7 @@ export default function DateRangePickerModal({
               activeOpacity={0.85}
             >
               <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.white} />
-              <Text style={s.applyTxt}>Apply Filter</Text>
+              <Text style={s.applyTxt}>{t('screens.componentsDateRangePickerModal.applyFilter')}</Text>
             </TouchableOpacity>
           </View>
 

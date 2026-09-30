@@ -24,10 +24,11 @@ const TEXT_TER = '#AEACA8';
 // SLIDE 1 — Hero (light theme)
 // ─────────────────────────────────────────────────────────────────────────────
 function HeroSlide() {
-  const logoScale   = useRef(new Animated.Value(0.3)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const textY       = useRef(new Animated.Value(24)).current;
+  const { t } = useTranslation();
+  const logoScale   = useState(() => new Animated.Value(0.3))[0];
+  const logoOpacity = useState(() => new Animated.Value(0))[0];
+  const textOpacity = useState(() => new Animated.Value(0))[0];
+  const textY       = useState(() => new Animated.Value(24))[0];
 
   useEffect(() => {
     Animated.sequence([
@@ -57,7 +58,7 @@ function HeroSlide() {
         <Text style={hero.tagline}>Ab Hisab Ungaliyon Par</Text>
         <View style={hero.divider} />
         <Text style={hero.subtitle}>
-          Your complete business dashboard —{'\n'}invoices, stocks, ledgers and reports{'\n'}all at your fingertips.
+          {t('screens.onboarding.heroSubtitle')}
         </Text>
       </Animated.View>
     </View>
@@ -82,9 +83,10 @@ const hero = StyleSheet.create({
 // SLIDE 2 — Swipe Demo (BOTH directions)
 // ─────────────────────────────────────────────────────────────────────────────
 function SwipeDemo() {
-  const slideX        = useRef(new Animated.Value(0)).current;
-  const leftActionOp  = useRef(new Animated.Value(0)).current;  // Transfer (swipe right)
-  const rightActionOp = useRef(new Animated.Value(0)).current;  // Edit Stock (swipe left)
+  const { t } = useTranslation();
+  const slideX        = useState(() => new Animated.Value(0))[0];
+  const leftActionOp  = useState(() => new Animated.Value(0))[0];  // Transfer (swipe right)
+  const rightActionOp = useState(() => new Animated.Value(0))[0];  // Edit Stock (swipe left)
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -123,13 +125,13 @@ function SwipeDemo() {
       {/* LEFT revealed: Transfer (dark #1A1A1A like actual app) */}
       <Animated.View style={[sd.actionLeft, { opacity: leftActionOp }]}>
         <Ionicons name="swap-horizontal-outline" size={20} color="#fff" />
-        <Text style={sd.actionLbl}>Transfer</Text>
+        <Text style={sd.actionLbl}>{t('screens.onboarding.transfer')}</Text>
       </Animated.View>
 
       {/* RIGHT revealed: Edit Stock (gold #A89060 like actual app) */}
       <Animated.View style={[sd.actionRight, { opacity: rightActionOp }]}>
         <Ionicons name="create-outline" size={20} color="#fff" />
-        <Text style={sd.actionLbl}>Edit Stock</Text>
+        <Text style={sd.actionLbl}>{t('screens.onboarding.editStock')}</Text>
       </Animated.View>
 
       {/* Main stock card */}
@@ -143,7 +145,7 @@ function SwipeDemo() {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 3 }}>
           <Text style={sd.cardVal}>₹12,500</Text>
-          <View style={sd.qtyBadge}><Text style={sd.qtyTxt}>240 units</Text></View>
+          <View style={sd.qtyBadge}><Text style={sd.qtyTxt}>{t('screens.onboarding.units', { qty: 240 })}</Text></View>
         </View>
         <Ionicons name="chevron-forward" size={13} color={TEXT_TER} style={{ marginLeft: 2 }} />
       </Animated.View>
@@ -161,11 +163,11 @@ function SwipeDemo() {
       <View style={sd.hintRow}>
         <Animated.View style={[sd.hintTag, sd.hintDark, { opacity: leftActionOp }]}>
           <Ionicons name="arrow-forward-outline" size={10} color="#fff" />
-          <Text style={[sd.hintTxt, { color: '#fff' }]}>swipe right → Transfer</Text>
+          <Text style={[sd.hintTxt, { color: '#fff' }]}>{t('screens.onboarding.swipeRightHint')}</Text>
         </Animated.View>
         <Animated.View style={[sd.hintTag, sd.hintGold, { opacity: rightActionOp }]}>
           <Ionicons name="arrow-back-outline" size={10} color="#fff" />
-          <Text style={[sd.hintTxt, { color: '#fff' }]}>swipe left → Edit</Text>
+          <Text style={[sd.hintTxt, { color: '#fff' }]}>{t('screens.onboarding.swipeLeftHint')}</Text>
         </Animated.View>
       </View>
     </View>
@@ -212,11 +214,12 @@ const sd = StyleSheet.create({
 // SLIDE 3 — Multi-Select Demo (light theme)
 // ─────────────────────────────────────────────────────────────────────────────
 function MultiSelectDemo() {
-  const a1 = useRef(new Animated.Value(0)).current;
-  const a2 = useRef(new Animated.Value(0)).current;
-  const a3 = useRef(new Animated.Value(0)).current;
-  const barY  = useRef(new Animated.Value(50)).current;
-  const barOp = useRef(new Animated.Value(0)).current;
+  const { t } = useTranslation();
+  const a1 = useState(() => new Animated.Value(0))[0];
+  const a2 = useState(() => new Animated.Value(0))[0];
+  const a3 = useState(() => new Animated.Value(0))[0];
+  const barY  = useState(() => new Animated.Value(50))[0];
+  const barOp = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -247,9 +250,9 @@ function MultiSelectDemo() {
   }, []);
 
   const rows = [
-    { anim: a1, name: 'Cotton Fabric', sub: '240 units' },
-    { anim: a2, name: 'Silk Dupatta',  sub: '120 units' },
-    { anim: a3, name: 'Linen Blend',   sub: '85 units'  },
+    { anim: a1, name: 'Cotton Fabric', sub: t('screens.onboarding.units', { qty: 240 }) },
+    { anim: a2, name: 'Silk Dupatta',  sub: t('screens.onboarding.units', { qty: 120 }) },
+    { anim: a3, name: 'Linen Blend',   sub: t('screens.onboarding.units', { qty: 85 }) },
   ];
 
   return (
@@ -290,15 +293,15 @@ function MultiSelectDemo() {
 
       {/* Sliding action bar (same as real app) */}
       <Animated.View style={[msd.actionBar, { transform: [{ translateY: barY }], opacity: barOp }]}>
-        <Text style={msd.barCount}>3 selected</Text>
+        <Text style={msd.barCount}>{t('common.selected', { count: 3 })}</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           <View style={[msd.barBtn, { backgroundColor: GOLD }]}>
             <Ionicons name="share-outline" size={11} color="#fff" />
-            <Text style={msd.barBtnTxt}>PDF</Text>
+            <Text style={msd.barBtnTxt}>{t('screens.onboarding.pdf')}</Text>
           </View>
           <View style={[msd.barBtn, { backgroundColor: '#444' }]}>
             <Ionicons name="swap-horizontal-outline" size={11} color="#fff" />
-            <Text style={msd.barBtnTxt}>Transfer</Text>
+            <Text style={msd.barBtnTxt}>{t('screens.onboarding.transfer')}</Text>
           </View>
         </View>
       </Animated.View>
@@ -326,11 +329,12 @@ const msd = StyleSheet.create({
 // SLIDE 4 — Cashflow Ring Demo (light theme)
 // ─────────────────────────────────────────────────────────────────────────────
 function CashflowDemo() {
-  const tapScale    = useRef(new Animated.Value(1)).current;
-  const rippleScale = useRef(new Animated.Value(0)).current;
-  const rippleOp    = useRef(new Animated.Value(0)).current;
-  const tooltipOp   = useRef(new Animated.Value(0)).current;
-  const tooltipSc   = useRef(new Animated.Value(0.85)).current;
+  const { t } = useTranslation();
+  const tapScale    = useState(() => new Animated.Value(1))[0];
+  const rippleScale = useState(() => new Animated.Value(0))[0];
+  const rippleOp    = useState(() => new Animated.Value(0))[0];
+  const tooltipOp   = useState(() => new Animated.Value(0))[0];
+  const tooltipSc   = useState(() => new Animated.Value(0.85))[0];
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -371,8 +375,8 @@ function CashflowDemo() {
           <View style={cfd.headerIcon}>
             <Ionicons name="eye-outline" size={13} color={TEXT_SEC} />
           </View>
-          <Text style={cfd.cardTitle}>Cashflow</Text>
-          <Text style={cfd.tapHint}>Tap ring to see breakdown</Text>
+          <Text style={cfd.cardTitle}>{t('dashboard.cashflow')}</Text>
+          <Text style={cfd.tapHint}>{t('screens.onboarding.tapRingHint')}</Text>
         </View>
 
         {/* Ring */}
@@ -381,7 +385,7 @@ function CashflowDemo() {
             <Animated.View style={[cfd.ripple, { transform: [{ scale: rippleScale }], opacity: rippleOp }]} />
             <View style={cfd.ring}>
               <View style={cfd.ringCenter}>
-                <Text style={cfd.ringLbl}>Net Cash</Text>
+                <Text style={cfd.ringLbl}>{t('screens.onboarding.netCash')}</Text>
                 <Text style={cfd.ringVal}>₹8,500</Text>
               </View>
             </View>
@@ -389,13 +393,13 @@ function CashflowDemo() {
             <Animated.View style={[cfd.tooltip, { opacity: tooltipOp, transform: [{ scale: tooltipSc }] }]}>
               <View style={cfd.ttRow}>
                 <View style={[cfd.ttDot, { backgroundColor: DARK }]} />
-                <Text style={cfd.ttLbl}>Income</Text>
+                <Text style={cfd.ttLbl}>{t('dashboard.income')}</Text>
                 <Text style={cfd.ttVal}>₹37,440</Text>
               </View>
               <View style={cfd.ttDiv} />
               <View style={cfd.ttRow}>
                 <View style={[cfd.ttDot, { backgroundColor: '#A0A0A0' }]} />
-                <Text style={cfd.ttLbl}>Expense</Text>
+                <Text style={cfd.ttLbl}>{t('dashboard.expense')}</Text>
                 <Text style={cfd.ttVal}>₹28,940</Text>
               </View>
             </Animated.View>
@@ -441,11 +445,12 @@ const cfd = StyleSheet.create({
 // SLIDE 5 — Voice Search Demo (light theme)
 // ─────────────────────────────────────────────────────────────────────────────
 function VoiceDemo() {
-  const micScale = useRef(new Animated.Value(1)).current;
-  const pulse1   = useRef(new Animated.Value(1)).current;
-  const pulse2   = useRef(new Animated.Value(1)).current;
-  const textOp   = useRef(new Animated.Value(0)).current;
-  const textY    = useRef(new Animated.Value(8)).current;
+  const { t } = useTranslation();
+  const micScale = useState(() => new Animated.Value(1))[0];
+  const pulse1   = useState(() => new Animated.Value(1))[0];
+  const pulse2   = useState(() => new Animated.Value(1))[0];
+  const textOp   = useState(() => new Animated.Value(0))[0];
+  const textY    = useState(() => new Animated.Value(8))[0];
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -491,7 +496,7 @@ function VoiceDemo() {
       <View style={vd.searchBar}>
         <Ionicons name="search-outline" size={14} color={TEXT_TER} />
         <Animated.Text style={[vd.searchText, { opacity: textOp, transform: [{ translateY: textY }] }]}>
-          Sales Invoice
+          {t('screens.onboarding.salesInvoice')}
         </Animated.Text>
         <View style={vd.micWrap}>
           <Animated.View style={[vd.pulseRing, { transform: [{ scale: pulse1 }], opacity: pulse1.interpolate({ inputRange: [1, 1.75], outputRange: [0.3, 0] }) }]} />
@@ -506,7 +511,7 @@ function VoiceDemo() {
       <Animated.View style={[vd.resultCard, { opacity: textOp }]}>
         <Ionicons name="document-text-outline" size={14} color={GOLD} />
         <View style={{ flex: 1 }}>
-          <Text style={vd.resultTitle}>Sales Invoice #1042</Text>
+          <Text style={vd.resultTitle}>{t('screens.onboarding.salesInvoiceNo', { no: 1042 })}</Text>
           <Text style={vd.resultSub}>Rajesh Traders · ₹24,500</Text>
         </View>
         <Ionicons name="chevron-forward" size={12} color={TEXT_TER} />
@@ -515,7 +520,7 @@ function VoiceDemo() {
       {/* Listening hint */}
       <Animated.View style={[vd.listenRow, { opacity: textOp }]}>
         <View style={vd.listenDot} />
-        <Text style={vd.listenTxt}>Listening…</Text>
+        <Text style={vd.listenTxt}>{t('screens.onboarding.listening')}</Text>
       </Animated.View>
     </View>
   );
@@ -549,10 +554,11 @@ const vd = StyleSheet.create({
 // SLIDE 6 — Quick Actions Bottom Sheet Demo (matches actual QuickActionsModal)
 // ─────────────────────────────────────────────────────────────────────────────
 function QuickAddDemo() {
-  const sheetY   = useRef(new Animated.Value(240)).current;
-  const sheetOp  = useRef(new Animated.Value(0)).current;
-  const expandH  = useRef(new Animated.Value(0)).current;
-  const chevronR = useRef(new Animated.Value(0)).current;
+  const { t } = useTranslation();
+  const sheetY   = useState(() => new Animated.Value(240))[0];
+  const sheetOp  = useState(() => new Animated.Value(0))[0];
+  const expandH  = useState(() => new Animated.Value(0))[0];
+  const chevronR = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -591,10 +597,10 @@ function QuickAddDemo() {
   const chevronDeg = chevronR.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
 
   const SECTIONS = [
-    { label: 'Sales',    icon: 'receipt-outline',    color: '#2D7D46', bg: '#F0FBF4',
-      items: ['Create Invoice', 'Create Quotation', 'Sales Order'] },
-    { label: 'Purchase', icon: 'bag-handle-outline', color: '#C0392B', bg: '#FDECEA', items: [] },
-    { label: 'Voucher',  icon: 'wallet-outline',     color: '#D97706', bg: '#FFFBEB', items: [] },
+    { label: t('voucher.sales'), icon: 'receipt-outline',    color: '#2D7D46', bg: '#F0FBF4',
+      items: [t('quickActions.createInvoice'), t('screens.onboarding.createQuotation'), t('screens.onboarding.salesOrder')] },
+    { label: t('voucher.purchase'), icon: 'bag-handle-outline', color: '#C0392B', bg: '#FDECEA', items: [] },
+    { label: t('quickActions.voucher'), icon: 'wallet-outline',     color: '#D97706', bg: '#FFFBEB', items: [] },
   ];
 
   return (
@@ -609,7 +615,7 @@ function QuickAddDemo() {
 
         {/* Header */}
         <View style={qad.sheetHeader}>
-          <Text style={qad.sheetTitle}>Quick Actions</Text>
+          <Text style={qad.sheetTitle}>{t('quickActions.title')}</Text>
           <View style={qad.closeBtn}>
             <Ionicons name="close" size={16} color={TEXT_PRI} />
           </View>

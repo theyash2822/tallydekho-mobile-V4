@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../constants/colors';
+import { useTranslation } from 'react-i18next';
 import FilterBottomSheet, { FilterCheckRow, FilterRadioRow, filterSheetContentStyles as fm } from './FilterBottomSheet';
 
 export type ArApView = 'bills' | 'settlements';
@@ -25,6 +26,7 @@ export default function ArApFilterSheet({
   settlementsLabel: string;
   onApply: (view: ArApView, overdueOnly: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [localView, setLocalView] = useState<ArApView>(view);
   const [localOverdue, setLocalOverdue] = useState(overdueOnly);
   const [wasVisible, setWasVisible] = useState(visible);
@@ -43,17 +45,17 @@ export default function ArApFilterSheet({
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter"
+      title={t('common.filter')}
       activeCount={arApActiveFilterCount(localView, localOverdue)}
       onClear={() => { setLocalView('bills'); setLocalOverdue(false); }}
       onApply={() => onApply(localView, overdueDisabled ? false : localOverdue)}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.componentsArApFilterSheet.applyFilters')}
       heightFraction={0.5}
     >
-      <Text style={s.sectionLbl}>Show</Text>
+      <Text style={s.sectionLbl}>{t('screens.componentsArApFilterSheet.show')}</Text>
       <View style={fm.panel}>
         <FilterRadioRow
-          label="Outstanding bills"
+          label={t('screens.componentsArApFilterSheet.outstandingBills')}
           selected={localView === 'bills'}
           onPress={() => setLocalView('bills')}
         />
@@ -64,15 +66,15 @@ export default function ArApFilterSheet({
         />
       </View>
 
-      <Text style={s.sectionLbl}>Status</Text>
+      <Text style={s.sectionLbl}>{t('screens.componentsArApFilterSheet.status')}</Text>
       <View style={[fm.panel, overdueDisabled && s.disabled]} pointerEvents={overdueDisabled ? 'none' : 'auto'}>
         <FilterCheckRow
-          label="Overdue only"
+          label={t('screens.componentsArApFilterSheet.overdueOnly')}
           selected={!overdueDisabled && localOverdue}
           onPress={() => setLocalOverdue((v) => !v)}
         />
         {overdueDisabled && (
-          <Text style={s.note}>Not applicable to {settlementsLabel.toLowerCase()}</Text>
+          <Text style={s.note}>{t('screens.componentsArApFilterSheet.notApplicableTo', { label: settlementsLabel.toLowerCase() })}</Text>
         )}
       </View>
     </FilterBottomSheet>

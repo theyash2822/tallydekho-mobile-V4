@@ -36,6 +36,7 @@ import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomS
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,10 +146,11 @@ function ThemedFInput({ style, onFocus, onBlur, keyboardType, ...props }: TextIn
 
 // ─── StepIndicator ────────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
+  const { t } = useTranslation();
   const STEPS = [
-    { num: 1 as const, label: 'Details' },
-    { num: 2 as const, label: 'Order & Dispatch' },
-    { num: 3 as const, label: 'Items & Logistics' },
+    { num: 1 as const, label: t('screens.salesCreateDeliveryNote.stepDetails') },
+    { num: 2 as const, label: t('screens.salesCreateDeliveryNote.stepOrder') },
+    { num: 3 as const, label: t('screens.salesCreateDeliveryNote.stepItems') },
   ];
   return (
     <View style={si.wrap}>
@@ -177,6 +179,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
   onRemove: () => void;
   taxable: number;
 }) {
+  const { t } = useTranslation();
   const taxOpts: BSSOption[] = taxLedgers.map(l => {
     const rate = resolveTaxLedgerRate(l);
     return { label: l.name, value: l.name, subtitle: rate > 0 ? `${rate}%` : undefined };
@@ -200,8 +203,8 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
               onUpdate('taxRate', '');
               onUpdate('taxAmount', '');
             }}
-            placeholder="Select tax ledger..."
-            sheetTitle="Tax Ledger"
+            placeholder={t('screens.salesCreateDeliveryNote.selectTaxLedger')}
+            sheetTitle={t('screens.salesCreateDeliveryNote.taxLedger')}
           />
         </View>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
@@ -210,7 +213,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
       </View>
       <View style={[ir.taxEntryBottomRow, !entry.ledgerName && { opacity: 0.38 }]} pointerEvents={entry.ledgerName ? 'auto' : 'none'}>
         <View style={ir.taxFieldGroup}>
-          <Text style={ir.taxMiniLbl}>Rate</Text>
+          <Text style={ir.taxMiniLbl}>{t('pdf.rate')}</Text>
           <View style={ir.taxFieldInputRow}>
             <TextInput
               style={ir.taxRateInput}
@@ -221,7 +224,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
                 onUpdate('taxAmount', auto);
               }}
               keyboardType="numeric"
-              placeholder={entry.ledgerName ? '0' : 'Select ledger first'}
+              placeholder={entry.ledgerName ? '0' : t('screens.salesCreateDeliveryNote.selectLedgerFirst')}
               placeholderTextColor={COLORS.textTertiary}
               editable={!!entry.ledgerName}
             />
@@ -230,7 +233,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
         </View>
         <Ionicons name="arrow-forward-outline" size={13} color={COLORS.textTertiary} style={{ marginTop: 16 }} />
         <View style={[ir.taxFieldGroup, { flex: 1 }]}>
-          <Text style={ir.taxMiniLbl}>Amount</Text>
+          <Text style={ir.taxMiniLbl}>{t('voucher.amount')}</Text>
           <View style={ir.taxFieldInputRow}>
             <Text style={ir.taxRateSign}>₹</Text>
             <TextInput
@@ -271,6 +274,7 @@ function ItemRow({
   itemIndex: number;
   canRemove: boolean;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
   const calc = calcItem(item);
 
@@ -282,13 +286,13 @@ function ItemRow({
 
   const stockItem = stockItems.find(si2 => si2.name === item.product);
   const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
-  const headerLabel = productLabel || `Item ${itemIndex + 1}`;
+  const headerLabel = productLabel || t('screens.salesCreateDeliveryNote.itemN', { n: itemIndex + 1 });
 
   // Warehouse options: per-item godowns when loaded, else Main Location fallback.
   const warehouseOpts: BSSOption[] = godowns.length > 0
-    ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: `${Math.round(g.qty)} ${stockItem?.unit || 'units'} available` }))
+    ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: t('screens.salesCreateDeliveryNote.available', { qty: Math.round(g.qty), unit: stockItem?.unit || 'units' }) }))
     : item.product
-      ? [{ label: 'Main Location', value: 'Main Location', subtitle: stockItem?.closing_qty != null ? `${Math.round(stockItem.closing_qty)} ${stockItem?.unit || 'units'} available` : 'Default warehouse' }]
+      ? [{ label: 'Main Location', value: 'Main Location', subtitle: stockItem?.closing_qty != null ? t('screens.salesCreateDeliveryNote.available', { qty: Math.round(stockItem.closing_qty), unit: stockItem?.unit || 'units' }) : t('screens.salesCreateDeliveryNote.defaultWarehouse') }]
       : [];
   const needsWarehouseDropdown = item.product ? warehouseOpts.length >= 1 : false;
 
@@ -316,14 +320,14 @@ function ItemRow({
         <View style={ir.expandedContent}>
           {/* Product / Service */}
           <View>
-            <Text style={ir.fieldLabel}>Product / Service <Text style={ir.star}>*</Text></Text>
+            <Text style={ir.fieldLabel}>{t('screens.salesCreateDeliveryNote.product')} <Text style={ir.star}>*</Text></Text>
             <BottomSheetSearch
-              placeholder="Select product..."
+              placeholder={t('screens.salesCreateDeliveryNote.selectProduct')}
               options={stockOpts}
               value={item.product}
               onSelect={opt => onProductSelect(item.id, opt)}
               onClear={() => onProductClear(item.id)}
-              sheetTitle="Product / Service"
+              sheetTitle={t('screens.salesCreateDeliveryNote.product')}
               containerStyle={{ marginBottom: 0 }}
             />
           </View>
@@ -331,14 +335,14 @@ function ItemRow({
           {/* Godown — only shown when product is selected */}
           {item.product && needsWarehouseDropdown ? (
             <View>
-              <Text style={ir.fieldLabel}>Godown / Warehouse <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.fieldLabel}>{t('screens.salesCreateDeliveryNote.godown')} <Text style={ir.star}>*</Text></Text>
               <BottomSheetSearch
-                placeholder="Select godown..."
+                placeholder={t('screens.salesCreateDeliveryNote.selectGodown')}
                 options={warehouseOpts}
                 value={item.warehouse}
                 onSelect={opt => onUpdate(item.id, 'warehouse', opt.value)}
                 onClear={() => onUpdate(item.id, 'warehouse', '')}
-                sheetTitle="Godown / Warehouse"
+                sheetTitle={t('screens.salesCreateDeliveryNote.godown')}
                 containerStyle={{ marginBottom: 0 }}
               />
             </View>
@@ -347,7 +351,7 @@ function ItemRow({
           {/* Row: Qty | Unit | Rate */}
           <View style={ir.qurRow}>
             <View style={ir.qtyBox}>
-              <Text style={ir.miniLabel}>Qty <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('pdf.qty')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'center' }]}
                 value={item.qty}
@@ -359,13 +363,13 @@ function ItemRow({
               />
             </View>
             <View style={ir.unitBox}>
-              <Text style={ir.miniLabel}>Unit</Text>
+              <Text style={ir.miniLabel}>{t('screens.salesCreateDeliveryNote.unit')}</Text>
               <TouchableOpacity style={ir.unitBtn} disabled activeOpacity={1}>
                 <Text style={ir.unitTxt}>{item.unit || '—'}</Text>
               </TouchableOpacity>
             </View>
             <View style={ir.rateBox}>
-              <Text style={ir.miniLabel}>Rate (₹) <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('screens.salesCreateDeliveryNote.rateRs')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'right' }]}
                 value={item.rate}
@@ -380,20 +384,20 @@ function ItemRow({
 
           {/* Amount — derived, never hand-edited */}
           <View style={ir.taxableRow}>
-            <Text style={ir.taxableLabel}>Amount</Text>
+            <Text style={ir.taxableLabel}>{t('voucher.amount')}</Text>
             <Text style={ir.taxableVal}>₹{calc.amount.toFixed(2)}</Text>
           </View>
 
           {/* Sales Ledger — defaults to the ledger picked in step 1 */}
           <View>
-            <Text style={ir.fieldLabel}>Sales Ledger <Text style={ir.star}>*</Text></Text>
+            <Text style={ir.fieldLabel}>{t('screens.salesCreateDeliveryNote.salesLedger')} <Text style={ir.star}>*</Text></Text>
             <BottomSheetSearch
-              placeholder="Select sales ledger..."
+              placeholder={t('screens.salesCreateDeliveryNote.selectSalesLedger')}
               options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
               value={item.salesLedger}
               onSelect={opt => onUpdate(item.id, 'salesLedger', opt.value)}
               onClear={() => onUpdate(item.id, 'salesLedger', '')}
-              sheetTitle="Sales Ledger"
+              sheetTitle={t('screens.salesCreateDeliveryNote.salesLedger')}
               containerStyle={{ marginBottom: 0 }}
             />
           </View>
@@ -401,8 +405,8 @@ function ItemRow({
           {/* Tax Section */}
           <View style={ir.taxSection}>
             <View style={ir.taxSectionHdr}>
-              <Text style={ir.taxSectionTitle}>Taxes</Text>
-              <Text style={ir.taxColHint}>Type · Rate % · Amount ₹</Text>
+              <Text style={ir.taxSectionTitle}>{t('screens.salesCreateDeliveryNote.taxes')}</Text>
+              <Text style={ir.taxColHint}>{t('screens.salesCreateDeliveryNote.taxColHint')}</Text>
             </View>
             {item.taxEntries.map(te => (
               <TaxEntryRow
@@ -416,12 +420,12 @@ function ItemRow({
             ))}
             <TouchableOpacity style={ir.addTaxDashedBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
               <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
-              <Text style={ir.addTaxDashedTxt}>Add Tax</Text>
+              <Text style={ir.addTaxDashedTxt}>{t('screens.salesCreateDeliveryNote.addTax')}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={ir.subtotalRow}>
-            <Text style={ir.subtotalLabel}>Item Total</Text>
+            <Text style={ir.subtotalLabel}>{t('screens.salesCreateDeliveryNote.itemTotal')}</Text>
             <Text style={ir.subtotalVal}>₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
           </View>
         </View>
@@ -446,6 +450,7 @@ export default function CreateDeliveryNoteScreen() {
   };
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
+  const companyGuid = company?.guid;
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const fyEnd = selectedFY?.endDate || `${new Date().getFullYear() + 1}-03-31`;
 
@@ -518,7 +523,7 @@ export default function CreateDeliveryNoteScreen() {
         onBeforeShare: () => setSharingPdf(false),
       });
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'PDF Error', text2: e?.message || 'Could not generate PDF' });
+      Toast.show({ type: 'error', text1: t('screens.salesCreateDeliveryNote.pdfError'), text2: e?.message || t('screens.salesCreateDeliveryNote.pdfErrorMsg') });
     } finally {
       setSharingPdf(false);
     }
@@ -527,8 +532,8 @@ export default function CreateDeliveryNoteScreen() {
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
   const numberingDisplay = numberingPolicy === 'tallydekho_series'
-    ? 'Auto · TallyDekho series'
-    : 'Auto · Tally series';
+    ? t('screens.salesCreateDeliveryNote.autoTdSeries')
+    : t('screens.salesCreateDeliveryNote.autoTallySeries');
 
   const handleEntryTypeChange = useCallback((next: EntryType) => {
     setEntryType(next);
@@ -609,14 +614,25 @@ export default function CreateDeliveryNoteScreen() {
 
   // Linked Sales Orders — only fetched after a party is selected. The backend
   // applies an exact, case-insensitive partyName filter.
-  useEffect(() => {
-    if (!company?.guid || !party) {
+  const [linkedOrdersKey, setLinkedOrdersKey] = useState<{
+    companyGuid?: string; party: string; from?: string; to?: string;
+  } | null>(null);
+  if (
+    !linkedOrdersKey || linkedOrdersKey.companyGuid !== companyGuid || linkedOrdersKey.party !== party
+    || linkedOrdersKey.from !== selectedFY?.startDate || linkedOrdersKey.to !== selectedFY?.endDate
+  ) {
+    setLinkedOrdersKey({ companyGuid, party, from: selectedFY?.startDate, to: selectedFY?.endDate });
+    if (!companyGuid || !party) {
       setLinkedOrderOpts([]);
       setLinkedOrdersLoading(false);
-      return;
+    } else {
+      setLinkedOrdersLoading(true);
     }
+  }
+
+  useEffect(() => {
+    if (!company?.guid || !party) return;
     let cancelled = false;
-    setLinkedOrdersLoading(true);
     getSalesOrders(company.guid, {
       partyName: party,
       limit: '50',
@@ -672,12 +688,12 @@ export default function CreateDeliveryNoteScreen() {
       salesLedger: i.salesLedger || ledger,
       warehouse: '',
     } : i));
-    if (!si2 || !company?.guid) {
+    if (!si2 || !companyGuid) {
       if (warehouses.length === 1) updateItem(itemId, 'warehouse', warehouses[0].name);
       return;
     }
     try {
-      const res: any = await getStockGodowns(company.guid, si2.guid || '');
+      const res: any = await getStockGodowns(companyGuid, si2.guid || '');
       const godownList: Godown[] = res?.data?.warehouses || [];
       const finalGodowns: Godown[] = godownList.length > 0
         ? godownList
@@ -689,7 +705,7 @@ export default function CreateDeliveryNoteScreen() {
     } catch {
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: 'Main Location' } : i));
     }
-  }, [stockItems, company?.guid, warehouses, updateItem, ledger]);
+  }, [stockItems, companyGuid, warehouses, updateItem, ledger]);
 
   const handleProductClear = useCallback((itemId: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, product: '', unit: '', rate: '', warehouse: '' } : i));
@@ -748,7 +764,7 @@ export default function CreateDeliveryNoteScreen() {
 
   /** Prefill Step 3 from linked Sales Order — voucher_inventory_items, with optional app_vouchers snapshot for taxes. */
   const applyOrderPrefill = useCallback(async (order: LinkedOrder) => {
-    if (!company?.guid) return;
+    if (!companyGuid) return;
     setLoadingOrderItems(true);
     try {
       let mapped: DNItem[] = [];
@@ -757,7 +773,7 @@ export default function CreateDeliveryNoteScreen() {
       // Prefer app_vouchers snapshot when TDK-created SO exists (richer tax/logistics).
       if (order.tdkRef) {
         try {
-          const preview: any = await getOrderPreview(order.tdkRef, company.guid);
+          const preview: any = await getOrderPreview(order.tdkRef, companyGuid);
           const doc = preview?.data || preview || {};
           const raw = doc.rawPayload || {};
           const rawItems = Array.isArray(raw.items) ? raw.items : [];
@@ -812,7 +828,7 @@ export default function CreateDeliveryNoteScreen() {
 
       // Synced Tally SO (or preview miss) — pull inventory lines by guid / voucher number
       if (!mapped.length) {
-        const res: any = await getVoucherById(company.guid, order.guid || order.voucherNumber);
+        const res: any = await getVoucherById(companyGuid, order.guid || order.voucherNumber);
         const invItems: any[] = res?.data?.items || [];
         mapped = invItems
           .filter(it => it.stock_item_name)
@@ -834,9 +850,9 @@ export default function CreateDeliveryNoteScreen() {
         // Warm godown lists for prefilled products (non-blocking)
         mapped.forEach(async (row) => {
           const si2 = stockItems.find(st => st.name === row.product);
-          if (!si2?.guid || !company?.guid) return;
+          if (!si2?.guid || !companyGuid) return;
           try {
-            const gRes: any = await getStockGodowns(company.guid, si2.guid);
+            const gRes: any = await getStockGodowns(companyGuid, si2.guid);
             const godownList: Godown[] = gRes?.data?.warehouses || [];
             const finalGodowns: Godown[] = godownList.length > 0
               ? godownList
@@ -848,16 +864,16 @@ export default function CreateDeliveryNoteScreen() {
           } catch { /* leave warehouse editable */ }
         });
         if (logisticsFromPayload.length) setLogEntries(logisticsFromPayload);
-        Toast.show({ type: 'success', text1: 'Sales Order loaded', text2: `${mapped.length} item${mapped.length === 1 ? '' : 's'} ready in Step 3` });
+        Toast.show({ type: 'success', text1: i18n.t('screens.salesCreateDeliveryNote.orderLoaded'), text2: mapped.length === 1 ? i18n.t('screens.salesCreateDeliveryNote.itemsReadyOne', { n: mapped.length }) : i18n.t('screens.salesCreateDeliveryNote.itemsReadyOther', { n: mapped.length }) });
       } else {
-        Toast.show({ type: 'info', text1: 'Order linked', text2: 'No line items found — add them in Step 3' });
+        Toast.show({ type: 'info', text1: i18n.t('screens.salesCreateDeliveryNote.orderLinked'), text2: i18n.t('screens.salesCreateDeliveryNote.noLineItems') });
       }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Could not load order items', text2: err?.message || 'Add items manually in Step 3' });
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.orderItemsFailed'), text2: err?.message || i18n.t('screens.salesCreateDeliveryNote.addManually') });
     } finally {
       setLoadingOrderItems(false);
     }
-  }, [company?.guid, ledger, warehouses, stockItems]);
+  }, [companyGuid, ledger, warehouses, stockItems]);
 
   const handleLinkedOrderSelect = useCallback((opt: BSSOption) => {
     const order: LinkedOrder = {
@@ -881,9 +897,9 @@ export default function CreateDeliveryNoteScreen() {
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
     if (step === 1) {
-      if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
-      if (!party) { Toast.show({ type: 'error', text1: 'Customer / Party required' }); return; }
-      if (!date) { Toast.show({ type: 'error', text1: 'Date required' }); return; }
+      if (!ledger) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errLedger') }); return; }
+      if (!party) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errParty') }); return; }
+      if (!date) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errDate') }); return; }
       setStep(2);
       return;
     }
@@ -911,37 +927,37 @@ export default function CreateDeliveryNoteScreen() {
 
   const itemsSummary = useMemo(() => {
     const filled = items.filter(i => i.product);
-    if (filled.length === 0) return `${items.length} item${items.length !== 1 ? 's' : ''} (not filled)`;
+    if (filled.length === 0) return items.length !== 1 ? t('screens.salesCreateDeliveryNote.notFilledOther', { n: items.length }) : t('screens.salesCreateDeliveryNote.notFilledOne', { n: items.length });
     const first = stockItems.find(si2 => si2.name === filled[0].product);
     const firstName = first?.displayName || filled[0].product;
     if (filled.length === 1) return firstName;
-    return `${firstName} + ${filled.length - 1} more`;
-  }, [items, stockItems]);
+    return t('screens.salesCreateDeliveryNote.andMore', { name: firstName, n: filled.length - 1 });
+  }, [items, stockItems, t]);
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     Keyboard.dismiss();
     if (submittingRef.current) return;
     if (!assertCanCreate('delivery_note.create')) return;
-    if (!company?.guid) { Toast.show({ type: 'error', text1: 'No company selected' }); return; }
-    if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
-    if (!party) { Toast.show({ type: 'error', text1: 'Customer required' }); return; }
-    if (!date) { Toast.show({ type: 'error', text1: 'Date required' }); return; }
+    if (!company?.guid) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errCompany') }); return; }
+    if (!ledger) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errLedger') }); return; }
+    if (!party) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errCustomer') }); return; }
+    if (!date) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errDate') }); return; }
 
     const filledItems = items.filter(i => i.product && (parseFloat(i.qty) || 0) > 0 && (parseFloat(i.rate) || 0) > 0);
-    if (filledItems.length === 0) { Toast.show({ type: 'error', text1: 'Add at least 1 item with qty and rate' }); return; }
+    if (filledItems.length === 0) { Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errNoItems') }); return; }
     if (items.some(i => i.product && (!(parseFloat(i.qty) > 0) || !(parseFloat(i.rate) > 0)))) {
-      Toast.show({ type: 'error', text1: 'All items need qty and rate' }); return;
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errQtyRate') }); return;
     }
     if (items.some(i => i.product && !i.salesLedger)) {
-      Toast.show({ type: 'error', text1: 'Select a sales ledger for every item' }); return;
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errItemLedger') }); return;
     }
     const multiGodownItems = items.filter(i => i.product && (itemGodowns[i.id]?.length || 0) > 1);
     if (multiGodownItems.some(i => !i.warehouse)) {
-      Toast.show({ type: 'error', text1: 'Select godown for all items' }); return;
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errGodown') }); return;
     }
     if (vehicleNumber.trim() && !/^[A-Z0-9-]{6,15}$/.test(vehicleNumber.trim())) {
-      Toast.show({ type: 'error', text1: 'Invalid vehicle number', text2: 'Use letters/digits only, e.g. MH12AB1234' }); return;
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.errVehicle'), text2: i18n.t('screens.salesCreateDeliveryNote.errVehicleMsg') }); return;
     }
 
     setSubmitting(true);
@@ -1027,7 +1043,7 @@ export default function CreateDeliveryNoteScreen() {
       setSubmitting(false);
       return;
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesCreateDeliveryNote.submitFailed'), text2: err?.message || i18n.t('screens.salesCreateDeliveryNote.submitFailedMsg') });
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -1064,8 +1080,8 @@ export default function CreateDeliveryNoteScreen() {
           {step === 1 && (
             <>
               <BottomSheetSearch
-                label="Sales Ledger" required
-                placeholder="Search ledger account..."
+                label={t('screens.salesCreateDeliveryNote.salesLedger')} required
+                placeholder={t('screens.salesCreateDeliveryNote.searchLedger')}
                 options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
                 value={ledger}
                 onSelect={opt => {
@@ -1073,25 +1089,25 @@ export default function CreateDeliveryNoteScreen() {
                   setItems(prev => prev.map(i => (i.salesLedger ? i : { ...i, salesLedger: opt.value })));
                 }}
                 onClear={() => setLedger('')}
-                sheetTitle="Sales Ledger"
+                sheetTitle={t('screens.salesCreateDeliveryNote.salesLedger')}
                 icon="book-outline"
               />
 
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Delivery Note Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.salesCreateDeliveryNote.dnDetails')}</Text>
                 </View>
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>DN No.</Text>
+                    <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.dnNo')}</Text>
                     <View style={s.autoBox}>
                       <Text style={s.autoTxt} numberOfLines={1}>{numberingDisplay}</Text>
                       <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
+                    <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.star}>*</Text></Text>
                     {entryType === 'regular' ? (
                       <View style={[s.autoBox, { opacity: 0.55 }]}>
                         <Text style={s.autoTxt}>{date}</Text>
@@ -1099,24 +1115,24 @@ export default function CreateDeliveryNoteScreen() {
                       </View>
                     ) : (
                       <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
+                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || t('screens.salesCreateDeliveryNote.selectDate')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 </View>
                 <Text style={s.helperTxt}>
-                  Voucher number is assigned per Settings → Voucher Config. This screen never invents one.
+                  {t('screens.salesCreateDeliveryNote.numberingHelper')}
                 </Text>
               </View>
 
               <BottomSheetSearch
-                label="Customer / Party" required
-                placeholder="Search customer..."
+                label={t('screens.salesCreateDeliveryNote.party')} required
+                placeholder={t('screens.salesCreateDeliveryNote.searchCustomer')}
                 options={parties}
                 value={party}
                 onSelect={handlePartySelect}
                 onClear={handlePartyClear}
-                sheetTitle="Customer / Party"
+                sheetTitle={t('screens.salesCreateDeliveryNote.party')}
                 icon="person-outline"
               />
               {party && partyGstin ? (
@@ -1128,7 +1144,7 @@ export default function CreateDeliveryNoteScreen() {
               ) : party && !partyGstin ? (
                 <View style={s.gstRow}>
                   <Ionicons name="alert-circle-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={s.gstSubTxt}>No GSTIN registered</Text>
+                  <Text style={s.gstSubTxt}>{t('screens.salesCreateDeliveryNote.noGstin')}</Text>
                 </View>
               ) : null}
 
@@ -1136,19 +1152,19 @@ export default function CreateDeliveryNoteScreen() {
               {party ? (
                 <View style={{ marginTop: SPACING.md }}>
                   <BottomSheetSearch
-                    label="Linked Sales Order"
+                    label={t('screens.salesCreateDeliveryNote.linkedOrder')}
                     placeholder={
                       linkedOrdersLoading
-                        ? 'Loading orders...'
+                        ? t('screens.salesCreateDeliveryNote.loadingOrders')
                         : linkedOrderOpts.length === 0
-                          ? 'No sales orders for this party'
-                          : 'Select sales order...'
+                          ? t('screens.salesCreateDeliveryNote.noOrders')
+                          : t('screens.salesCreateDeliveryNote.selectOrder')
                     }
                     options={linkedOrderOpts}
                     value={linkedOrder?.voucherNumber || ''}
                     onSelect={handleLinkedOrderSelect}
                     onClear={handleLinkedOrderClear}
-                    sheetTitle="Linked Sales Order"
+                    sheetTitle={t('screens.salesCreateDeliveryNote.linkedOrder')}
                     icon="link-outline"
                     disabled={linkedOrdersLoading || linkedOrderOpts.length === 0}
                   />
@@ -1157,19 +1173,19 @@ export default function CreateDeliveryNoteScreen() {
                       <ActivityIndicator size="small" color={COLORS.brandPrimary} />
                       <Text style={s.gstSubTxt}>
                         {loadingOrderItems
-                          ? `Loading items from order #${linkedOrder?.voucherNumber || ''}...`
-                          : `Fetching sales orders for ${party}...`}
+                          ? t('screens.salesCreateDeliveryNote.loadingOrderItems', { number: linkedOrder?.voucherNumber || '' })
+                          : t('screens.salesCreateDeliveryNote.fetchingOrders', { party })}
                       </Text>
                     </View>
                   )}
                   {linkedOrder && !loadingOrderItems && (
                     <Text style={s.helperTxt}>
-                      Order #{linkedOrder.voucherNumber} linked — items prefilled for Step 3 (qty editable for partial delivery).
+                      {t('screens.salesCreateDeliveryNote.orderLinkedHelper', { number: linkedOrder.voucherNumber })}
                     </Text>
                   )}
                 </View>
               ) : (
-                <Text style={s.helperTxt}>Select a customer to load their sales orders.</Text>
+                <Text style={s.helperTxt}>{t('screens.salesCreateDeliveryNote.selectCustomerHint')}</Text>
               )}
             </>
           )}
@@ -1180,36 +1196,36 @@ export default function CreateDeliveryNoteScreen() {
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="receipt-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Order Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.salesCreateDeliveryNote.orderDetails')}</Text>
                 </View>
-                <Text style={s.fLabel}>Order No(s)</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.orderNos')}</Text>
                 <View style={[s.autoBox, { marginBottom: SPACING.md }]}>
                   <Text style={s.autoTxt} numberOfLines={1}>
                     {linkedOrder?.voucherNumber
                       ? `#${linkedOrder.voucherNumber}${linkedOrder.date ? ` · ${isoToDMY(linkedOrder.date)}` : ''}`
-                      : 'No linked sales order'}
+                      : t('screens.salesCreateDeliveryNote.noLinkedOrder')}
                   </Text>
                   <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                 </View>
-                <Text style={s.fLabel}>Mode/Terms of Payment</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.modeOfPayment')}</Text>
                 <ThemedFInput
                   value={modeOfPayment}
                   onChangeText={setModeOfPayment}
-                  placeholder="e.g. Against Delivery / 30 Days"
+                  placeholder={t('screens.salesCreateDeliveryNote.modeOfPaymentPh')}
                   style={{ marginBottom: SPACING.md }}
                 />
-                <Text style={s.fLabel}>Other References</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.otherRefs')}</Text>
                 <ThemedFInput
                   value={otherReferences}
                   onChangeText={setOtherReferences}
-                  placeholder="Customer PO / other ref"
+                  placeholder={t('screens.salesCreateDeliveryNote.otherRefsPh')}
                   style={{ marginBottom: SPACING.md }}
                 />
-                <Text style={s.fLabel}>Terms of Delivery</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.termsOfDelivery')}</Text>
                 <ThemedFInput
                   value={termsOfDelivery}
                   onChangeText={setTermsOfDelivery}
-                  placeholder="e.g. FOR Destination"
+                  placeholder={t('screens.salesCreateDeliveryNote.termsPh')}
                   multiline
                   numberOfLines={2}
                   style={{ minHeight: 60, textAlignVertical: 'top', marginBottom: 0 }}
@@ -1219,55 +1235,55 @@ export default function CreateDeliveryNoteScreen() {
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="car-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Dispatch Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.salesCreateDeliveryNote.dispatchDetails')}</Text>
                 </View>
-                <Text style={s.fLabel}>Dispatch Doc No.</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.dispatchDocNo')}</Text>
                 <ThemedFInput
                   value={dispatchDocNo}
                   onChangeText={setDispatchDocNo}
-                  placeholder="Optional"
+                  placeholder={t('common.optional')}
                   style={{ marginBottom: SPACING.md }}
                 />
-                <Text style={s.fLabel}>Dispatched through</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.dispatchedThrough')}</Text>
                 <ThemedFInput
                   value={dispatchedThrough}
                   onChangeText={setDispatchedThrough}
-                  placeholder="e.g. Road / Courier name"
+                  placeholder={t('screens.salesCreateDeliveryNote.dispatchedThroughPh')}
                   style={{ marginBottom: SPACING.md }}
                 />
-                <Text style={s.fLabel}>Destination</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.destination')}</Text>
                 <ThemedFInput
                   value={shipToDestination}
                   onChangeText={setShipToDestination}
-                  placeholder="City / place of delivery"
+                  placeholder={t('screens.salesCreateDeliveryNote.destinationPh')}
                   style={{ marginBottom: SPACING.md }}
                 />
-                <Text style={s.fLabel}>Carrier Name/Agent</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.carrier')}</Text>
                 <ThemedFInput
                   value={carrierName}
                   onChangeText={setCarrierName}
-                  placeholder="Optional"
+                  placeholder={t('common.optional')}
                   style={{ marginBottom: SPACING.md }}
                 />
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Bill of Lading/LR-RR No.</Text>
-                    <ThemedFInput value={billOfLadingNo} onChangeText={setBillOfLadingNo} placeholder="Optional" />
+                    <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.billOfLading')}</Text>
+                    <ThemedFInput value={billOfLadingNo} onChangeText={setBillOfLadingNo} placeholder={t('common.optional')} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>LR Date</Text>
+                    <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.lrDate')}</Text>
                     <TouchableOpacity
                       style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
                       onPress={() => setShowLrDatePicker(true)}
                     >
                       <Text style={{ color: lrDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                        {lrDate || 'Optional'}
+                        {lrDate || t('common.optional')}
                       </Text>
                       <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={s.fLabel}>Motor Vehicle No.</Text>
+                <Text style={s.fLabel}>{t('screens.salesCreateDeliveryNote.vehicleNo')}</Text>
                 <ThemedFInput
                   value={vehicleNumber}
                   onChangeText={v => setVehicleNumber(v.toUpperCase())}
@@ -1284,7 +1300,7 @@ export default function CreateDeliveryNoteScreen() {
             <>
               <View style={s.sectionHdr}>
                 <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
-                <Text style={s.sectionTitle}>Items to Deliver</Text>
+                <Text style={s.sectionTitle}>{t('screens.salesCreateDeliveryNote.itemsToDeliver')}</Text>
                 <View style={s.itemCount}><Text style={s.itemCountTxt}>{items.length}</Text></View>
                 <Text style={s.sectionSummary} numberOfLines={1}>{itemsSummary}</Text>
               </View>
@@ -1311,7 +1327,7 @@ export default function CreateDeliveryNoteScreen() {
 
               <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-                <Text style={s.addItemTxt}>+ Add Item</Text>
+                <Text style={s.addItemTxt}>{t('screens.salesCreateDeliveryNote.addItem')}</Text>
               </TouchableOpacity>
 
               <LogisticsSection
@@ -1328,31 +1344,31 @@ export default function CreateDeliveryNoteScreen() {
 
               {/* Running total */}
               <View style={s.runningTotalCard}>
-                <Text style={s.runTotalTitle}>Running Total</Text>
+                <Text style={s.runTotalTitle}>{t('screens.salesCreateDeliveryNote.runningTotal')}</Text>
                 <View style={s.runTotalRow}>
-                  <Text style={s.runTotalLabel}>Items Subtotal</Text>
+                  <Text style={s.runTotalLabel}>{t('screens.salesCreateDeliveryNote.itemsSubtotal')}</Text>
                   <Text style={s.runTotalVal}>₹{totals.gross.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                 </View>
                 {totals.taxTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Tax</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.tax')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.taxTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.logisticsTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Charges</Text>
+                    <Text style={s.runTotalLabel}>{t('screens.salesCreateDeliveryNote.charges')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.roundOff !== 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Round Off</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.roundOff')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.roundOff.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 <View style={[s.runTotalRow, s.runTotalGrandRow]}>
-                  <Text style={s.runTotalGrandLabel}>Grand Total</Text>
+                  <Text style={s.runTotalGrandLabel}>{t('pdf.grandTotal')}</Text>
                   <Text style={s.runTotalGrandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
@@ -1361,14 +1377,14 @@ export default function CreateDeliveryNoteScreen() {
               <View style={s.card} onLayout={(e) => { notesCardY.current = e.nativeEvent.layout.y; }}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={s.cardTitle}>Notes</Text>
+                  <Text style={s.cardTitle}>{t('screens.salesCreateDeliveryNote.notes')}</Text>
                 </View>
                 <View onLayout={(e) => { narrationOffset.current = e.nativeEvent.layout.y; }}>
                   <FormField
-                    label="Narration"
+                    label={t('voucher.narration')}
                     value={narration}
                     onChangeText={setNarration}
-                    placeholder="Delivery instructions..."
+                    placeholder={t('screens.salesCreateDeliveryNote.narrationPh')}
                     multiline
                     numberOfLines={2}
                     style={{ minHeight: 60, textAlignVertical: 'top' } as any}
@@ -1388,9 +1404,9 @@ export default function CreateDeliveryNoteScreen() {
             <View style={s.grandTotalBar}>
               <View>
                 <Text style={s.grandTotalMeta}>
-                  {items.filter(i => i.product).length} item{items.filter(i => i.product).length !== 1 ? 's' : ''} · {party || 'No customer'}
+                  {items.filter(i => i.product).length !== 1 ? t('screens.salesCreateDeliveryNote.footerItemsOther', { n: items.filter(i => i.product).length }) : t('screens.salesCreateDeliveryNote.footerItemsOne', { n: items.filter(i => i.product).length })} · {party || t('screens.salesCreateDeliveryNote.noCustomer')}
                 </Text>
-                <Text style={s.grandTotalLabel}>Grand Total</Text>
+                <Text style={s.grandTotalLabel}>{t('pdf.grandTotal')}</Text>
               </View>
               <Text style={s.grandTotalAmt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
@@ -1398,27 +1414,27 @@ export default function CreateDeliveryNoteScreen() {
           <View style={s.footerBtnRow}>
             {step === 1 && (
               <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextBtnTxt}>Next: Order & Dispatch →</Text>
+                <Text style={s.nextBtnTxt}>{t('screens.salesCreateDeliveryNote.nextOrder')}</Text>
               </TouchableOpacity>
             )}
             {step === 2 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                  <Text style={s.backOutlineTxt}>← Details</Text>
+                  <Text style={s.backOutlineTxt}>{t('screens.salesCreateDeliveryNote.backDetails')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-                  <Text style={s.nextBtnTxt}>Next: Items →</Text>
+                  <Text style={s.nextBtnTxt}>{t('screens.salesCreateDeliveryNote.nextItems')}</Text>
                 </TouchableOpacity>
               </>
             )}
             {step === 3 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                  <Text style={s.backOutlineTxt}>← Dispatch</Text>
+                  <Text style={s.backOutlineTxt}>{t('screens.salesCreateDeliveryNote.backDispatch')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
                   {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                  <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Create Delivery Note'}</Text>
+                  <Text style={s.submitTxt}>{submitting ? t('voucher.submitting') : t('screens.salesCreateDeliveryNote.submit')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1434,14 +1450,14 @@ export default function CreateDeliveryNoteScreen() {
         maxDate={fyEnd}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
-        title="Delivery Note Date"
+        title={t('screens.salesCreateDeliveryNote.dateTitle')}
       />
       <DatePickerModal
         visible={showLrDatePicker}
         value={lrDate || date}
         onSelect={(d) => { setLrDate(d); setShowLrDatePicker(false); }}
         onClose={() => setShowLrDatePicker(false)}
-        title="LR / Bill of Lading Date"
+        title={t('screens.salesCreateDeliveryNote.lrDateTitle')}
       />
 
       {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}
@@ -1465,21 +1481,21 @@ export default function CreateDeliveryNoteScreen() {
                 color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Delivery Note Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? t('voucher.journalQueued') : t('screens.salesCreateDeliveryNote.submitted')}</Text>
             <Text style={ss.sub}>
               {submitResult?.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Delivery note pushed to Tally successfully.'}
+                ? t('screens.salesCreateDeliveryNote.queuedMsg')
+                : t('screens.salesCreateDeliveryNote.submittedMsg')}
             </Text>
             <View style={[ss.refBadge, submitResult?.voucherNumber ? { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' } : null]}>
-              <Text style={ss.refLabel}>Delivery Note No.</Text>
+              <Text style={ss.refLabel}>{t('screens.salesCreateDeliveryNote.dnNoLabel')}</Text>
               <Text style={[ss.refVal, submitResult?.voucherNumber ? { color: '#166534' } : { color: COLORS.textSecondary }]}>
-                {submitResult?.voucherNumber || 'Pending from TallyPrime'}
+                {submitResult?.voucherNumber || t('screens.salesCreateDeliveryNote.pendingTally')}
               </Text>
             </View>
             {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refLabel}>{t('screens.salesCreateDeliveryNote.refNo')}</Text>
                 <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
@@ -1496,7 +1512,7 @@ export default function CreateDeliveryNoteScreen() {
                   }}
                 >
                   <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={ss.previewBtnTxt}>Preview</Text>
+                  <Text style={ss.previewBtnTxt}>{t('currency.preview')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[ss.previewBtn, { flex: 1 }]}
@@ -1507,13 +1523,13 @@ export default function CreateDeliveryNoteScreen() {
                   {sharingPdf
                     ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
                     : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
-                  <Text style={ss.previewBtnTxt}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
+                  <Text style={ss.previewBtnTxt}>{sharingPdf ? t('pdf.generating') : t('pdf.sharePdf')}</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
-              <Text style={ss.doneTxt}>Done</Text>
+              <Text style={ss.doneTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

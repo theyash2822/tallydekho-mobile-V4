@@ -51,12 +51,14 @@ export function BottomModalShell({
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
+    if (!visible) setKeyboardOpen(false);
+  }
 
   useEffect(() => {
-    if (!visible) {
-      setKeyboardOpen(false);
-      return;
-    }
+    if (!visible) return;
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const subShow = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));

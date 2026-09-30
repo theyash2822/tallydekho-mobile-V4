@@ -85,7 +85,7 @@ function CustomToggle({
   value: boolean;
   onValueChange: (v: boolean) => void;
 }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
 
   useEffect(() => {
     Animated.spring(anim, {
@@ -146,6 +146,7 @@ function DeleteAccountModal({
   onClose: () => void;
   phone: string;
 }) {
+  const { t } = useTranslation();
   const [otp, setOtp]         = useState('');
   const [countdown, setCount] = useState(30);
   const [isDirty, setIsDirty] = useState(false);
@@ -153,8 +154,7 @@ function DeleteAccountModal({
   const [canResend, setResend] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startTimer = () => {
-    setCount(30); setResend(false);
+  const startCountdown = () => {
     timerRef.current = setInterval(() => {
       setCount(prev => {
         if (prev <= 1) {
@@ -167,8 +167,19 @@ function DeleteAccountModal({
     }, 1000);
   };
 
+  const startTimer = () => {
+    setCount(30); setResend(false);
+    startCountdown();
+  };
+
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) { setOtp(''); setCount(30); setResend(false); }
+  }
+
   useEffect(() => {
-    if (visible) { setOtp(''); startTimer(); }
+    if (visible) startCountdown();
     else clearInterval(timerRef.current!);
     return () => clearInterval(timerRef.current!);
   }, [visible]);
@@ -182,14 +193,14 @@ function DeleteAccountModal({
     if (otp.length < 4) return;
     onClose();
     setTimeout(() =>
-      Alert.alert('Account Deleted', 'Your account has been permanently deleted.'),
+      Alert.alert(t('screens.settingsProfile.accountDeleted'), t('screens.settingsProfile.accountDeletedMsg')),
     300);
   };
 
   const handleResend = () => {
     if (!canResend) return;
     startTimer();
-    Alert.alert('OTP Resent', `A new verification code has been sent to ${phone} via WhatsApp.`);
+    Alert.alert(t('screens.settingsProfile.otpResent'), t('screens.settingsProfile.newCodeSentWhatsApp', { phone }));
   };
 
   return (
@@ -200,18 +211,18 @@ function DeleteAccountModal({
           <View style={ps.handle} />
 
           {/* Heading */}
-          <Text style={ps.modalTitle}>Delete Account Confirmation</Text>
+          <Text style={ps.modalTitle}>{t('screens.settingsProfile.deleteAccountConfirmation')}</Text>
           <Text style={ps.modalSub}>
-            {'Code has been sent to '}
+            {t('screens.settingsProfile.codeSentToPrefix')}
             <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{phone}</Text>
-            {' via WhatsApp.  '}
+            {t('screens.settingsProfile.viaWhatsAppSuffix')}
             <Text
               style={ps.changeLink}
               onPress={() =>
-                Alert.alert('Change Number', 'Contact support to change your registered number.')
+                Alert.alert(t('screens.settingsProfile.changeNumber'), t('screens.settingsProfile.changeNumberMsg'))
               }
             >
-              Change?
+              {t('screens.settingsProfile.changeQ')}
             </Text>
           </Text>
 
@@ -225,7 +236,7 @@ function DeleteAccountModal({
             activeOpacity={0.85}
             disabled={otp.length < 4}
           >
-            <Text style={ps.modalBtnText}>Delete Account</Text>
+            <Text style={ps.modalBtnText}>{t('profile.deleteAccount')}</Text>
           </TouchableOpacity>
 
           {/* Resend */}
@@ -235,7 +246,7 @@ function DeleteAccountModal({
             activeOpacity={canResend ? 0.7 : 1}
           >
             <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
-              {canResend ? 'Resend OTP' : `Resend OTP (${countdown}s)`}
+              {canResend ? t('auth.resendOtp') : t('auth.resendOtpTimer', { countdown })}
             </Text>
           </TouchableOpacity>
 
@@ -260,9 +271,14 @@ function CreatePasskeyModal({
   onClose: () => void;
   onConfirm: (pin: string) => void;
 }) {
+  const { t } = useTranslation();
   const [pin, setPin] = useState('');
 
-  useEffect(() => { if (!visible) setPin(''); }, [visible]);
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (!visible) setPin('');
+  }
 
   const handleKey = (key: string) => {
     if (key === 'back') setPin(p => p.slice(0, -1));
@@ -277,8 +293,8 @@ function CreatePasskeyModal({
           <View style={ps.handle} />
 
           {/* Heading */}
-          <Text style={ps.modalTitle}>Create A Passkey</Text>
-          <Text style={ps.modalSub}>Enter A 4-Character Passkey</Text>
+          <Text style={ps.modalTitle}>{t('screens.settingsProfile.createPasskey')}</Text>
+          <Text style={ps.modalSub}>{t('screens.settingsProfile.enterPasskey')}</Text>
 
           {/* PIN boxes */}
           <PinBoxes value={pin} />
@@ -290,12 +306,12 @@ function CreatePasskeyModal({
             activeOpacity={0.85}
             disabled={pin.length < 4}
           >
-            <Text style={ps.modalBtnText}>Confirm</Text>
+            <Text style={ps.modalBtnText}>{t('common.confirm')}</Text>
           </TouchableOpacity>
 
           {/* Reset link */}
           <TouchableOpacity style={ps.resendRow} onPress={() => setPin('')} activeOpacity={0.7}>
-            <Text style={[ps.resendText, { color: COLORS.info }]}>Reset passcode</Text>
+            <Text style={[ps.resendText, { color: COLORS.info }]}>{t('screens.settingsProfile.resetPasscode')}</Text>
           </TouchableOpacity>
 
           {/* Number pad */}
@@ -337,8 +353,9 @@ function OTPVerifySheet({
   sendLabel:        string;
   getSubtitle:      (val: string) => string;
 }) {
+  const { t } = useTranslation();
   const isPhone      = inputKeyboard === 'phone-pad';
-  const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'Email';
+  const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : t('profile.email');
 
   const [step,       setStep]       = useState<1|2|3|4>(1);
   const [currentVal, setCurrentVal] = useState('');
@@ -385,7 +402,7 @@ function OTPVerifySheet({
       }
       setOtp(''); setStep(2); startTimer();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to send OTP. Try again.');
+      Alert.alert(t('common.error'), err?.message || t('screens.settingsProfile.failedSendOtp'));
     } finally { setLoading(false); }
   };
 
@@ -409,7 +426,10 @@ function OTPVerifySheet({
       }
       setOtp(''); setStep(4); startTimer();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to send OTP to new number. Try again.');
+      Alert.alert(
+        err?.status === 429 ? t('screens.settingsProfile.tooManyAttempts') : err?.status === 400 ? t('screens.settingsProfile.invalidOtp') : t('common.error'),
+        err?.message || t('screens.settingsProfile.failedSendOtpNew'),
+      );
     } finally { setLoading(false); }
   };
 
@@ -424,14 +444,14 @@ function OTPVerifySheet({
       }
       onSuccess(newVal.trim()); onClose();
     } catch (err: any) {
-      Alert.alert('Invalid OTP', err?.message || 'OTP did not match. Try again.');
+      Alert.alert(err?.status === 429 ? t('screens.settingsProfile.tooManyAttempts') : t('screens.settingsProfile.invalidOtp'), err?.message || t('screens.settingsProfile.otpNoMatch'));
     } finally { setLoading(false); }
   };
 
   const handleResend = () => {
     if (!canResend) return;
     startTimer();
-    Alert.alert('OTP Resent', `A new code has been sent to you via ${channelLabel}.`, [{ text: 'OK' }]);
+    Alert.alert(t('screens.settingsProfile.otpResent'), t('screens.settingsProfile.newCodeSentVia', { channel: channelLabel }), [{ text: t('common.ok') }]);
   };
 
   const handleKey = (key: string) => {
@@ -448,10 +468,10 @@ function OTPVerifySheet({
       : <Ionicons name="mail-outline" size={15} color={COLORS.white} />;
 
   const stepTitles: Record<1|2|3|4, string> = {
-    1: `Verify Current ${isPhone ? 'Number' : 'Email'}`,
-    2: 'Enter OTP',
-    3: `New ${isPhone ? 'Phone Number' : 'Email Address'}`,
-    4: 'Confirm New OTP',
+    1: isPhone ? t('screens.settingsProfile.verifyCurrentNumber') : t('screens.settingsProfile.verifyCurrentEmail'),
+    2: t('auth.enterOtp'),
+    3: isPhone ? t('screens.settingsProfile.newPhoneNumber') : t('screens.settingsProfile.newEmailAddress'),
+    4: t('screens.settingsProfile.confirmNewOtp'),
   };
 
   const displayCurrent = isPhone ? `+91 ${currentVal}` : currentVal;
@@ -464,8 +484,8 @@ function OTPVerifySheet({
     const canSend = isCurrentStep ? isCurrentValid : isNewValid;
     const onSend  = isCurrentStep ? handleSendCurrentOTP : handleSendNewOTP;
     const subTitle = isCurrentStep
-      ? `Enter your current ${isPhone ? 'phone number' : 'email address'}`
-      : `Enter your new ${isPhone ? 'phone number' : 'email address'}`;
+      ? (isPhone ? t('screens.settingsProfile.enterCurrentPhone') : t('screens.settingsProfile.enterCurrentEmail'))
+      : (isPhone ? t('screens.settingsProfile.enterNewPhone') : t('screens.settingsProfile.enterNewEmail'));
 
     return (
       <View>
@@ -508,7 +528,7 @@ function OTPVerifySheet({
         </TouchableOpacity>
 
         <TouchableOpacity style={ps.resendRow} onPress={onClose} activeOpacity={0.7}>
-          <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>Cancel</Text>
+          <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <View style={{ height: 16 }} />
       </View>
@@ -519,7 +539,7 @@ function OTPVerifySheet({
   const renderOTP = (isCurrentStep: boolean) => {
     const display   = isCurrentStep ? displayCurrent : displayNew;
     const onVerify  = isCurrentStep ? handleVerifyCurrentOTP : handleVerifyNewOTP;
-    const btnLabel  = isCurrentStep ? 'Verify & Continue →' : 'Verify & Update ✓';
+    const btnLabel  = isCurrentStep ? t('screens.settingsProfile.verifyContinue') : t('screens.settingsProfile.verifyUpdate');
     const canVerify = otp.length === 4;
 
     return (
@@ -527,7 +547,7 @@ function OTPVerifySheet({
         <Text style={ps.modalSub}>
           {getSubtitle(display)}{'\n'}
           <Text style={{ fontWeight: '700', color: channel === 'whatsapp' ? '#25D366' : COLORS.brandPrimary }}>
-            via {channelLabel}
+            {t('screens.settingsProfile.viaChannel', { channel: channelLabel })}
           </Text>
         </Text>
 
@@ -552,11 +572,11 @@ function OTPVerifySheet({
         >
           {canResend ? (
             <Text style={[ps.resendText, { color: COLORS.brandPrimary, textDecorationLine: 'underline' }]}>
-              Didn't receive OTP? Resend
+              {t('screens.settingsProfile.didntReceive')}
             </Text>
           ) : (
             <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>
-              Resend OTP in {countdown}s
+              {t('screens.settingsProfile.resendIn', { countdown })}
             </Text>
           )}
         </TouchableOpacity>
@@ -616,10 +636,12 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState(user?.email || 'your@email.com');
 
   // Sync when user data loads
-  useEffect(() => {
+  const [prevUser, setPrevUser] = useState(user);
+  if (user !== prevUser) {
+    setPrevUser(user);
     if (user?.name) setName(user.name);
     if (user?.phone) setPhone(user.phone);
-  }, [user]);
+  }
 
   // Security — loaded from API
   const [biometric, setBiometricState] = useState(false);
@@ -643,22 +665,22 @@ export default function ProfileScreen() {
       const hasHW = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHW || !enrolled) {
-        Toast.show({ type: 'error', text1: 'Biometric Not Available', text2: 'Please set up Face ID / Fingerprint in device settings first.' });
+        Toast.show({ type: 'error', text1: t('screens.settingsProfile.biometricNotAvailable'), text2: t('screens.settingsProfile.biometricSetupFirst') });
         return;
       }
       // Prompt biometric to confirm user's identity before enabling
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Confirm your identity to enable biometric login',
-        cancelLabel: 'Cancel',
+        promptMessage: t('screens.settingsProfile.confirmIdentity'),
+        cancelLabel: t('common.cancel'),
         disableDeviceFallback: false,
       });
       if (!result.success) {
-        Toast.show({ type: 'info', text1: 'Cancelled', text2: 'Biometric not enabled.' });
+        Toast.show({ type: 'info', text1: t('screens.settingsProfile.cancelled'), text2: t('screens.settingsProfile.biometricNotEnabled') });
         return;
       }
       // Store PIN securely for biometric auto-login (if 2FA is set)
       if (twoFA) {
-        Toast.show({ type: 'info', text1: 'Enter your PIN', text2: 'Enter PIN once to enable biometric login.' });
+        Toast.show({ type: 'info', text1: t('auth.enterPin'), text2: t('screens.settingsProfile.enterPinOnce') });
         // setShowPasskey flow will handle saving PIN to SecureStore
         setShowPasskey(true);
         // We set biometric after PIN is confirmed via handlePasskeyConfirm
@@ -673,7 +695,7 @@ export default function ProfileScreen() {
       await apiSetBiometric(val);
     } catch {
       setBiometricState(!val); // revert
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not update biometric setting.' });
+      Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsProfile.couldNotUpdateBiometric') });
     }
   };
 
@@ -689,8 +711,8 @@ export default function ProfileScreen() {
 
   // Save toast animation (slidedown below header)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const toastH    = useRef(new Animated.Value(0)).current;
-  const toastOpac = useRef(new Animated.Value(0)).current;
+  const toastH    = useState(() => new Animated.Value(0))[0];
+  const toastOpac = useState(() => new Animated.Value(0))[0];
 
   const showToast = (state: 'saving' | 'saved') => {
     setSaveState(state);
@@ -716,7 +738,7 @@ export default function ProfileScreen() {
       setTimeout(hideToast, 1600);
     } catch {
       hideToast();
-      Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not update profile. Try again.' });
+      Toast.show({ type: 'error', text1: t('profile.saveFailed'), text2: t('screens.settingsProfile.couldNotUpdateProfile') });
     }
   };
 
@@ -745,9 +767,9 @@ export default function ProfileScreen() {
           setBiometricState(true);
         }
       }
-      Toast.show({ type: 'success', text1: 'Passkey Set', text2: '2-Factor Authentication is now enabled.' });
+      Toast.show({ type: 'success', text1: t('screens.settingsProfile.passkeySet'), text2: t('screens.settingsProfile.twoFaEnabled') });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err?.message || 'Could not set passkey.' });
+      Toast.show({ type: 'error', text1: t('common.error'), text2: err?.message || t('screens.settingsProfile.couldNotSetPasskey') });
     }
   };
 
@@ -759,9 +781,13 @@ export default function ProfileScreen() {
       // Clear stored biometric PIN
       await clearBiometricPin(phone);
       setBiometricState(false);
-      Toast.show({ type: 'success', text1: '2FA Disabled', text2: 'Two-Factor Authentication has been turned off.' });
+      Toast.show({ type: 'success', text1: t('screens.settingsProfile.twoFaDisabled'), text2: t('screens.settingsProfile.twoFaTurnedOff') });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Incorrect PIN', text2: err?.message || 'Could not disable 2FA.' });
+      Toast.show({
+        type: 'error',
+        text1: err?.status === 429 ? t('screens.settingsProfile.tooManyAttempts') : t('screens.settingsProfile.incorrectPin'),
+        text2: err?.message || t('screens.settingsProfile.couldNotDisable2fa'),
+      });
     }
   };
 
@@ -821,7 +847,7 @@ export default function ProfileScreen() {
                 style={ps.fieldInput}
                 value={name}
                 onChangeText={v => { setName(v); markDirty(); }}
-                placeholder="Enter your name"
+                placeholder={t('screens.settingsProfile.enterYourName')}
                 placeholderTextColor={COLORS.textTertiary}
                 selectionColor={COLORS.brandPrimary}
                 returnKeyType="next"
@@ -845,14 +871,14 @@ export default function ProfileScreen() {
                 <Text style={ps.maskedValue}>{maskPhone(phone)}</Text>
                 <View style={ps.verifiedPill}>
                   <Ionicons name="checkmark-circle" size={12} color={COLORS.positive} />
-                  <Text style={ps.verifiedText}>Verified</Text>
+                  <Text style={ps.verifiedText}>{t('screens.settingsProfile.verified')}</Text>
                 </View>
                 <TouchableOpacity
                   style={ps.editBtn}
                   onPress={() => setShowEditPhone(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={ps.editBtnText}>Edit</Text>
+                  <Text style={ps.editBtnText}>{t('common.edit')}</Text>
                   <Ionicons name="chevron-forward" size={11} color={COLORS.brandPrimary} />
                 </TouchableOpacity>
               </View>
@@ -867,14 +893,14 @@ export default function ProfileScreen() {
                 <Text style={ps.maskedValue}>{maskEmail(email)}</Text>
                 <View style={ps.verifiedPill}>
                   <Ionicons name="checkmark-circle" size={12} color={COLORS.positive} />
-                  <Text style={ps.verifiedText}>Verified</Text>
+                  <Text style={ps.verifiedText}>{t('screens.settingsProfile.verified')}</Text>
                 </View>
                 <TouchableOpacity
                   style={ps.editBtn}
                   onPress={() => setShowEditEmail(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={ps.editBtnText}>Edit</Text>
+                  <Text style={ps.editBtnText}>{t('common.edit')}</Text>
                   <Ionicons name="chevron-forward" size={11} color={COLORS.brandPrimary} />
                 </TouchableOpacity>
               </View>
@@ -963,17 +989,17 @@ export default function ProfileScreen() {
           if (user) setUser({ ...user, phone: newPhone });
           Toast.show({
             type: 'success',
-            text1: 'Phone Number Updated',
-            text2: 'Your phone number has been changed successfully.',
+            text1: t('profile.phoneUpdated'),
+            text2: t('screens.settingsProfile.phoneChanged'),
             visibilityTime: 3000,
           });
         }}
         channel="whatsapp"
-        title="Edit Phone Number"
-        inputPlaceholder="10-digit mobile number"
+        title={t('profile.editPhone')}
+        inputPlaceholder={t('screens.settingsProfile.tenDigitMobile')}
         inputKeyboard="phone-pad"
-        sendLabel="Send OTP via WhatsApp"
-        getSubtitle={(val) => `Code has been sent to ${val}`}
+        sendLabel={t('auth.sendOtp')}
+        getSubtitle={(val) => t('auth.codeSentTo', { phone: val })}
       />
 
       {/* ── Edit Email — Email OTP ──────────────────────────────────────── */}
@@ -985,17 +1011,17 @@ export default function ProfileScreen() {
           if (user) setUser({ ...user, email: newEmail });
           Toast.show({
             type: 'success',
-            text1: 'Email Address Updated',
-            text2: 'Your email address has been changed successfully.',
+            text1: t('profile.emailUpdated'),
+            text2: t('screens.settingsProfile.emailChanged'),
             visibilityTime: 3000,
           });
         }}
         channel="email"
-        title="Edit Email Address"
+        title={t('profile.editEmail')}
         inputPlaceholder="your@email.com"
         inputKeyboard="email-address"
-        sendLabel="Send OTP via Email"
-        getSubtitle={(val) => `Code has been sent to ${val}`}
+        sendLabel={t('screens.settingsProfile.sendOtpEmail')}
+        getSubtitle={(val) => t('auth.codeSentTo', { phone: val })}
       />
     </SafeAreaView>
   );

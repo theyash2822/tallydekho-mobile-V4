@@ -7,14 +7,15 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useAuth } from '../../src/context/AuthContext';
 
-const ENTRY_LABEL: Record<string, string> = {
-  BOTH: 'Regular + Optional',
-  REGULAR_ONLY: 'Regular only',
-  OPTIONAL_ONLY: 'Optional only',
+const ENTRY_LABEL_KEY: Record<string, string> = {
+  BOTH: 'screens.settingsMyAccess.entryBoth',
+  REGULAR_ONLY: 'screens.settingsMyAccess.entryRegularOnly',
+  OPTIONAL_ONLY: 'screens.settingsMyAccess.entryOptionalOnly',
 };
 
 function Chip({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'ok' | 'warn' }) {
@@ -53,6 +54,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export default function MyAccessScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company } = useAuth();
   const {
     workspace,
@@ -69,54 +71,54 @@ export default function MyAccessScreen() {
 
   const roleLabel =
     access?.membershipType === 'OWNER'
-      ? 'Owner'
-      : access?.role?.displayName || access?.role?.systemKey || 'Member';
+      ? t('screens.settingsMyAccess.owner')
+      : access?.role?.displayName || access?.role?.systemKey || t('screens.settingsMyAccess.member');
 
   const membershipStatus = access?.membershipStatus || workspace?.membershipStatus || 'ACTIVE';
 
   const capList = useMemo(() => {
     const arr = Array.from(capabilities || []).map(String).sort();
     if (access?.membershipType === 'OWNER' && arr.length === 0) {
-      return ['All capabilities (Owner)'];
+      return [t('screens.settingsMyAccess.allCapabilities')];
     }
     return arr;
-  }, [capabilities, access?.membershipType]);
+  }, [capabilities, access?.membershipType, t]);
 
   const scopeBlocks = useMemo(() => {
-    const blocks: { title: string; items: string[]; open: boolean }[] = [
-      { title: 'Companies', items: scopes.companies || [], open: !(scopes.companies?.length) },
-      { title: 'Financial years', items: scopes.financialYears || [], open: !(scopes.financialYears?.length) },
-      { title: 'Ledgers / parties', items: scopes.ledgers || [], open: !(scopes.ledgers?.length) },
-      { title: 'Godowns / warehouses', items: scopes.godowns || [], open: !(scopes.godowns?.length) },
-      { title: 'Cost centres', items: scopes.costCentres || [], open: !(scopes.costCentres?.length) },
+    const blocks: { id: string; title: string; items: string[]; open: boolean }[] = [
+      { id: 'companies', title: t('screens.settingsMyAccess.scopeCompanies'), items: scopes.companies || [], open: !(scopes.companies?.length) },
+      { id: 'financialYears', title: t('screens.settingsMyAccess.scopeFinancialYears'), items: scopes.financialYears || [], open: !(scopes.financialYears?.length) },
+      { id: 'ledgers', title: t('screens.settingsMyAccess.scopeLedgers'), items: scopes.ledgers || [], open: !(scopes.ledgers?.length) },
+      { id: 'godowns', title: t('screens.settingsMyAccess.scopeGodowns'), items: scopes.godowns || [], open: !(scopes.godowns?.length) },
+      { id: 'costCentres', title: t('screens.settingsMyAccess.scopeCostCentres'), items: scopes.costCentres || [], open: !(scopes.costCentres?.length) },
     ];
     return blocks;
-  }, [scopes]);
+  }, [scopes, t]);
 
   const policyRows = useMemo(() => {
     const keys = Object.keys(sensitivePolicies || {});
     if (!keys.length) {
       return isOwnerOrAdmin
-        ? [{ key: 'default', label: 'Sensitive fields', value: 'Visible (Owner/Admin default)' }]
-        : [{ key: 'default', label: 'Sensitive fields', value: 'Follows role policy (server-enforced)' }];
+        ? [{ key: 'default', label: t('screens.settingsMyAccess.sensitiveFields'), value: t('screens.settingsMyAccess.visibleDefault') }]
+        : [{ key: 'default', label: t('screens.settingsMyAccess.sensitiveFields'), value: t('screens.settingsMyAccess.followsRolePolicy') }];
     }
     return keys.sort().map((key) => {
       const raw = (sensitivePolicies as any)[key];
       const vis =
-        raw === true || raw === 'VISIBLE' ? 'Visible' :
-        raw === 'MASKED' ? 'Masked' :
-        'Hidden';
+        raw === true || raw === 'VISIBLE' ? t('screens.settingsMyAccess.visible') :
+        raw === 'MASKED' ? t('screens.settingsMyAccess.masked') :
+        t('screens.settingsMyAccess.hidden');
       return { key, label: key.replace(/_/g, ' '), value: vis };
     });
-  }, [sensitivePolicies, isOwnerOrAdmin]);
+  }, [sensitivePolicies, isOwnerOrAdmin, t]);
 
   const moduleChecks = [
-    { label: 'Dashboard', cap: 'dashboard.view' },
-    { label: 'Sales', cap: 'sales.view' },
-    { label: 'Purchase', cap: 'purchase.view' },
-    { label: 'Inventory', cap: 'inventory.view' },
-    { label: 'Financials', cap: 'financials.view' },
-    { label: 'PDF share', cap: 'document.pdf.generate' },
+    { label: t('nav.dashboard'), cap: 'dashboard.view' },
+    { label: t('nav.sales'), cap: 'sales.view' },
+    { label: t('nav.purchase'), cap: 'purchase.view' },
+    { label: t('quickActions.inventory'), cap: 'inventory.view' },
+    { label: t('screens.settingsMyAccess.financials'), cap: 'financials.view' },
+    { label: t('screens.settingsMyAccess.pdfShare'), cap: 'document.pdf.generate' },
   ];
 
   return (
@@ -125,32 +127,32 @@ export default function MyAccessScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>My Access</Text>
+        <Text style={s.headerTitle}>{t('screens.settingsMyAccess.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <Section title="Workspace">
-          <Row label="Name" value={workspace?.name || '—'} />
-          <Row label="Company" value={company?.name || '—'} />
-          <Row label="Pairing" value={pairingStatus || 'UNPAIRED'} />
+        <Section title={t('screens.settingsMyAccess.workspace')}>
+          <Row label={t('screens.settingsMyAccess.name')} value={workspace?.name || '—'} />
+          <Row label={t('screens.settingsMyAccess.company')} value={company?.name || '—'} />
+          <Row label={t('screens.settingsMyAccess.pairing')} value={pairingStatus || 'UNPAIRED'} />
           <View style={s.chipRow}>
-            {demoMode ? <Chip label="Demo Mode" tone="warn" /> : <Chip label="Live data" tone="ok" />}
+            {demoMode ? <Chip label={t('screens.settingsMyAccess.demoMode')} tone="warn" /> : <Chip label={t('screens.settingsMyAccess.liveData')} tone="ok" />}
             <Chip label={membershipStatus} tone={membershipStatus === 'ACTIVE' ? 'ok' : 'warn'} />
           </View>
         </Section>
 
-        <Section title="Your role">
-          <Row label="Access" value={roleLabel} />
-          <Row label="Entry mode" value={ENTRY_LABEL[entryMode] || entryMode || 'BOTH'} />
+        <Section title={t('screens.settingsMyAccess.yourRole')}>
+          <Row label={t('screens.settingsMyAccess.access')} value={roleLabel} />
+          <Row label={t('screens.settingsMyAccess.entryMode')} value={ENTRY_LABEL_KEY[entryMode] ? t(ENTRY_LABEL_KEY[entryMode]) : entryMode || 'BOTH'} />
           {isOwnerOrAdmin ? (
-            <Text style={s.hint}>Owner/Admin can pair Tally, approve Hard Sync/Restore, and configure integrations.</Text>
+            <Text style={s.hint}>{t('screens.settingsMyAccess.ownerHint')}</Text>
           ) : (
-            <Text style={s.hint}>Role and scopes are managed by the Workspace Owner on the Web Portal.</Text>
+            <Text style={s.hint}>{t('screens.settingsMyAccess.memberHint')}</Text>
           )}
         </Section>
 
-        <Section title="Modules you can open">
+        <Section title={t('screens.settingsMyAccess.modulesTitle')}>
           <View style={s.chipRow}>
             {moduleChecks.map((m) => (
               <Chip
@@ -162,48 +164,48 @@ export default function MyAccessScreen() {
           </View>
         </Section>
 
-        <Section title="Effective capabilities">
+        <Section title={t('screens.settingsMyAccess.capabilitiesTitle')}>
           {capList.length === 0 ? (
-            <Text style={s.empty}>No capability list returned — backend remains the authority on write/read.</Text>
+            <Text style={s.empty}>{t('screens.settingsMyAccess.noCapabilities')}</Text>
           ) : (
             <View style={s.chipRow}>
               {capList.slice(0, 40).map((c) => (
                 <Chip key={c} label={c} />
               ))}
-              {capList.length > 40 ? <Chip label={`+${capList.length - 40} more`} /> : null}
+              {capList.length > 40 ? <Chip label={t('screens.settingsMyAccess.moreCount', { count: capList.length - 40 })} /> : null}
             </View>
           )}
         </Section>
 
-        <Section title="Data scope">
+        <Section title={t('screens.settingsMyAccess.dataScope')}>
           {scopeBlocks.map((b) => (
-            <View key={b.title} style={s.scopeBlock}>
+            <View key={b.id} style={s.scopeBlock}>
               <Text style={s.scopeTitle}>{b.title}</Text>
               {b.open ? (
-                <Text style={s.scopeOpen}>Unrestricted (or Owner)</Text>
+                <Text style={s.scopeOpen}>{t('screens.settingsMyAccess.unrestricted')}</Text>
               ) : (
                 <View style={s.chipRow}>
                   {b.items.slice(0, 12).map((item) => (
                     <Chip key={item} label={item} />
                   ))}
-                  {b.items.length > 12 ? <Chip label={`+${b.items.length - 12} more`} /> : null}
+                  {b.items.length > 12 ? <Chip label={t('screens.settingsMyAccess.moreCount', { count: b.items.length - 12 })} /> : null}
                 </View>
               )}
             </View>
           ))}
         </Section>
 
-        <Section title="Sensitive data policy">
+        <Section title={t('screens.settingsMyAccess.sensitivePolicy')}>
           {policyRows.map((p) => (
             <Row key={p.key} label={p.label} value={p.value} />
           ))}
           <Text style={s.hint}>
-            Values may already be masked or omitted by the server. Mobile never overrides a deny.
+            {t('screens.settingsMyAccess.policyHint')}
           </Text>
         </Section>
 
         <Text style={s.footnote}>
-          This screen is informational. Changing roles, seats, or scopes is available only on the Web Portal for the Workspace Owner.
+          {t('screens.settingsMyAccess.footnote')}
         </Text>
       </ScrollView>
     </SafeAreaView>

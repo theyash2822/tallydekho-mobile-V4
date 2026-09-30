@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -18,17 +19,17 @@ import { BottomModalShell } from './BottomModalShell';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ADJUSTMENT_REASONS = [
-  { id: 'Damage',    label: 'Damage',    icon: 'alert-circle-outline',   effect: 'reduce' as const },
-  { id: 'Shortage',  label: 'Shortage',  icon: 'trending-down-outline',  effect: 'reduce' as const },
-  { id: 'Expired',   label: 'Expired',   icon: 'time-outline',           effect: 'reduce' as const },
-  { id: 'Lost',      label: 'Lost',      icon: 'search-outline',         effect: 'reduce' as const },
-  { id: 'Excess',    label: 'Excess',    icon: 'trending-up-outline',    effect: 'increase' as const },
-  { id: 'Correction',label: 'Correction',icon: 'create-outline',         effect: 'both' as const },
+  { id: 'Damage',    labelKey: 'screens.componentsFormsStockAdjustmentModal.damage',    icon: 'alert-circle-outline',   effect: 'reduce' as const },
+  { id: 'Shortage',  labelKey: 'screens.componentsFormsStockAdjustmentModal.shortage',  icon: 'trending-down-outline',  effect: 'reduce' as const },
+  { id: 'Expired',   labelKey: 'screens.componentsFormsStockAdjustmentModal.expired',   icon: 'time-outline',           effect: 'reduce' as const },
+  { id: 'Lost',      labelKey: 'screens.componentsFormsStockAdjustmentModal.lost',      icon: 'search-outline',         effect: 'reduce' as const },
+  { id: 'Excess',    labelKey: 'screens.componentsFormsStockAdjustmentModal.excess',    icon: 'trending-up-outline',    effect: 'increase' as const },
+  { id: 'Correction',labelKey: 'screens.componentsFormsStockAdjustmentModal.correction',icon: 'create-outline',         effect: 'both' as const },
 ];
 
 const DIRECTION_OPTIONS = [
-  { id: 'Add',    label: '+ Add stock'    },
-  { id: 'Reduce', label: '− Reduce stock' },
+  { id: 'Add',    labelKey: 'screens.componentsFormsStockAdjustmentModal.addStock'    },
+  { id: 'Reduce', labelKey: 'screens.componentsFormsStockAdjustmentModal.reduceStock' },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -39,6 +40,7 @@ export function StockAdjustmentModal({
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
   const { company } = useAuth();
+  const { t } = useTranslation();
 
   // Form state
   const [warehouse,    setWarehouse]    = useState('');
@@ -51,10 +53,18 @@ export function StockAdjustmentModal({
   const [itemGodowns,  setItemGodowns]  = useState<string[]>([]);
   // isSubmitting removed — SubmitButton manages its own loading state
 
+  const openKey = `${visible}|${item?.id}`;
+  const [prevOpenKey, setPrevOpenKey] = useState<string | null>(null);
+  if (prevOpenKey !== openKey) {
+    setPrevOpenKey(openKey);
+    if (visible && company?.guid && item) {
+      setReason(''); setDirection(''); setNote(''); setAdjQty(1);
+    }
+  }
+
   // ── Load godowns when modal opens ──────────────────────────────────────────
   useEffect(() => {
     if (!visible || !company?.guid || !item) return;
-    setReason(''); setDirection(''); setNote(''); setAdjQty(1);
 
     getStockGodowns(company.guid, item.id).then((res: any) => {
       const godowns: string[] = Array.isArray(res?.data) ? res.data : [];
@@ -93,24 +103,24 @@ export function StockAdjustmentModal({
   // ── Validation ─────────────────────────────────────────────────────────────
   const validate = (): boolean => {
     if (!warehouse) {
-      Toast.show({ type: 'error', text1: 'Warehouse required', text2: 'Select the warehouse to adjust.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockAdjustmentModal.warehouseRequired'), text2: t('screens.componentsFormsStockAdjustmentModal.selectWarehouseToAdjust') });
       return false;
     }
     if (!adjQty || adjQty <= 0) {
-      Toast.show({ type: 'error', text1: 'Qty required', text2: 'Enter a positive adjustment quantity.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockAdjustmentModal.qtyRequired'), text2: t('screens.componentsFormsStockAdjustmentModal.enterPositiveQty') });
       return false;
     }
     if (!reason) {
-      Toast.show({ type: 'error', text1: 'Reason required', text2: 'Select an adjustment reason.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockAdjustmentModal.reasonRequired'), text2: t('screens.componentsFormsStockAdjustmentModal.selectReasonMsg') });
       return false;
     }
     if (isCorrection && !direction) {
-      Toast.show({ type: 'error', text1: 'Direction required', text2: 'Select Add or Reduce for Correction.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockAdjustmentModal.directionRequired'), text2: t('screens.componentsFormsStockAdjustmentModal.selectDirectionMsg') });
       return false;
     }
     // Prevent negative stock for reduce reasons
     if (effectiveEffect === 'reduce' && adjQty > (item?.qty || 0)) {
-      Toast.show({ type: 'error', text1: 'Exceeds stock', text2: `Max adjustable: ${item?.qty} ${item?.unit || 'units'}` });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsStockAdjustmentModal.exceedsStock'), text2: t('screens.componentsFormsStockAdjustmentModal.maxAdjustable', { qty: item?.qty, unit: item?.unit || t('screens.componentsFormsStockAdjustmentModal.units') }) });
       return false;
     }
     return true;
@@ -141,14 +151,14 @@ export function StockAdjustmentModal({
       clearStockListCache();
       Toast.show({
         type: 'success',
-        text1: queued ? 'Adjustment Queued ⏳' : 'Adjustment Saved ✅',
+        text1: queued ? t('screens.componentsFormsStockAdjustmentModal.adjustmentQueued') : t('screens.componentsFormsStockAdjustmentModal.adjustmentSavedCheck'),
         text2: queued
-          ? 'Saved. Will push to Tally when desktop connects.'
-          : `${itemName} adjusted in Tally`,
+          ? t('screens.componentsFormsStockAdjustmentModal.savedWillPush')
+          : t('screens.componentsFormsStockAdjustmentModal.adjustedInTally', { itemName }),
       });
     } catch (err: any) {
       // Entry may already be in write_queue; show warning not error
-      Toast.show({ type: 'info', text1: 'Adjustment Saved', text2: 'Will push to Tally when desktop connects.' });
+      Toast.show({ type: 'info', text1: t('screens.componentsFormsStockAdjustmentModal.adjustmentSaved'), text2: t('screens.componentsFormsStockAdjustmentModal.willPush') });
     }
   };
 
@@ -165,14 +175,14 @@ export function StockAdjustmentModal({
       titleNode={(
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           <Ionicons name="options-outline" size={20} color="#A89060" />
-          <Text style={ms.title}>Adjust Stock</Text>
+          <Text style={ms.title}>{t('screens.componentsFormsStockAdjustmentModal.adjustStock')}</Text>
         </View>
       )}
       footer={(
         <SubmitButton
-          idleLabel="Save Adjustment"
-          loadingLabel="Saving..."
-          successLabel="✓ Adjustment Saved"
+          idleLabel={t('screens.componentsFormsStockAdjustmentModal.saveAdjustment')}
+          loadingLabel={t('common.saving')}
+          successLabel={t('screens.componentsFormsStockAdjustmentModal.adjustmentSavedTick')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -180,44 +190,44 @@ export function StockAdjustmentModal({
     >
       {item ? <ItemHeaderCard item={item} /> : null}
 
-      <ReadonlyField label="Current Qty" value={item ? `${item.qty} ${item.unit || 'units'}` : '—'} />
+      <ReadonlyField label={t('screens.componentsFormsStockAdjustmentModal.currentQty')} value={item ? `${item.qty} ${item.unit || t('screens.componentsFormsStockAdjustmentModal.units')}` : '—'} />
 
       {itemGodowns.length > 1 ? (
         <InlineDropdownField
-          label="Warehouse"
+          label={t('screens.componentsFormsStockAdjustmentModal.warehouse')}
           options={itemGodowns.map(w => ({ id: w, label: w }))}
           value={warehouse}
           onSelect={(v) => { Keyboard.dismiss(); setWarehouse(v); }}
-          placeholder="Select warehouse"
+          placeholder={t('screens.componentsFormsStockAdjustmentModal.selectWarehouse')}
           required
         />
       ) : (
-        <ReadonlyField label="Warehouse" value={warehouse || item?.warehouse || '—'} />
+        <ReadonlyField label={t('screens.componentsFormsStockAdjustmentModal.warehouse')} value={warehouse || item?.warehouse || '—'} />
       )}
 
       <QtyStepperField
-        label="Adjustment Qty"
-        subLabel="(required)"
+        label={t('screens.componentsFormsStockAdjustmentModal.adjustmentQty')}
+        subLabel={t('screens.componentsFormsStockAdjustmentModal.requiredParen')}
         value={adjQty}
         onChange={setAdjQty}
       />
 
       <InlineDropdownField
-        label="Reason"
-        options={ADJUSTMENT_REASONS.map(r => ({ id: r.id, label: r.label }))}
+        label={t('screens.componentsFormsStockAdjustmentModal.reason')}
+        options={ADJUSTMENT_REASONS.map(r => ({ id: r.id, label: t(r.labelKey) }))}
         value={reason}
         onSelect={(v) => { Keyboard.dismiss(); setReason(v); setDirection(''); }}
-        placeholder="Select reason"
+        placeholder={t('screens.componentsFormsStockAdjustmentModal.selectReason')}
         required
       />
 
       {isCorrection && (
         <InlineDropdownField
-          label="Direction"
-          options={DIRECTION_OPTIONS}
+          label={t('screens.componentsFormsStockAdjustmentModal.direction')}
+          options={DIRECTION_OPTIONS.map(o => ({ id: o.id, label: t(o.labelKey) }))}
           value={direction}
           onSelect={(v) => { Keyboard.dismiss(); setDirection(v); }}
-          placeholder="Add or Reduce?"
+          placeholder={t('screens.componentsFormsStockAdjustmentModal.addOrReduce')}
           required
         />
       )}
@@ -229,19 +239,19 @@ export function StockAdjustmentModal({
           borderWidth: 1, borderColor: previewColor + '30',
         }}>
           <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' }}>
-            Effect Preview
+            {t('screens.componentsFormsStockAdjustmentModal.effectPreview')}
           </Text>
           <Text style={{ fontSize: 14, fontWeight: '700', color: previewColor }}>
-            {previewSign}{adjQty} → {newQty !== null ? `${newQty} ${item?.unit || 'units'}` : '—'}
+            {previewSign}{adjQty} → {newQty !== null ? `${newQty} ${item?.unit || t('screens.componentsFormsStockAdjustmentModal.units')}` : '—'}
           </Text>
         </View>
       )}
 
       <InlineField
-        label="Note / Reference"
+        label={t('screens.componentsFormsStockAdjustmentModal.noteReference')}
         value={note}
         onChange={setNote}
-        placeholder="Optional — e.g. damaged during handling"
+        placeholder={t('screens.componentsFormsStockAdjustmentModal.notePlaceholder')}
         multiline
       />
     </BottomModalShell>

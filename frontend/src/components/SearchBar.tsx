@@ -44,8 +44,8 @@ export default function SearchBar({
 }: Props) {
   const { t } = useTranslation();
   const [showMicModal, setShowMicModal] = useState(false);
-  const micScale = useRef(new Animated.Value(1)).current;
-  const micOpacity = useRef(new Animated.Value(0.7)).current;
+  const micScale = useState(() => new Animated.Value(1))[0];
+  const micOpacity = useState(() => new Animated.Value(0.7))[0];
   const micAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const voiceStartedRef = useRef(false);
   const wasListeningRef = useRef(false);

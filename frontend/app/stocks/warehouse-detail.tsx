@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getWarehouseDetail, getStocks } from '../../src/services/api';
@@ -13,6 +14,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 // ─── Voucher icon map ─────────────────────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string; dir: string }> = {
@@ -44,29 +46,47 @@ export default function WarehouseDetailScreen() {
 
   const warehouseName = wh?.name || decodeURIComponent(params.name || '');
 
-  const load = useCallback(async () => {
+  const fetchWarehouse = useCallback(() => {
+    if (!companyGuid || !params.id) return;
+    // Load warehouse detail (name, address, activity)
+    getWarehouseDetail(companyGuid, params.id)
+      .then((detailRes: any) => {
+        const detail = detailRes?.data;
+        if (!detail) throw new Error(i18n.t('screens.stocksWarehouseDetail.notFound'));
+        setWh(detail);
+
+        // Load stocks for this warehouse using the warehouse name filter
+        return getStocks(companyGuid, { warehouse: detail.name, limit: '1000' });
+      })
+      .then((stocksRes: any) => {
+        const items = stocksRes?.data?.items ?? [];
+        setStocks(items);
+      })
+      .catch((err: any) => {
+        setApiError(err?.message || i18n.t('screens.stocksWarehouseDetail.loadFailed'));
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [companyGuid, params.id]);
+
+  const load = useCallback(() => {
     if (!companyGuid || !params.id) return;
     setIsLoading(true);
     setApiError(null);
-    try {
-      // Load warehouse detail (name, address, activity)
-      const detailRes: any = await getWarehouseDetail(companyGuid, params.id);
-      const detail = detailRes?.data;
-      if (!detail) throw new Error('Warehouse not found');
-      setWh(detail);
+    fetchWarehouse();
+  }, [companyGuid, params.id, fetchWarehouse]);
 
-      // Load stocks for this warehouse using the warehouse name filter
-      const stocksRes: any = await getStocks(companyGuid, { warehouse: detail.name, limit: '1000' });
-      const items = stocksRes?.data?.items ?? [];
-      setStocks(items);
-    } catch (err: any) {
-      setApiError(err?.message || 'Failed to load warehouse');
-    } finally {
-      setIsLoading(false);
+  const [prevLoadKey, setPrevLoadKey] = useState({ companyGuid, id: params.id });
+  if (prevLoadKey.companyGuid !== companyGuid || prevLoadKey.id !== params.id) {
+    setPrevLoadKey({ companyGuid, id: params.id });
+    if (companyGuid && params.id) {
+      setIsLoading(true);
+      setApiError(null);
     }
-  }, [companyGuid, params.id]);
+  }
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchWarehouse(); }, [fetchWarehouse]);
 
   // ── Compute tile stats ──────────────────────────────────────────────────────
   const totalSkus  = stocks.length;
@@ -93,7 +113,7 @@ export default function WarehouseDetailScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle} numberOfLines={1}>
-            {warehouseName || 'Warehouse Detail'}
+            {warehouseName || t('screens.stocksWarehouseDetail.title')}
           </Text>
           {(wh?.code || wh?.address) ? (
             <Text style={s.headerSub} numberOfLines={1}>
@@ -137,12 +157,12 @@ export default function WarehouseDetailScreen() {
               <View style={s.tileStats}>
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{totalSkus}</Text>
-                  <Text style={s.tileStatLabel}>SKUs</Text>
+                  <Text style={s.tileStatLabel}>{t('screens.stocksWarehouseDetail.skus')}</Text>
                 </View>
                 <View style={s.tileStatDivider} />
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{fmtValue(totalValue)}</Text>
-                  <Text style={s.tileStatLabel}>Value</Text>
+                  <Text style={s.tileStatLabel}>{t('screens.stocksWarehouseDetail.value')}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -164,12 +184,12 @@ export default function WarehouseDetailScreen() {
               <View style={s.tileStats}>
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{onHandSkus}</Text>
-                  <Text style={s.tileStatLabel}>SKUs</Text>
+                  <Text style={s.tileStatLabel}>{t('screens.stocksWarehouseDetail.skus')}</Text>
                 </View>
                 <View style={s.tileStatDivider} />
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{fmtValue(onHandValue)}</Text>
-                  <Text style={s.tileStatLabel}>Value</Text>
+                  <Text style={s.tileStatLabel}>{t('screens.stocksWarehouseDetail.value')}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -178,14 +198,14 @@ export default function WarehouseDetailScreen() {
 
           {/* ── Recent Activity ── */}
           <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Activity</Text>
-            <Text style={s.sectionCount}>{recentActivity.length} transactions</Text>
+            <Text style={s.sectionTitle}>{t('screens.stocksWarehouseDetail.activity')}</Text>
+            <Text style={s.sectionCount}>{t('screens.stocksWarehouseDetail.transactionsCount', { count: recentActivity.length })}</Text>
           </View>
 
           {recentActivity.length === 0 ? (
             <View style={{ alignItems: 'center', padding: 32, gap: 8 }}>
               <Ionicons name="document-text-outline" size={40} color={COLORS.textTertiary} />
-              <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No activity yet</Text>
+              <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>{t('screens.stocksWarehouseDetail.noActivity')}</Text>
             </View>
           ) : (
             <View style={s.activityCard}>
@@ -197,7 +217,7 @@ export default function WarehouseDetailScreen() {
                       style={s.actRow}
                       activeOpacity={0.7}
                       disabled={!a.guid}
-                      onPress={() => a.guid ? safePush(router, `/document/${a.guid}` as any) : undefined}
+                      onPress={() => openVoucherPreview(router, { guid: a.guid })}
                     >
                       <View style={[s.actIcon, { backgroundColor: cfg.bg }]}>
                         <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />

@@ -10,6 +10,7 @@ import { LedgerRowSkeleton } from '../src/components/ShimmerPlaceholder';
 
 import { useAuth } from '../src/context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import i18n from '../src/i18n';
 import {
   getNotifications,
   markNotificationRead,
@@ -73,9 +74,14 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [filter, setFilter] = useState<Filter>('All');
 
-  useEffect(() => {
+  const [prevCompanyGuid, setPrevCompanyGuid] = useState(companyGuid);
+  if (companyGuid !== prevCompanyGuid) {
+    setPrevCompanyGuid(companyGuid);
     setIsLoading(true);
     setApiError(null);
+  }
+
+  useEffect(() => {
     getNotifications(companyGuid)
       .then((res: any) => {
         const data = res?.data ?? res;
@@ -85,7 +91,7 @@ export default function NotificationsScreen() {
       })
       .catch((err: any) => {
         console.error('[API Error]', err?.message);
-        setApiError(err?.message || 'Failed to load notifications');
+        setApiError(err?.message || i18n.t('screens.notifications.loadFailed'));
       })
       .finally(() => setIsLoading(false));
   }, [companyGuid]);
@@ -209,13 +215,13 @@ export default function NotificationsScreen() {
           <>
             {today.length > 0 && (
               <>
-                <Text style={s.groupLabel}>Today</Text>
+                <Text style={s.groupLabel}>{t('sales.today')}</Text>
                 {today.map(renderCard)}
               </>
             )}
             {earlier.length > 0 && (
               <>
-                <Text style={s.groupLabel}>Earlier</Text>
+                <Text style={s.groupLabel}>{t('screens.notifications.earlier')}</Text>
                 {earlier.map(renderCard)}
               </>
             )}

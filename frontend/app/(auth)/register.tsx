@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
@@ -18,6 +19,7 @@ const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { phone, token } = useLocalSearchParams<{ phone: string; token: string }>();
   const { signIn } = useAuth();
   const [name, setName] = useState('');
@@ -63,10 +65,10 @@ export default function RegisterScreen() {
         }));
         router.replace('/(auth)/tally-sync');
       } else {
-        setError('Registration failed. Please retry.');
+        setError(t('screens.authRegister.registrationFailed'));
       }
     } catch (err: any) {
-      setError(err?.message || 'Something went wrong. Please try again.');
+      setError(err?.message || t('screens.authRegister.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -84,15 +86,15 @@ export default function RegisterScreen() {
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.heading}>Get Started</Text>
-            <Text style={styles.subHeading}>Log in to access your profile and get started easily.</Text>
+            <Text style={styles.heading}>{t('onboarding.getStarted')}</Text>
+            <Text style={styles.subHeading}>{t('screens.authRegister.subHeading')}</Text>
 
             {/* Full Name */}
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>{t('profile.fullName')}</Text>
             <TextInput
               testID="full-name-input"
               style={styles.input}
-              placeholder="Enter your full name"
+              placeholder={t('screens.authRegister.fullNamePlaceholder')}
               placeholderTextColor={COLORS.textTertiary}
               value={name}
               onChangeText={setName}
@@ -101,14 +103,14 @@ export default function RegisterScreen() {
             />
 
             {/* Email */}
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>{t('screens.authRegister.emailAddress')}</Text>
             <TextInput
               testID="email-input"
               style={styles.input}
               placeholder="yourname@example.com"
               placeholderTextColor={COLORS.textTertiary}
               value={email}
-              onChangeText={t => setEmail(t.toLowerCase())}
+              onChangeText={v => setEmail(v.toLowerCase())}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -116,7 +118,7 @@ export default function RegisterScreen() {
             />
 
             {/* Language Selector */}
-            <Text style={styles.label}>Choose Language</Text>
+            <Text style={styles.label}>{t('screens.authRegister.chooseLanguage')}</Text>
             <TouchableOpacity
               testID="language-selector"
               style={styles.selector}
@@ -138,9 +140,9 @@ export default function RegisterScreen() {
                 {termsAccepted && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
               </View>
               <Text style={styles.termsText}>
-                Accept{' '}
+                {t('screens.authRegister.accept')}{' '}
                 <Text style={styles.link} onPress={() => safePush(router, '/(auth)/terms' as any)}>
-                  Terms and Conditions &amp; Privacy Policy
+                  {t('screens.authRegister.termsLink')}
                 </Text>
               </Text>
             </TouchableOpacity>
@@ -156,7 +158,7 @@ export default function RegisterScreen() {
               activeOpacity={0.8}
             >
               {loading ? <ActivityIndicator color={COLORS.white} size="small" /> : (
-                <Text style={styles.primaryBtnText}>Login</Text>
+                <Text style={styles.primaryBtnText}>{t('auth.login')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -167,7 +169,7 @@ export default function RegisterScreen() {
       <Modal visible={langModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Choose Language</Text>
+            <Text style={styles.modalTitle}>{t('screens.authRegister.chooseLanguage')}</Text>
             <ScrollView>
               {LANGUAGES.map(lang => (
                 <TouchableOpacity

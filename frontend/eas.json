@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -22,10 +23,10 @@
     },
     "staging": {
       "distribution": "internal",
-      "channel": "staging",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "staging",
-        "EXPO_PUBLIC_BACKEND_URL": "https://staging-api.tallydekho.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://staging-api.tallydekho.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "android": {
         "buildType": "apk"
@@ -35,14 +36,15 @@
       }
     },
     "production": {
-      "channel": "production",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_BACKEND_URL": "https://api.tallydekho.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.tallydekho.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "android": {
         "buildType": "aab"
-      }
+      },
+      "autoIncrement": true
     }
   },
   "submit": {

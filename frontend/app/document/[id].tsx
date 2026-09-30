@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { DocumentType, VoucherDocument } from '../../src/types/document';
 
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
@@ -84,6 +85,7 @@ function apiVoucherToDoc(
 }
 
 export default function DocumentPage() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id: string; type?: string }>();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -95,28 +97,34 @@ export default function DocumentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadDeps = [params.id, companyGuid, companyName, routeType];
+  const [prevLoadDeps, setPrevLoadDeps] = useState<unknown[] | null>(null);
+  if (prevLoadDeps === null || loadDeps.some((d, i) => d !== prevLoadDeps[i])) {
+    setPrevLoadDeps(loadDeps);
+    if (!params.id) { setLoading(false); setError(t('screens.documentId.noId')); }
+    else if (!companyGuid) { setLoading(false); setError(t('screens.documentId.companyNotLoaded')); }
+    else { setLoading(true); setError(null); }
+  }
+
   useEffect(() => {
-    if (!params.id) { setLoading(false); setError('No document ID provided'); return; }
-    if (!companyGuid) { setLoading(false); setError('Company not loaded — please wait'); return; }
-    setLoading(true);
-    setError(null);
+    if (!params.id || !companyGuid) return;
     getVoucherById(companyGuid, params.id)
       .then((res: any) => {
         if (res?.data?.voucher) {
           try {
             setDoc(apiVoucherToDoc(res.data, companyName, routeType));
           } catch (e: any) {
-            setError('Failed to parse document: ' + (e?.message || 'unknown error'));
+            setError(t('screens.documentId.parseFailed', { message: e?.message || t('screens.documentId.unknownError') }));
           }
         } else {
-          setError('Document not found');
+          setError(t('screens.documentId.notFound'));
         }
       })
       .catch((err: any) => {
-        setError(err?.message || 'Failed to load document');
+        setError(err?.message || t('screens.documentId.loadFailed'));
       })
       .finally(() => setLoading(false));
-  }, [params.id, companyGuid, companyName, routeType]);
+  }, [params.id, companyGuid, companyName, routeType, t]);
 
   if (loading) {
     return (
@@ -131,13 +139,13 @@ export default function DocumentPage() {
       <View style={s.loader}>
         <Ionicons name="document-text-outline" size={48} color={COLORS.textTertiary} />
         <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, marginTop: 12, textAlign: 'center' }}>
-          {error || 'Document not found'}
+          {error || t('screens.documentId.notFound')}
         </Text>
         <TouchableOpacity
           onPress={() => router.back()}
           style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: 8 }}
         >
-          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Go Back</Text>
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>{t('screens.documentId.goBack')}</Text>
         </TouchableOpacity>
       </View>
     );

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses, getExpensesHomeMetrics } from '../../src/services/api';
@@ -81,7 +82,7 @@ export default function ExpenseScreen() {
   const metricRef = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
 
-  const loadData = useCallback(() => {
+  const startLoad = () => {
     if (!companyGuid) {
       setLiveExpenses([]);
       setLiveCategories([]);
@@ -89,11 +90,14 @@ export default function ExpenseScreen() {
       setIsLoading(false);
       return;
     }
-
-    const rangeParams = fyFrom && fyTo ? { from: fyFrom, to: fyTo } : {};
-
     setIsLoading(true);
     setApiError(null);
+  };
+
+  const fetchData = useCallback(() => {
+    if (!companyGuid) return;
+
+    const rangeParams = fyFrom && fyTo ? { from: fyFrom, to: fyTo } : {};
 
     Promise.allSettled([
       getExpenses(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any),
@@ -139,9 +143,21 @@ export default function ExpenseScreen() {
       .finally(() => setIsLoading(false));
   }, [companyGuid, fyFrom, fyTo, formatAmount, t]);
 
+  const loadData = () => {
+    startLoad();
+    fetchData();
+  };
+
+  const loadDeps = [companyGuid, fyFrom, fyTo, formatAmount, t, lastSyncAt];
+  const [loadedDeps, setLoadedDeps] = useState<unknown[] | null>(null);
+  if (!loadedDeps || loadDeps.some((d, i) => d !== loadedDeps[i])) {
+    setLoadedDeps(loadDeps);
+    startLoad();
+  }
+
   useEffect(() => {
-    loadData();
-  }, [loadData, lastSyncAt]);
+    fetchData();
+  }, [fetchData, lastSyncAt]);
 
   const metricCards = useMemo(() => buildHomeMetricCards(homeMetrics, [
     { id: 'mtd', label: t('purchase.mtd'), icon: 'calendar-number-outline' },
@@ -235,7 +251,7 @@ export default function ExpenseScreen() {
                       key={exp.guid || `expense-${index}`}
                       onPress={() => {
                         const routeType = expenseRowToRouteType(exp.voucherType);
-                        safePush(router, `/document/${exp.guid || exp.id}?type=${routeType}` as any);
+                        openVoucherPreview(router, { guid: exp.guid, docType: routeType });
                       }}
                     >
                       <VoucherListTile

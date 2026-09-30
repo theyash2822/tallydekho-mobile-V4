@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard, Text, StyleSheet } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../utils/safeNavigation';
 import { StockItem, ALL_TAX_RATES } from '../../data/stockData';
@@ -20,6 +21,7 @@ export function EditStockModal({
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,7 +34,10 @@ export function EditStockModal({
   const [groupOptions, setGroupOptions] = useState<{id: string; label: string}[]>([]);
   const [notes,        setNotes]        = useState('');
 
-  useEffect(() => {
+  const prefillKey = visible && item ? item.id : null;
+  const [prevPrefillKey, setPrevPrefillKey] = useState<typeof prefillKey>(null);
+  if (prefillKey !== prevPrefillKey) {
+    setPrevPrefillKey(prefillKey);
     if (visible && item) {
       setHsnCode(item.hsn || '');
       setHsnHint(null);
@@ -41,7 +46,7 @@ export function EditStockModal({
       setGroupName(item.group || '');
       setNotes('');
     }
-  }, [visible, item?.id]);
+  }
 
   useEffect(() => {
     if (visible && company?.guid && groupOptions.length === 0) {
@@ -60,7 +65,7 @@ export function EditStockModal({
 
   const validate = () => {
     if (!hsnCode && !reorderLevel && !taxRateId && !groupName) {
-      Toast.show({ type: 'error', text1: 'Nothing to update', text2: 'Change at least one field.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsEditStockModal.nothingToUpdate'), text2: t('screens.componentsFormsEditStockModal.nothingToUpdateMsg') });
       return false;
     }
     return true;
@@ -76,8 +81,8 @@ export function EditStockModal({
       if (nextHsn && nextHsn !== currentHsn) {
         const check: any = await checkHsnCode(nextHsn);
         if (check?.data?.valid === false) {
-          setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
-          Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+          setHsnHint(t('screens.componentsFormsEditStockModal.invalidHsnHint'));
+          Toast.show({ type: 'error', text1: t('screens.componentsFormsEditStockModal.invalidHsn'), text2: t('screens.componentsFormsEditStockModal.invalidHsnMsg') });
           setIsSubmitting(false);
           return;
         }
@@ -90,7 +95,7 @@ export function EditStockModal({
       if (groupName && groupName !== (item.group || '')) changes.groupName = groupName;
 
       if (Object.keys(changes).length === 0) {
-        Toast.show({ type: 'info', text1: 'No changes', text2: 'Values are the same as current.' });
+        Toast.show({ type: 'info', text1: t('screens.componentsFormsEditStockModal.noChanges'), text2: t('screens.componentsFormsEditStockModal.noChangesMsg') });
         setIsSubmitting(false);
         return;
       }
@@ -112,17 +117,17 @@ export function EditStockModal({
       setTimeout(() => {
         Toast.show({
           type: 'success',
-          text1: queued ? 'Update Queued ⏳' : 'Item Updated ✅',
+          text1: queued ? t('screens.componentsFormsEditStockModal.updateQueued') : t('screens.componentsFormsEditStockModal.itemUpdated'),
           text2: queued
-            ? 'Saved. Will update in Tally when desktop connects.'
-            : `${item.name} updated in Tally`,
+            ? t('screens.componentsFormsEditStockModal.updateQueuedMsg')
+            : t('screens.componentsFormsEditStockModal.itemUpdatedMsg', { name: item.name }),
         });
         if (queueId) {
           safePush(router, `/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
         }
       }, 300);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Update Failed', text2: err?.message || 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsEditStockModal.updateFailed'), text2: err?.message || t('screens.componentsFormsEditStockModal.pleaseTryAgain') });
     } finally {
       setIsSubmitting(false);
     }
@@ -134,12 +139,12 @@ export function EditStockModal({
     <BottomModalShell
       visible={visible}
       onClose={handleClose}
-      title="Edit Stock Item"
+      title={t('screens.componentsFormsEditStockModal.title')}
       footer={
         <SubmitButton
-          idleLabel="Update in Tally"
-          loadingLabel="Updating..."
-          successLabel="✓ Updated"
+          idleLabel={t('screens.componentsFormsEditStockModal.updateInTally')}
+          loadingLabel={t('screens.componentsFormsEditStockModal.updating')}
+          successLabel={t('screens.componentsFormsEditStockModal.updatedCheck')}
           onValidate={validate}
           onDone={handleDone}
         />
@@ -147,21 +152,21 @@ export function EditStockModal({
     >
       {item ? <ItemHeaderCard item={item} /> : null}
 
-      <ReadonlyField label="Item Name"   value={item?.name || '—'} />
-      <ReadonlyField label="Current Qty" value={item ? String(item.qty) : '—'} />
+      <ReadonlyField label={t('screens.componentsFormsEditStockModal.itemName')} value={item?.name || '—'} />
+      <ReadonlyField label={t('screens.componentsFormsEditStockModal.currentQty')} value={item ? String(item.qty) : '—'} />
 
       <InlineField
-        label="HSN Code"
+        label={t('screens.componentsFormsEditStockModal.hsnCode')}
         value={hsnCode}
         onChange={(v) => { setHsnCode(v); setHsnHint(null); }}
-        placeholder="e.g. 38089190"
+        placeholder={t('screens.componentsFormsEditStockModal.hsnPlaceholder')}
         onBlur={async () => {
           const code = hsnCode.trim();
           if (!code) { setHsnHint(null); return; }
           try {
             const res: any = await checkHsnCode(code);
             if (res?.data?.valid === false) {
-              setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+              setHsnHint(t('screens.componentsFormsEditStockModal.invalidHsnHint'));
             } else {
               setHsnHint(null);
             }
@@ -175,33 +180,33 @@ export function EditStockModal({
       )}
 
       <InlineField
-        label="Reorder Level"
+        label={t('screens.componentsFormsEditStockModal.reorderLevel')}
         value={reorderLevel}
         onChange={setReorderLevel}
-        placeholder="e.g. 50"
+        placeholder={t('screens.componentsFormsEditStockModal.reorderPlaceholder')}
       />
 
       <InlineDropdownField
-        label="GST Rate"
+        label={t('screens.componentsFormsEditStockModal.gstRate')}
         options={ALL_TAX_RATES}
         value={taxRateId}
         onSelect={setTaxRateId}
-        placeholder="Select GST rate"
+        placeholder={t('screens.componentsFormsEditStockModal.selectGstRate')}
       />
 
       <InlineDropdownField
-        label="Stock Group"
+        label={t('screens.componentsFormsEditStockModal.stockGroup')}
         options={groupOptions}
         value={groupName}
         onSelect={setGroupName}
-        placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
+        placeholder={groupOptions.length > 0 ? t('screens.componentsFormsEditStockModal.selectGroup') : t('screens.componentsFormsEditStockModal.loadingGroups')}
       />
 
       <InlineField
-        label="Notes / Reference"
+        label={t('screens.componentsFormsEditStockModal.notesReference')}
         value={notes}
         onChange={setNotes}
-        placeholder="Optional"
+        placeholder={t('common.optional')}
         multiline
       />
     </BottomModalShell>

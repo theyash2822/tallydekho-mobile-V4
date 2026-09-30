@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { createStockItem, getStockGroups, getStockUnits, getWarehouses, getInventorySettings, checkHsnCode } from '../../src/services/api';
@@ -15,9 +16,14 @@ import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 import { useRbasCreate } from '../../src/hooks/useRbasCreate';
+import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
-const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
+const dmyToIso = (dmy: string) => {
+  const d = parseDMY(dmy);
+  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
+};
+const todayIso = () => dmyToIso(formatDMY(new Date()));
 
 function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.ComponentProps<typeof TextInput>) {
   const [focused, setFocused] = useState(false);
@@ -33,12 +39,13 @@ function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.Compo
 }
 
 function InrInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
   return (
     <View style={[s.inrBox, focused && s.inputFocused]}>
       <TextInput
         style={[s.inrInput, WEB]}
-        placeholder={placeholder || 'Enter price'}
+        placeholder={placeholder || t('screens.stocksCreateItem.enterPrice')}
         placeholderTextColor={COLORS.textTertiary}
         value={value} onChangeText={onChange}
         keyboardType="decimal-pad"
@@ -54,10 +61,11 @@ function InrInput({ value, onChange, placeholder }: { value: string; onChange: (
 
 /** Tax rate field — matches FormDropdown label + control height for side-by-side rows. */
 function TaxRateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
   return (
     <View style={s.fieldWrap}>
-      <Text style={s.fieldLabel}>Tax rate</Text>
+      <Text style={s.fieldLabel}>{t('screens.stocksCreateItem.taxRate')}</Text>
       <View style={[s.taxBox, focused && s.inputFocused]}>
         <TextInput
           style={[s.taxInput, WEB]}
@@ -78,6 +86,7 @@ function TaxRateInput({ value, onChange }: { value: string; onChange: (v: string
 }
 
 export default function CreateStockItemScreen() {
+  const { t } = useTranslation();
   const allowed = useRequireCapability('stock_item.create');
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -128,7 +137,8 @@ export default function CreateStockItemScreen() {
   const [warehouse, setWarehouse] = useState('');
   const [quantity, setQuantity] = useState('');
   const [salePrice, setSalePrice] = useState('');
-  const [expiryDate, setExpiryDate] = useState(todayStr());
+  const [expiryDate, setExpiryDate] = useState('');
+  const [showExpiryPicker, setShowExpiryPicker] = useState(false);
   const [batchNo, setBatchNo] = useState('');
   const [generateBarcode, setGenerateBarcode] = useState(false);
   const [bcItemName, setBcItemName] = useState(true);
@@ -137,19 +147,19 @@ export default function CreateStockItemScreen() {
 
   const handleSave = async () => {
     if (!productName.trim()) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Product name is required.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.stocksCreateItem.nameRequired') });
       return;
     }
     if (!group) {
-      Toast.show({ type: 'error', text1: 'Group Required', text2: 'Select a stock group from the list.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateItem.groupRequired'), text2: t('screens.stocksCreateItem.groupRequiredMsg') });
       return;
     }
     if (!unit) {
-      Toast.show({ type: 'error', text1: 'Unit Required', text2: 'Select a unit of measure.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateItem.unitRequired'), text2: t('screens.stocksCreateItem.unitRequiredMsg') });
       return;
     }
     if (!company?.guid) {
-      Toast.show({ type: 'error', text1: 'No Company', text2: 'Select a company first.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateItem.noCompany'), text2: t('screens.stocksCreateItem.noCompanyMsg') });
       return;
     }
     if (!assertCanCreate('stock_item.create')) return;
@@ -157,8 +167,8 @@ export default function CreateStockItemScreen() {
       try {
         const check: any = await checkHsnCode(hsnCode.trim());
         if (check?.data?.valid === false) {
-          setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
-          Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+          setHsnHint(t('screens.stocksCreateItem.invalidHsnHint'));
+          Toast.show({ type: 'error', text1: t('screens.stocksCreateItem.invalidHsn'), text2: t('screens.stocksCreateItem.invalidHsnMsg') });
           return;
         }
       } catch { /* allow if check API fails */ }
@@ -181,6 +191,8 @@ export default function CreateStockItemScreen() {
         cgstRate: igst / 2,
         sgstRate: igst / 2,
         hsnCode: hsnCode.trim(),
+        batchNo: showBatchFields ? batchNo.trim() : '',
+        expiryDate: showExpiryFields && expiryDate ? dmyToIso(expiryDate) : '',
         generateBarcode: !!generateBarcode,
         barcodeLabel: generateBarcode
           ? { itemName: !!bcItemName, sku: !!bcSku, salePrice: !!bcSalePrice }
@@ -195,8 +207,8 @@ export default function CreateStockItemScreen() {
       if (generateBarcode && barcode && stockGuid) {
         Toast.show({
           type: 'success',
-          text1: queued ? 'Item Queued + Barcode ✅' : 'Item + Barcode Saved ✅',
-          text2: `Barcode: ${barcode}`,
+          text1: queued ? t('screens.stocksCreateItem.queuedBarcode') : t('screens.stocksCreateItem.savedBarcode'),
+          text2: t('screens.stocksCreateItem.barcodeValue', { barcode }),
         });
         // Open label preview with selected label content prefs
         setTimeout(() => {
@@ -208,7 +220,7 @@ export default function CreateStockItemScreen() {
               copies: '1',
               showSku: bcSku ? '1' : '0',
               showPrice: bcSalePrice ? '1' : '0',
-              showBatch: '0',
+              showBatch: showBatchFields && batchNo.trim() ? '1' : '0',
             },
           } as any);
         }, 600);
@@ -218,18 +230,18 @@ export default function CreateStockItemScreen() {
       if (generateBarcode && !barcode) {
         Toast.show({
           type: 'info',
-          text1: queued ? 'Item Queued ⏳' : 'Item Saved ✅',
+          text1: queued ? t('screens.stocksCreateItem.queued') : t('screens.stocksCreateItem.saved'),
           text2: res?.barcodeError
-            ? `Barcode failed: ${res.barcodeError}`
-            : 'Item saved. Generate barcode from item detail after sync.',
+            ? t('screens.stocksCreateItem.barcodeFailed', { error: res.barcodeError })
+            : t('screens.stocksCreateItem.barcodeLater'),
         });
       } else {
         Toast.show({
           type: 'success',
-          text1: queued ? 'Item Queued ⏳' : 'Item Saved ✅',
+          text1: queued ? t('screens.stocksCreateItem.queued') : t('screens.stocksCreateItem.saved'),
           text2: queued
-            ? 'Will create in Tally when desktop connects.'
-            : `"${itemName}" added to Tally.`,
+            ? t('screens.stocksCreateItem.queuedMsg')
+            : t('screens.stocksCreateItem.addedMsg', { name: itemName }),
         });
       }
       const queueId = res?.queueId ?? res?.data?.queueId;
@@ -241,7 +253,7 @@ export default function CreateStockItemScreen() {
       }
       setTimeout(() => router.back(), 1000);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not save item.' });
+      Toast.show({ type: 'error', text1: t('screens.stocksCreateItem.failed'), text2: err?.message || t('screens.stocksCreateItem.saveFailed') });
     } finally {
       setSubmitting(false);
     }
@@ -255,7 +267,7 @@ export default function CreateStockItemScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Add New Item</Text>
+        <Text style={s.headerTitle}>{t('screens.stocksCreateItem.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -267,19 +279,19 @@ export default function CreateStockItemScreen() {
         >
           {/* Group */}
           <FormDropdown
-            label="Group"
+            label={t('screens.stocksCreateItem.group')}
             required
             value={group}
             options={groupOptions}
-            placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading...'}
+            placeholder={groupOptions.length > 0 ? t('screens.stocksCreateItem.selectGroup') : t('common.loading')}
             onSelect={o => setGroup(o.value)}
           />
 
           {/* Product Name */}
-          <Text style={s.label}>Product name <Text style={s.star}>*</Text></Text>
-          <ThemedInput placeholder="Enter product name" value={productName} onChangeText={setProductName} />
+          <Text style={s.label}>{t('screens.stocksCreateItem.productName')} <Text style={s.star}>*</Text></Text>
+          <ThemedInput placeholder={t('screens.stocksCreateItem.productNamePh')} value={productName} onChangeText={setProductName} />
 
-          <Text style={s.label}>HSN</Text>
+          <Text style={s.label}>{t('pdf.hsn')}</Text>
           <ThemedInput
             placeholder="HSN / SAC"
             value={hsnCode}
@@ -293,7 +305,7 @@ export default function CreateStockItemScreen() {
                 const res: any = await checkHsnCode(hsnCode.trim());
                 const d = res?.data;
                 if (d && d.valid === false) {
-                  setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+                  setHsnHint(t('screens.stocksCreateItem.invalidHsnHint'));
                 } else {
                   setHsnHint(null);
                 }
@@ -309,11 +321,11 @@ export default function CreateStockItemScreen() {
           <View style={s.row2}>
             <View style={s.rowCol}>
               <FormDropdown
-                label="Unit of measure"
+                label={t('screens.stocksCreateItem.unit')}
                 required
                 value={unit}
                 options={unitOptions}
-                placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
+                placeholder={unitOptions.length > 0 ? t('screens.stocksCreateItem.selectUnit') : t('common.loading')}
                 onSelect={o => setUnit(o.value)}
                 containerStyle={s.rowDropdown}
               />
@@ -324,27 +336,27 @@ export default function CreateStockItemScreen() {
           </View>
 
           {/* Purchase Price */}
-          <Text style={s.label}>Purchase Price</Text>
-          <InrInput value={purchasePrice} onChange={setPurchasePrice} placeholder="Enter price" />
+          <Text style={s.label}>{t('screens.stocksCreateItem.purchasePrice')}</Text>
+          <InrInput value={purchasePrice} onChange={setPurchasePrice} placeholder={t('screens.stocksCreateItem.enterPrice')} />
 
           {/* Warehouse Placement */}
           <FormDropdown
-            label="Warehouse Placement"
+            label={t('screens.stocksCreateItem.warehouse')}
             value={warehouse}
             options={warehouseOptions}
-            placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
+            placeholder={warehouseOptions.length > 0 ? t('screens.stocksCreateItem.selectWarehouse') : t('common.loading')}
             onSelect={o => setWarehouse(o.value)}
           />
 
           {/* Quantity + Sale Price */}
           <View style={s.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Quantity</Text>
-              <ThemedInput placeholder="Enter quantity" value={quantity} onChangeText={setQuantity} keyboardType="numeric" />
+              <Text style={s.label}>{t('screens.stocksCreateItem.quantity')}</Text>
+              <ThemedInput placeholder={t('screens.stocksCreateItem.quantityPh')} value={quantity} onChangeText={setQuantity} keyboardType="numeric" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Default Sale Price</Text>
-              <InrInput value={salePrice} onChange={setSalePrice} placeholder="Enter sale price" />
+              <Text style={s.label}>{t('screens.stocksCreateItem.salePrice')}</Text>
+              <InrInput value={salePrice} onChange={setSalePrice} placeholder={t('screens.stocksCreateItem.salePricePh')} />
             </View>
           </View>
 
@@ -353,18 +365,18 @@ export default function CreateStockItemScreen() {
           <View style={s.row2}>
             {showExpiryFields ? (
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Expiry Date</Text>
-              <TouchableOpacity style={s.dateBtn} activeOpacity={0.7}>
+              <Text style={s.label}>{t('screens.stocksCreateItem.expiryDate')}</Text>
+              <TouchableOpacity style={s.dateBtn} activeOpacity={0.7} onPress={() => setShowExpiryPicker(true)}>
                 <Ionicons name="calendar-outline" size={16} color={COLORS.textSecondary} />
-                <Text style={s.dateTxt}>{expiryDate}</Text>
+                <Text style={[s.dateTxt, !expiryDate && { color: COLORS.textTertiary }]}>{expiryDate || t('screens.stocksCreateItem.selectDate')}</Text>
                 <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
             ) : <View style={{ flex: 1 }} />}
             {showBatchFields ? (
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Batch Number</Text>
-              <ThemedInput placeholder="Enter batch number" value={batchNo} onChangeText={setBatchNo} />
+              <Text style={s.label}>{t('screens.stocksCreateItem.batchNo')}</Text>
+              <ThemedInput placeholder={t('screens.stocksCreateItem.batchNoPh')} value={batchNo} onChangeText={setBatchNo} />
             </View>
             ) : <View style={{ flex: 1 }} />}
           </View>
@@ -372,7 +384,7 @@ export default function CreateStockItemScreen() {
 
           {/* Generate Barcode toggle */}
           <View style={s.toggleRow}>
-            <Text style={s.toggleLbl}>Generate Barcode</Text>
+            <Text style={s.toggleLbl}>{t('screens.stocksCreateItem.generateBarcode')}</Text>
             <BrandSwitch value={generateBarcode} onValueChange={setGenerateBarcode} />
           </View>
 
@@ -381,12 +393,12 @@ export default function CreateStockItemScreen() {
           {generateBarcode && (
             <View style={s.checkRow}>
               {([
-                { label: 'Item Name', val: bcItemName, set: setBcItemName },
-                { label: 'SKU', val: bcSku, set: setBcSku },
-                { label: 'Sale Price', val: bcSalePrice, set: setBcSalePrice },
+                { id: 'name', label: t('screens.stocksCreateItem.bcItemName'), val: bcItemName, set: setBcItemName },
+                { id: 'sku', label: t('screens.stocksCreateItem.bcSku'), val: bcSku, set: setBcSku },
+                { id: 'price', label: t('screens.stocksCreateItem.bcSalePrice'), val: bcSalePrice, set: setBcSalePrice },
               ] as const).map(c => (
                 <TouchableOpacity
-                  key={c.label}
+                  key={c.id}
                   style={s.checkItem}
                   onPress={() => (c.set as any)(!c.val)}
                   activeOpacity={0.7}
@@ -406,10 +418,18 @@ export default function CreateStockItemScreen() {
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
             {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
-            <Text style={s.saveBtnTxt}>{submitting?'Saving...':'Save'}</Text>
+            <Text style={s.saveBtnTxt}>{submitting?t('common.saving'):t('common.save')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <DatePickerModal
+        visible={showExpiryPicker}
+        value={expiryDate}
+        title={t('screens.stocksCreateItem.expiryDate')}
+        minDate={todayIso()}
+        onSelect={(d) => { setExpiryDate(d); setShowExpiryPicker(false); }}
+        onClose={() => setShowExpiryPicker(false)}
+      />
     </SafeAreaView>
   );
 }

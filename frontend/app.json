@@ -18,7 +18,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "NSFaceIDUsageDescription": "Use Face ID to unlock Auditor quickly and securely"
       },
       "bundleIdentifier": "com.tallydekho.app"
     },
@@ -29,8 +30,6 @@
         "backgroundColor": "#000000"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
@@ -47,7 +46,9 @@
         "expo-build-properties",
         {
           "android": {
-            "buildArchs": ["arm64-v8a"]
+            "buildArchs": [
+              "arm64-v8a"
+            ]
           }
         }
       ],
@@ -60,7 +61,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000000"
@@ -68,6 +69,12 @@
       ],
       "expo-web-browser",
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to unlock Auditor quickly and securely"
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -87,7 +94,8 @@
       "expo-font",
       "expo-image",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

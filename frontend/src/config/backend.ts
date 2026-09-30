@@ -12,7 +12,7 @@
 export type AppEnv = 'production' | 'staging' | 'development';
 
 export const PRODUCTION_BACKEND_URL = 'https://api.tallydekho.com';
-const DEV_LAN_BACKEND_URL = 'http://192.168.29.243:3001';
+const DEV_LAN_BACKEND_URL = 'http://192.168.29.241:3001';
 
 const PRODUCTION_HOST_PATTERN = /^api\.tallydekho\.com$/i;
 

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
-  PanResponder, Platform, RefreshControl,
+  PanResponder, Platform, RefreshControl, type PanResponderCallbacks,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -13,12 +13,13 @@ import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
-import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
+import { getFinancialData, getGSTReport, getAuditTrail, getAIWeeklyForecast } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -32,12 +33,9 @@ const C_GOLD   = '#D97706';
 const C_GREY   = '#E0DED6';
 const C_GRID   = '#E8E7E1';
 
-// ── AI Insights static data ────────────────────────────────────────────────────
-const AI_FORECAST  = [280,260,300,320,310,340,330,360,350,370,360,390,
-                      380,400,395,420,410,430,420,445,435,455,445,460];
-const AI_ACTUAL    = [260,240,280,270,310,380,420,400,380,450,490,540,
-                      580,630,680,740,800,860,820,900,940,980,1020,990];
 const AI_X = ['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'];
+
+type AIWeekly = { forecast: number[]; actual: number[]; enough: boolean };
 
 // ── Value formatter (lakh/crore aware) ────────────────────────────────────────
 function fmtVal(v: number): string {
@@ -48,30 +46,36 @@ function fmtVal(v: number): string {
 }
 
 // ── Logarithmic Y-scale helpers ───────────────────────────────────────────────
-const MIN_LOG = 2;  // log10(100)
-const MAX_LOG = 5;  // log10(100k)
-const LOG_RANGE = MAX_LOG - MIN_LOG;
+type LogScale = { minLog: number; maxLog: number };
 
-function logY(value: number, chartH: number, padTop: number): number {
-  const v = Math.max(value, 100);
-  const l = Math.min(Math.log10(v), MAX_LOG);
-  return padTop + chartH - ((l - MIN_LOG) / LOG_RANGE) * chartH;
+/** Whole decades around the data: at least 3 decades, never below ₹100. */
+function logScaleFor(values: number[]): LogScale {
+  const pos = values.filter(v => v > 0);
+  const hi = pos.length ? Math.max(...pos) : 100000;
+  const lo = pos.length ? Math.min(...pos) : 100;
+  const maxLog = Math.max(Math.ceil(Math.log10(Math.max(hi, 1000))), 3);
+  const minLog = Math.max(2, Math.min(Math.floor(Math.log10(Math.max(lo, 100))), maxLog - 3));
+  return { minLog, maxLog };
 }
 
-const Y_GRID = [100, 1000, 10000, 100000];
-const Y_LABELS = ['₹100', '₹1k', '₹10k', '₹100k'];
+function logY(value: number, chartH: number, padTop: number, scale: LogScale): number {
+  const v = Math.max(value, 10 ** scale.minLog);
+  const l = Math.min(Math.log10(v), scale.maxLog);
+  return padTop + chartH - ((l - scale.minLog) / (scale.maxLog - scale.minLog)) * chartH;
+}
 
 // ── Build smooth polyline path ────────────────────────────────────────────────
 function buildPath(
   values: number[],
   chartW: number, chartH: number,
   padLeft: number, padTop: number,
+  scale: LogScale,
 ): string {
   const n = values.length;
   return values
     .map((v, i) => {
       const x = padLeft + (i / (n - 1)) * chartW;
-      const y = logY(v, chartH, padTop);
+      const y = logY(v, chartH, padTop, scale);
       return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
@@ -85,6 +89,12 @@ interface LineChartProps {
   xLabels: string[];
   legendPosition?: 'top-right' | 'bottom';
   interactive?: boolean;
+}
+
+/** Creates the PanResponder once; handlers from the first render are kept for the component's lifetime. */
+function useStablePanResponder(config: PanResponderCallbacks) {
+  const [pan] = useState(() => PanResponder.create(config));
+  return pan;
 }
 
 function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactive = false }: LineChartProps) {
@@ -103,14 +113,18 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
   const nPts   = lines[0].values.length;
   const nLbls  = xLabels.length;
   const ptsPerLabel = nPts / nLbls;
+  const scale = logScaleFor(lines.flatMap(l => l.values));
+  const yGrid = Array.from({ length: scale.maxLog - scale.minLog + 1 }, (_, i) => 10 ** (scale.minLog + i));
 
   // Stale-closure refs
   const nPtsRef   = useRef(nPts);
   const chartWRef = useRef(chartW);
   const padLRef   = useRef(PAD_LEFT);
-  nPtsRef.current   = nPts;
-  chartWRef.current = chartW;
-  padLRef.current   = PAD_LEFT;
+  useLayoutEffect(() => {
+    nPtsRef.current   = nPts;
+    chartWRef.current = chartW;
+    padLRef.current   = PAD_LEFT;
+  });
 
   const getX = (i: number) => PAD_LEFT + (i / (nPts - 1)) * chartW;
 
@@ -122,16 +136,14 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
     setTooltipIdx(Math.max(0, Math.min(nPtsRef.current - 1, idx)));
   }, [interactive]);
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder:     () => interactive,
-      onMoveShouldSetPanResponder:      () => interactive,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant:   (e) => handleTouch(e.nativeEvent.locationX),
-      onPanResponderMove:    (e) => handleTouch(e.nativeEvent.locationX),
-      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
-    })
-  ).current;
+  const pan = useStablePanResponder({
+    onStartShouldSetPanResponder:     () => interactive,
+    onMoveShouldSetPanResponder:      () => interactive,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant:   (e) => handleTouch(e.nativeEvent.locationX),
+    onPanResponderMove:    (e) => handleTouch(e.nativeEvent.locationX),
+    onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
+  });
 
   // Tooltip label & values
   const tooltipLabelIdx = tooltipIdx !== null ? Math.floor(tooltipIdx / ptsPerLabel) : null;
@@ -171,8 +183,8 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
       <View {...(interactive ? pan.panHandlers : {})}>
         <Svg width={svgW} height={svgH}>
           {/* Grid lines + Y labels */}
-          {Y_GRID.map((v, i) => {
-            const y = logY(v, chartH, PAD_TOP);
+          {yGrid.map((v) => {
+            const y = logY(v, chartH, PAD_TOP, scale);
             return (
               <G key={v}>
                 <Line
@@ -184,7 +196,7 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
                   x={(PAD_LEFT - 4).toFixed(1)} y={(y + 3.5).toFixed(1)}
                   textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
                 >
-                  {Y_LABELS[i]}
+                  {fmtVal(v)}
                 </SvgText>
               </G>
             );
@@ -203,7 +215,7 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
 
           {/* X-axis labels */}
           {xLabels.map((lbl, j) => {
-            const centerIdx = j * ptsPerLabel + ptsPerLabel / 2;
+            const centerIdx = j * ptsPerLabel + (ptsPerLabel - 1) / 2;
             const x = PAD_LEFT + (centerIdx / (nPts - 1)) * chartW;
             return (
               <SvgText key={lbl} x={x.toFixed(1)} y={(svgH - 4).toFixed(1)}
@@ -216,7 +228,7 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
           {lines.map(l => (
             <Path
               key={l.label}
-              d={buildPath(l.values, chartW, chartH, PAD_LEFT, PAD_TOP)}
+              d={buildPath(l.values, chartW, chartH, PAD_LEFT, PAD_TOP, scale)}
               stroke={l.color} strokeWidth={2} fill="none"
               strokeLinecap="round" strokeLinejoin="round"
             />
@@ -226,7 +238,7 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
           {lines.map(l => {
             const lastVal = l.values[l.values.length - 1];
             const lx = PAD_LEFT + chartW;
-            const ly = logY(lastVal, chartH, PAD_TOP);
+            const ly = logY(lastVal, chartH, PAD_TOP, scale);
             return <Circle key={`dot-${l.label}`} cx={lx.toFixed(1)} cy={ly.toFixed(1)} r={4} fill="#1A1A1A" />;
           })}
 
@@ -239,7 +251,7 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactiv
                 stroke={COLORS.textTertiary} strokeWidth={1} strokeDasharray="3,3"
               />
               {lines.map(l => {
-                const cy = logY(l.values[tooltipIdx], chartH, PAD_TOP);
+                const cy = logY(l.values[tooltipIdx], chartH, PAD_TOP, scale);
                 return <Circle key={`cross-${l.label}`} cx={tooltipX.toFixed(1)} cy={cy.toFixed(1)} r={4} fill={l.color} stroke={COLORS.white} strokeWidth={1.5} />;
               })}
             </>
@@ -347,9 +359,11 @@ function InteractiveLineChart({ lines, xLabels, isLoading }: ILineChartProps) {
   const nRef      = useRef(n);
   const chartWRef = useRef(chartW);
   const padLRef   = useRef(PAD_LEFT);
-  nRef.current      = n;
-  chartWRef.current = chartW;
-  padLRef.current   = PAD_LEFT;
+  useLayoutEffect(() => {
+    nRef.current      = n;
+    chartWRef.current = chartW;
+    padLRef.current   = PAD_LEFT;
+  });
 
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -362,16 +376,14 @@ function InteractiveLineChart({ lines, xLabels, isLoading }: ILineChartProps) {
     setTooltipIdx(idx);
   }, []);
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder:       () => true,
-      onMoveShouldSetPanResponder:        () => true,
-      onPanResponderTerminationRequest:   () => false,
-      onPanResponderGrant:  (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); handleTouch(e.nativeEvent.locationX); },
-      onPanResponderMove:   (e) => handleTouch(e.nativeEvent.locationX),
-      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
-    })
-  ).current;
+  const pan = useStablePanResponder({
+    onStartShouldSetPanResponder:       () => true,
+    onMoveShouldSetPanResponder:        () => true,
+    onPanResponderTerminationRequest:   () => false,
+    onPanResponderGrant:  (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); handleTouch(e.nativeEvent.locationX); },
+    onPanResponderMove:   (e) => handleTouch(e.nativeEvent.locationX),
+    onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
+  });
 
   // Web mouse hover
   const webProps = Platform.OS === 'web' ? {
@@ -561,18 +573,16 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
     setActiveMonth(idx);
   }, [cx, cy, innerR]);
 
-  const gaugeRef = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder:     () => true,
-      onMoveShouldSetPanResponder:      () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant:   (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
-      onPanResponderMove:    (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
-      onPanResponderRelease: () => {
-        hideTimer.current = setTimeout(() => setActiveMonth(null), 2200);
-      },
-    })
-  ).current;
+  const gaugeRef = useStablePanResponder({
+    onStartShouldSetPanResponder:     () => true,
+    onMoveShouldSetPanResponder:      () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant:   (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+    onPanResponderMove:    (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+    onPanResponderRelease: () => {
+      hideTimer.current = setTimeout(() => setActiveMonth(null), 2200);
+    },
+  });
 
   const tooltipMonth = GST_MONTHS[displayIdx];
   const tooltipFiled = displayIdx < filedCount;
@@ -589,13 +599,13 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
             backgroundColor: tooltipFiled ? COLORS.brandPrimary : '#A89060',
           }]}>
             <Text style={gauge.tooltipBadgeTxt}>
-              {tooltipFiled ? '✓ Filed' : '● Pending'}
+              {tooltipFiled ? t('screens.tabsReports.filedBadge') : t('screens.tabsReports.pendingBadge')}
             </Text>
           </View>
         </View>
       ) : (
         <View style={gauge.tooltipWrap}>
-          <Text style={gauge.tooltipHint}>Touch arc to explore</Text>
+          <Text style={gauge.tooltipHint}>{t('screens.tabsReports.touchArc')}</Text>
         </View>
       )}
 
@@ -709,16 +719,14 @@ function AuditProgressBar({ label, count, total, color = COLORS.brandPrimary }: 
   const filled = (total - count) / total;
   const pct    = Math.round(filled * 100);
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder:     () => true,
-      onMoveShouldSetPanResponder:      () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant:   (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); setTouchX(e.nativeEvent.locationX); },
-      onPanResponderMove:    (e) => setTouchX(e.nativeEvent.locationX),
-      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTouchX(null), 1800); },
-    })
-  ).current;
+  const pan = useStablePanResponder({
+    onStartShouldSetPanResponder:     () => true,
+    onMoveShouldSetPanResponder:      () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant:   (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); setTouchX(e.nativeEvent.locationX); },
+    onPanResponderMove:    (e) => setTouchX(e.nativeEvent.locationX),
+    onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTouchX(null), 1800); },
+  });
 
   return (
     <View>
@@ -782,6 +790,7 @@ interface SectionCardProps {
 }
 
 function SectionCard({ iconName, title, children, onPress, metric, trend, trendPositive }: SectionCardProps) {
+  const { t } = useTranslation();
   return (
     <View style={sc.card}>
       <TouchableOpacity style={sc.header} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
@@ -802,7 +811,7 @@ function SectionCard({ iconName, title, children, onPress, metric, trend, trendP
       <View style={sc.body}>{children}</View>
       {onPress ? (
         <TouchableOpacity style={sc.footer} onPress={onPress} activeOpacity={0.7}>
-          <Text style={sc.footerTxt}>View details</Text>
+          <Text style={sc.footerTxt}>{t('screens.tabsReports.viewDetails')}</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -882,23 +891,38 @@ export default function ReportsScreen() {
   const [gstFiledCount, setGstFiledCount] = useState(0);
   const [auditCount, setAuditCount] = useState(0);
   const [auditTotal, setAuditTotal] = useState(100);
+  const [aiWeekly, setAiWeekly] = useState<AIWeekly | null>(null);
+  const [aiFailed, setAiFailed] = useState(false);
 
-  const loadReports = useCallback(async (opts?: { soft?: boolean }) => {
-    if (!companyGuid) return;
-    const from = selectedFY?.startDate;
-    const to   = selectedFY?.endDate;
-    const soft = opts?.soft ?? hasFinDataRef.current;
-    if (!soft) setFinLoading(true);
-    if (!soft) setApiError(null);
+  const fyStartDate = selectedFY?.startDate;
+  const fyEndDate   = selectedFY?.endDate;
+
+  const fetchReports = useCallback((soft: boolean): Promise<void> => {
+    if (!companyGuid) return Promise.resolve();
+    const from = fyStartDate;
+    const to   = fyEndDate;
     const gen = ++requestGenRef.current;
 
-    try {
-      const [finSettled, gstSettled, auditSettled] = await Promise.allSettled([
-        getFinancialData(companyGuid, from, to),
-        getGSTReport(companyGuid, from, to),
-        getAuditTrail(companyGuid),
-      ]);
+    return Promise.allSettled([
+      getFinancialData(companyGuid, from, to),
+      getGSTReport(companyGuid, from, to),
+      getAuditTrail(companyGuid),
+      getAIWeeklyForecast(companyGuid),
+    ]).then(([finSettled, gstSettled, auditSettled, aiSettled]) => {
       if (gen !== requestGenRef.current) return;
+
+      if (aiSettled.status === 'fulfilled') {
+        const ai = (aiSettled.value as any)?.data ?? aiSettled.value;
+        const nums = (v: any) => (Array.isArray(v) ? v.map((n: any) => Math.max(0, Number(n) || 0)) : []);
+        setAiWeekly({
+          forecast: nums(ai?.salesForecast),
+          actual: nums(ai?.salesActual),
+          enough: !!ai?.hasEnoughData,
+        });
+        setAiFailed(false);
+      } else {
+        setAiFailed(true);
+      }
 
       let finOk = false;
       const partialParts: string[] = [];
@@ -936,28 +960,36 @@ export default function ReportsScreen() {
       if (finOk) {
         if (partialParts.length) {
           setApiError(
-            `Some data couldn't be updated (${partialParts.join(', ')})`,
+            i18n.t('screens.tabsReports.partialError', { parts: partialParts.join(', ') }),
           );
         } else {
           setApiError(null);
         }
       } else if (hasFinDataRef.current || soft) {
-        setApiError("Couldn't refresh. Showing previous data. Retry");
+        setApiError(i18n.t('screens.tabsReports.refreshFailedRetry'));
       } else {
         const err = finSettled.status === 'rejected' ? finSettled.reason : null;
-        setApiError((err as any)?.message || 'Failed to load financial data');
+        setApiError((err as any)?.message || i18n.t('screens.tabsReports.failedToLoadFinancial'));
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       if (gen !== requestGenRef.current) return;
       if (hasFinDataRef.current || soft) {
-        setApiError("Couldn't refresh. Showing previous data. Retry");
+        setApiError(i18n.t('screens.tabsReports.refreshFailedRetry'));
       } else {
-        setApiError(err?.message || 'Failed to load financial data');
+        setApiError(err?.message || i18n.t('screens.tabsReports.failedToLoadFinancial'));
       }
-    } finally {
+    }).finally(() => {
       if (gen === requestGenRef.current) setFinLoading(false);
-    }
-  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate]);
+    });
+  }, [companyGuid, fyStartDate, fyEndDate]);
+
+  const loadReports = useCallback((opts?: { soft?: boolean }) => {
+    if (!companyGuid) return Promise.resolve();
+    const soft = opts?.soft ?? hasFinDataRef.current;
+    if (!soft) setFinLoading(true);
+    if (!soft) setApiError(null);
+    return fetchReports(soft);
+  }, [companyGuid, fetchReports]);
 
   useEffect(() => {
     if (identityRef.current !== reportIdentity) {
@@ -966,14 +998,26 @@ export default function ReportsScreen() {
       setFinData(null);
       setGstFiledCount(0);
       setAuditCount(0);
+      setAiWeekly(null);
+      setAiFailed(false);
       requestGenRef.current += 1;
     }
   }, [reportIdentity]);
 
   // Single fetch path — no duplicate useFocusEffect (Phase 3 hygiene)
+  const hardLoadKey = `${companyGuid}|${fyStartDate}|${fyEndDate}|${reportIdentity}`;
+  const [hardLoadedKey, setHardLoadedKey] = useState<string | null>(null);
+  if (hardLoadedKey !== hardLoadKey) {
+    setHardLoadedKey(hardLoadKey);
+    if (companyGuid) {
+      setFinLoading(true);
+      setApiError(null);
+    }
+  }
+
   useEffect(() => {
-    loadReports({ soft: false });
-  }, [loadReports, reportIdentity]);
+    fetchReports(false);
+  }, [fetchReports, reportIdentity]);
 
   // lastSyncAt → soft refresh
   useEffect(() => {
@@ -1072,15 +1116,25 @@ export default function ReportsScreen() {
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
         <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => safePush(router, '/reports/ai-insights' as any)}>
-          <LogLineChart
-            lines={[
-              { values: AI_FORECAST, color: COLORS.brandPrimary, label: t('reports.salesForecast'), latestLabel: '₹460' },
-              { values: AI_ACTUAL,   color: '#A89060',           label: t('reports.actual'),          latestLabel: '₹990' },
-            ]}
-            xLabels={AI_X}
-            legendPosition="bottom"
-            interactive
-          />
+          {aiWeekly && aiWeekly.enough && aiWeekly.forecast.length > 1 && aiWeekly.actual.length === aiWeekly.forecast.length ? (
+            <LogLineChart
+              lines={[
+                { values: aiWeekly.forecast, color: COLORS.brandPrimary, label: t('reports.salesForecast'), latestLabel: fmtVal(aiWeekly.forecast[aiWeekly.forecast.length - 1]) },
+                { values: aiWeekly.actual,   color: '#A89060',           label: t('reports.actual'),        latestLabel: fmtVal(aiWeekly.actual[aiWeekly.actual.length - 1]) },
+              ]}
+              xLabels={AI_X.slice(-aiWeekly.forecast.length)}
+              legendPosition="bottom"
+              interactive
+            />
+          ) : (
+            <Text style={styles.aiEmpty}>
+              {aiFailed
+                ? t('reports.aiLoadFailed', "Couldn't load the forecast. Pull down to retry.")
+                : aiWeekly
+                  ? t('reports.aiNotEnoughData', 'Not enough data for a forecast yet')
+                  : ' '}
+            </Text>
+          )}
         </SectionCard>
 
         <Text style={styles.moreLabel}>{t('reports.moreReports')}</Text>
@@ -1143,6 +1197,12 @@ const styles = StyleSheet.create({
   kpiValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
   kpiSep: { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
+  aiEmpty: {
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    paddingVertical: SPACING.lg,
+  },
   moreLabel: {
     fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
     textTransform: 'uppercase', letterSpacing: 0.8,

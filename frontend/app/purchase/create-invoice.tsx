@@ -131,6 +131,11 @@ const calcItem = (item: InvoiceItem) => {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+const PAY_MODE_LABEL_KEYS: Record<string, string> = {
+  cash: 'screens.purchaseCreateInvoice.payCash',
+  cheque: 'screens.purchaseCreateInvoice.payCheque',
+};
+
 const PAY_MODES: DropdownOption[] = [
   { label: 'Cash', value: 'cash' },
   { label: 'NEFT', value: 'neft' },
@@ -221,10 +226,11 @@ function DateInput({ label, value, onChange, minDate, maxDate }: { label: string
 
 // ─── StepIndicator ────────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
+  const { t } = useTranslation();
   const STEPS = [
-    { num: 1 as const, label: 'Invoice Details' },
-    { num: 2 as const, label: 'Items' },
-    { num: 3 as const, label: 'Review & Submit' },
+    { num: 1 as const, label: t('screens.purchaseCreateInvoice.invoiceDetails') },
+    { num: 2 as const, label: t('screens.purchaseCreateInvoice.items') },
+    { num: 3 as const, label: t('screens.purchaseCreateInvoice.reviewSubmit') },
   ];
   return (
     <View style={si.wrap}>
@@ -255,6 +261,7 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
   onSaved: (name: string, success?: boolean) => void;
   company?: { guid?: string; name?: string } | null;
 }>(function AddVendorDrawer({ onClose, onSaved, company }, ref) {
+  const { t } = useTranslation();
   const sheetRef  = useRef<BottomSheetModal>(null);
   const formRef   = useRef<PartyFormRef>(null);
   const insets    = useSafeAreaInsets();
@@ -282,7 +289,7 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
   };
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Required', 'Vendor name is required.'); return; }
+    if (!name.trim()) { Alert.alert(t('common.required'), t('screens.purchaseCreateInvoice.vendorNameRequired')); return; }
     setSaving(true);
     try {
       const pd = formRef.current?.getData();
@@ -315,7 +322,7 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
       const savedName = name.trim();
       resetForm();
       sheetRef.current?.dismiss();
-      if (result?.queued) Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+      if (result?.queued) Alert.alert(t('screens.purchaseCreateInvoice.queued'), t('screens.purchaseCreateInvoice.vendorQueuedMsg', { name: savedName }));
       onSaved(savedName, true);
     } catch (err: any) {
       setSaving(false);
@@ -326,9 +333,9 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
         resetForm();
         sheetRef.current?.dismiss();
         onSaved(savedName, false);
-        Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+        Alert.alert(t('screens.purchaseCreateInvoice.queued'), t('screens.purchaseCreateInvoice.vendorQueuedMsg', { name: savedName }));
       } else {
-        Alert.alert('Error', msg || 'Failed to create vendor. Please try again.');
+        Alert.alert(t('common.error'), msg || t('screens.purchaseCreateInvoice.createVendorFailed'));
       }
     } finally { setSaving(false); }
   };
@@ -353,8 +360,8 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
     >
       <View style={acd.header}>
         <View style={{ flex: 1 }}>
-          <Text style={acd.title}>New Vendor</Text>
-          <Text style={[acd.subtitle, { marginTop: 2 }]}>Sundry Creditors</Text>
+          <Text style={acd.title}>{t('screens.purchaseCreateInvoice.newVendor')}</Text>
+          <Text style={[acd.subtitle, { marginTop: 2 }]}>{t('quickActions.sundryCreditors')}</Text>
         </View>
         <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={acd.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="close" size={22} color={COLORS.textPrimary} />
@@ -366,16 +373,16 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
         contentContainerStyle={[acd.body, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
+        <Text style={acd.label}>{t('screens.purchaseCreateInvoice.name')} <Text style={acd.star}>*</Text></Text>
         <BottomSheetTextInput
           style={acd.input as any}
-          placeholder="Enter vendor name"
+          placeholder={t('screens.purchaseCreateInvoice.enterVendorName')}
           placeholderTextColor={COLORS.textTertiary}
           value={name}
           onChangeText={setName}
         />
 
-        <Text style={acd.label}>Opening Balance</Text>
+        <Text style={acd.label}>{t('ledger.opening')}</Text>
         <View style={acd.balBox}>
           <BottomSheetTextInput
             style={acd.balInput as any}
@@ -386,9 +393,9 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
             keyboardType="numeric"
           />
           <View style={acd.drCrRow}>
-            <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
+            <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>{t('screens.purchaseCreateInvoice.dr')}</Text>
             <BrandSwitch value={isCr} onValueChange={setIsCr} />
-            <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
+            <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>{t('screens.purchaseCreateInvoice.cr')}</Text>
           </View>
         </View>
 
@@ -406,7 +413,7 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
       <View style={[acd.footer, { paddingBottom: insets.bottom + 8 }]}>
         <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
           {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
-          <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Vendor'}</Text>
+          <Text style={acd.saveBtnTxt}>{saving ? t('common.saving') : t('screens.purchaseCreateInvoice.saveVendor')}</Text>
         </TouchableOpacity>
       </View>
     </BottomSheetModal>
@@ -421,6 +428,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
   onRemove: () => void;
   taxable: number;
 }) {
+  const { t } = useTranslation();
   const taxOpts: BSSOption[] = taxLedgers.map(l => {
     const rate = resolveTaxLedgerRate(l);
     return { label: l.name, value: l.name, subtitle: rate > 0 ? `${rate}%` : undefined };
@@ -444,8 +452,8 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
               onUpdate('taxRate', '');
               onUpdate('taxAmount', '');
             }}
-            placeholder="Select tax ledger..."
-            sheetTitle="Tax Ledger"
+            placeholder={t('screens.purchaseCreateInvoice.selectTaxLedger')}
+            sheetTitle={t('screens.purchaseCreateInvoice.taxLedger')}
           />
         </View>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
@@ -454,7 +462,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
       </View>
       <View style={[ir.taxEntryBottomRow, !entry.ledgerName && { opacity: 0.38 }]} pointerEvents={entry.ledgerName ? 'auto' : 'none'}>
         <View style={ir.taxFieldGroup}>
-          <Text style={ir.taxMiniLbl}>Rate</Text>
+          <Text style={ir.taxMiniLbl}>{t('pdf.rate')}</Text>
           <View style={ir.taxFieldInputRow}>
             <TextInput
               style={ir.taxRateInput}
@@ -465,7 +473,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
                 onUpdate('taxAmount', auto);
               }}
               keyboardType="numeric"
-              placeholder={entry.ledgerName ? '0' : 'Select ledger first'}
+              placeholder={entry.ledgerName ? '0' : t('screens.purchaseCreateInvoice.selectLedgerFirst')}
               placeholderTextColor={COLORS.textTertiary}
               editable={!!entry.ledgerName}
             />
@@ -474,7 +482,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
         </View>
         <Ionicons name="arrow-forward-outline" size={13} color={COLORS.textTertiary} style={{ marginTop: 16 }} />
         <View style={[ir.taxFieldGroup, { flex: 1 }]}>
-          <Text style={ir.taxMiniLbl}>Amount</Text>
+          <Text style={ir.taxMiniLbl}>{t('pdf.amount')}</Text>
           <View style={ir.taxFieldInputRow}>
             <Text style={ir.taxRateSign}>₹</Text>
             <TextInput
@@ -517,6 +525,7 @@ function ItemRow({
   itemIndex: number;
   canRemove: boolean;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
   const calc = calcItem(item);
 
@@ -528,7 +537,7 @@ function ItemRow({
 
   const stockItem = stockItems.find(si => si.name === item.product);
   const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
-  const headerLabel = productLabel || `Item ${itemIndex + 1}`;
+  const headerLabel = productLabel || t('screens.purchaseCreateInvoice.itemN', { n: itemIndex + 1 });
 
   // Purchase = destination godown: show ALL company warehouses (not only those with qty>0).
   // Godown qty is shown as an on-hand hint when available.
@@ -542,11 +551,11 @@ function ItemRow({
         label: w.name,
         value: w.name,
         subtitle: qtyByWh[w.name] != null
-          ? `On hand: ${Math.round(qtyByWh[w.name])} ${stockItem?.unit || 'units'}`
-          : 'Receive stock here',
+          ? t('screens.purchaseCreateInvoice.onHand', { qty: Math.round(qtyByWh[w.name]), unit: stockItem?.unit || t('screens.purchaseCreateInvoice.unitsFallback') })
+          : t('screens.purchaseCreateInvoice.receiveStockHere'),
       }))
     : item.product
-      ? [{ label: 'Main Location', value: 'Main Location', subtitle: 'Default warehouse' }]
+      ? [{ label: 'Main Location', value: 'Main Location', subtitle: t('screens.purchaseCreateInvoice.defaultWarehouse') }]
       : [];
   const needsWarehouseDropdown = !!item.product && warehouseOpts.length >= 1;
 
@@ -573,16 +582,16 @@ function ItemRow({
       {expanded && (
         <View style={ir.expandedContent}>
           <View>
-            <Text style={ir.fieldLabel}>Product <Text style={ir.star}>*</Text></Text>
+            <Text style={ir.fieldLabel}>{t('screens.purchaseCreateInvoice.product')} <Text style={ir.star}>*</Text></Text>
             <View style={ir.productRow}>
               <View style={{ flex: 1 }}>
                 <BottomSheetSearch
-                  placeholder="Select product..."
+                  placeholder={t('screens.purchaseCreateInvoice.selectProduct')}
                   options={stockOpts}
                   value={item.product}
                   onSelect={opt => onProductSelect(item.id, opt)}
                   onClear={() => onProductClear(item.id)}
-                  sheetTitle="Product"
+                  sheetTitle={t('screens.purchaseCreateInvoice.product')}
                   containerStyle={{ marginBottom: 0 }}
                 />
               </View>
@@ -595,14 +604,14 @@ function ItemRow({
           {item.product ? (
             needsWarehouseDropdown ? (
               <View>
-                <Text style={ir.fieldLabel}>Receive in Warehouse <Text style={ir.star}>*</Text></Text>
+                <Text style={ir.fieldLabel}>{t('screens.purchaseCreateInvoice.receiveInWarehouse')} <Text style={ir.star}>*</Text></Text>
                 <BottomSheetSearch
-                  placeholder="Select warehouse..."
+                  placeholder={t('screens.purchaseCreateInvoice.selectWarehouse')}
                   options={warehouseOpts}
                   value={item.warehouse}
                   onSelect={opt => onUpdate(item.id, 'warehouse', opt.value)}
                   onClear={() => onUpdate(item.id, 'warehouse', '')}
-                  sheetTitle="Warehouse"
+                  sheetTitle={t('screens.purchaseCreateInvoice.warehouse')}
                   containerStyle={{ marginBottom: 0 }}
                 />
               </View>
@@ -611,7 +620,7 @@ function ItemRow({
 
           <View style={ir.qurRow}>
             <View style={ir.qtyBox}>
-              <Text style={ir.miniLabel}>Billed Qty <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('screens.purchaseCreateInvoice.billedQty')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'center' }]}
                 value={item.qty}
@@ -623,14 +632,14 @@ function ItemRow({
               />
             </View>
             <View style={ir.unitBox}>
-              <Text style={ir.miniLabel}>Unit</Text>
+              <Text style={ir.miniLabel}>{t('screens.purchaseCreateInvoice.unit')}</Text>
               <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
                 <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
                 <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
             <View style={ir.rateBox}>
-              <Text style={ir.miniLabel}>Rate (₹) <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('screens.purchaseCreateInvoice.rateInr')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'right' }]}
                 value={item.rate}
@@ -644,7 +653,7 @@ function ItemRow({
           </View>
 
           <View style={ir.discFullRow}>
-            <Text style={ir.miniLabel}>Discount</Text>
+            <Text style={ir.miniLabel}>{t('pdf.discount')}</Text>
             <View style={ir.discInner}>
               <TouchableOpacity style={ir.discTypeBtn} onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')} activeOpacity={0.7}>
                 <Text style={ir.discTypeTxt}>{item.discountType === '%' ? '%' : '₹'}</Text>
@@ -662,14 +671,14 @@ function ItemRow({
           </View>
 
           <View style={ir.taxableRow}>
-            <Text style={ir.taxableLabel}>Taxable Amount</Text>
+            <Text style={ir.taxableLabel}>{t('screens.purchaseCreateInvoice.taxableAmount')}</Text>
             <Text style={ir.taxableVal}>₹{calc.taxable.toFixed(2)}</Text>
           </View>
 
           <View style={ir.taxSection}>
             <View style={ir.taxSectionHdr}>
-              <Text style={ir.taxSectionTitle}>Taxes</Text>
-              <Text style={ir.taxColHint}>Type · Rate % · Amount ₹</Text>
+              <Text style={ir.taxSectionTitle}>{t('screens.purchaseCreateInvoice.taxes')}</Text>
+              <Text style={ir.taxColHint}>{t('screens.purchaseCreateInvoice.taxColHint')}</Text>
             </View>
             {item.taxEntries.map(te => (
               <TaxEntryRow
@@ -687,12 +696,12 @@ function ItemRow({
               activeOpacity={0.7}
             >
               <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
-              <Text style={ir.addTaxDashedTxt}>Add Tax</Text>
+              <Text style={ir.addTaxDashedTxt}>{t('screens.purchaseCreateInvoice.addTax')}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={ir.subtotalRow}>
-            <Text style={ir.subtotalLabel}>Item Total</Text>
+            <Text style={ir.subtotalLabel}>{t('screens.purchaseCreateInvoice.itemTotal')}</Text>
             <Text style={ir.subtotalVal}>₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
           </View>
         </View>
@@ -847,11 +856,11 @@ export default function CreatePurchaseInvoiceScreen() {
         if (d.againstOrderNo && !String(d.againstOrderNo).startsWith('TDK-')) {
           setAgainstOrderNo(d.againstOrderNo);
         }
-        Toast.show({ type: 'success', text1: 'Purchase Order Loaded', text2: 'Review and submit to convert to an invoice.' });
+        Toast.show({ type: 'success', text1: t('screens.purchaseCreateInvoice.poLoaded'), text2: t('screens.purchaseCreateInvoice.poLoadedSub') });
       } catch { /* ignore bad prefill */ }
       AsyncStorage.removeItem(key).catch(() => {});
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, t]);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -861,7 +870,7 @@ export default function CreatePurchaseInvoiceScreen() {
       setVendors(list.map((p: any) => ({
         label: p.name,
         value: p.name,
-        subtitle: p.gstin ? `GSTIN: ${p.gstin}` : undefined,
+        subtitle: p.gstin ? t('screens.purchaseCreateInvoice.gstinSub', { gstin: p.gstin }) : undefined,
         data: {
           gstin: p.gstin || '',
           gst_registration_type: p.gst_registration_type || '',
@@ -869,7 +878,7 @@ export default function CreatePurchaseInvoiceScreen() {
         },
       })));
     }).catch(() => {});
-  }, [company?.guid, scopeParties]);
+  }, [company?.guid, scopeParties, t]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -918,8 +927,8 @@ export default function CreatePurchaseInvoiceScreen() {
 
   // Fetch bank/cash ledgers — used by Make Payment Now picker (Step 3)
   const fetchBankLedgers = useCallback(() => {
-    if (!company?.guid) return;
-    getBankLedgers(company.guid).then((res: any) => {
+    if (!companyGuid) return;
+    getBankLedgers(companyGuid).then((res: any) => {
       const list: any[] = res?.data || [];
       const mapped = list.map(l => {
         const bal = parseFloat(l.balance || 0);
@@ -934,9 +943,9 @@ export default function CreatePurchaseInvoiceScreen() {
       });
       setBankLedgers(mapped);
     }).catch(() => {
-      Toast.show({ type: 'error', text1: 'Could not load payment ledgers', text2: 'Tap the picker to retry' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.loadPayLedgersFailed'), text2: t('screens.purchaseCreateInvoice.tapPickerRetry') });
     });
-  }, [company?.guid]);
+  }, [companyGuid, t]);
 
   useEffect(() => { fetchBankLedgers(); }, [fetchBankLedgers]);
 
@@ -970,17 +979,17 @@ export default function CreatePurchaseInvoiceScreen() {
       rate: si?.rate != null ? String(si.rate) : i.rate,
       warehouse: autoWh,
     } : i));
-    if (!si || !company?.guid) return;
+    if (!si || !companyGuid) return;
     try {
       // Prefer Tally GUID; backend also accepts stock name as fallback.
       const stockIdentifier = si.guid || si.name;
-      const res: any = await getStockGodowns(company.guid, stockIdentifier);
+      const res: any = await getStockGodowns(companyGuid, stockIdentifier);
       const godownList: Godown[] = res?.data?.warehouses || [];
       setItemGodowns(prev => ({ ...prev, [itemId]: godownList }));
     } catch {
       setItemGodowns(prev => ({ ...prev, [itemId]: [] }));
     }
-  }, [stockItems, company?.guid, warehouses]);
+  }, [stockItems, companyGuid, warehouses]);
 
   const handleProductClear = useCallback((itemId: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, product: '', unit: 'pcs', rate: '', warehouse: '' } : i));
@@ -1058,24 +1067,24 @@ export default function CreatePurchaseInvoiceScreen() {
     if (parsed.kind !== 'ok') {
       Toast.show({
         type: 'error',
-        text1: parsed.kind === 'not_einvoice' ? 'Not an e-Invoice QR' : 'Could not read e-Invoice QR',
-        text2: `${parsed.reason} Nothing was filled.`,
+        text1: parsed.kind === 'not_einvoice' ? t('screens.purchaseCreateInvoice.notEinvoiceQr') : t('screens.purchaseCreateInvoice.couldNotReadQr'),
+        text2: t('screens.purchaseCreateInvoice.nothingFilled', { reason: parsed.reason }),
       });
       return;
     }
     startQrReview(parsed.summary);
-  }, [startQrReview]);
+  }, [startQrReview, t]);
 
   // A file is attached only if it has a valid e-Invoice QR or the server reads it as a bill.
   // Nothing on the form is changed except via the QR review sheet (user taps Apply).
   const processBillFile = useCallback(async (file: BillFileInput) => {
     const guid = companyGuid;
     if (!guid) {
-      Toast.show({ type: 'error', text1: 'Select a company first' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.selectCompanyFirst') });
       return;
     }
     if (file.base64.length * 0.75 > BILL_PHOTO_MAX_BYTES) {
-      Toast.show({ type: 'error', text1: 'File too large', text2: 'Max 6 MB. Try a smaller PDF or take the photo a little further away.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.fileTooLarge'), text2: t('screens.purchaseCreateInvoice.fileTooLargeSub') });
       return;
     }
     const session = ++billSessionRef.current;
@@ -1083,7 +1092,7 @@ export default function CreatePurchaseInvoiceScreen() {
     const dataUri = `data:${file.mime};base64,${file.base64}`;
     const qr = file.isImage ? await findEinvoiceQrInImage(file.uri) : null;
     let analysis: BillAnalysis | null = null;
-    let failTitle = 'Could not check this bill';
+    let failTitle = t('screens.purchaseCreateInvoice.couldNotCheckBill');
     let failMsg = '';
     try {
       const res: any = await analyzePurchaseBill({ companyGuid: guid, file: dataUri });
@@ -1091,37 +1100,37 @@ export default function CreatePurchaseInvoiceScreen() {
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'OCR_BUSY') {
-        failTitle = 'Bill reader is busy';
-        failMsg = 'Other bills are being checked right now. Please try again in a few seconds.';
+        failTitle = t('screens.purchaseCreateInvoice.billReaderBusy');
+        failMsg = t('screens.purchaseCreateInvoice.billReaderBusyMsg');
       } else if (code === 'TIMEOUT' || code === 'ANALYZE_TIMEOUT') {
-        failTitle = 'Checking took too long';
-        failMsg = 'The bill could not be checked in time. Check your connection, or try a clearer photo of just the bill.';
+        failTitle = t('screens.purchaseCreateInvoice.checkingTooLong');
+        failMsg = t('screens.purchaseCreateInvoice.checkingTooLongMsg');
       } else {
-        failMsg = err?.message || 'Please check your connection.';
+        failMsg = err?.message || t('screens.purchaseCreateInvoice.checkConnection');
       }
     }
     if (session !== billSessionRef.current) return;
     setBillChecking(false);
     if (companyGuidRef.current !== guid) return;
 
-    const kind = file.isImage ? 'photo' : 'PDF';
+    const kind = file.isImage ? t('screens.purchaseCreateInvoice.kindPhoto') : t('screens.purchaseCreateInvoice.kindPdf');
     if (!qr) {
       if (!analysis) {
-        Alert.alert(failTitle, `${failMsg}\n\nThe file was not attached.`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Try again', onPress: () => { retryBillRef.current?.(file); } },
+        Alert.alert(failTitle, `${failMsg}${t('screens.purchaseCreateInvoice.fileNotAttachedSuffix')}`, [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('screens.purchaseCreateInvoice.tryAgain'), onPress: () => { retryBillRef.current?.(file); } },
         ]);
         return;
       }
       if (!analysis.readable) {
-        Alert.alert('Bill not attached', analysis.reason || `No readable text found in this ${kind}.`);
+        Alert.alert(t('screens.purchaseCreateInvoice.billNotAttached'), analysis.reason || t('screens.purchaseCreateInvoice.noReadableText', { kind }));
         return;
       }
       if (!analysis.isBill) {
         const missing = (analysis.missing || []).join(', ');
         Alert.alert(
-          'This does not look like a bill',
-          `We could not find enough bill details in this ${kind}.${missing ? `\n\nNot found: ${missing}` : ''}\n\nPlease attach the vendor's tax invoice. The file was not attached.`,
+          t('screens.purchaseCreateInvoice.notABill'),
+          `${t('screens.purchaseCreateInvoice.notABillBody', { kind })}${missing ? t('screens.purchaseCreateInvoice.notFoundList', { missing }) : ''}${t('screens.purchaseCreateInvoice.notABillTail')}`,
         );
         return;
       }
@@ -1129,24 +1138,24 @@ export default function CreatePurchaseInvoiceScreen() {
 
     setBillAttachment({ uri: file.uri, dataUri, mime: file.mime, name: file.name, analysis, qr });
     if (qr) {
-      Toast.show({ type: 'success', text1: 'e-Invoice QR found on the bill', text2: 'Review the details, then tap Apply.' });
+      Toast.show({ type: 'success', text1: t('screens.purchaseCreateInvoice.qrFoundOnBill'), text2: t('screens.purchaseCreateInvoice.qrFoundOnBillSub') });
       startQrReview(qr);
     } else {
-      Toast.show({ type: 'success', text1: 'Bill checked and attached', text2: 'Fill the details; match notes appear under the bill.' });
+      Toast.show({ type: 'success', text1: t('screens.purchaseCreateInvoice.billAttached'), text2: t('screens.purchaseCreateInvoice.billAttachedSub') });
     }
-  }, [companyGuid, startQrReview]);
+  }, [companyGuid, startQrReview, t]);
 
   useEffect(() => { retryBillRef.current = processBillFile; }, [processBillFile]);
 
   const processBillPhoto = useCallback((asset: ImagePicker.ImagePickerAsset | undefined) => {
     if (!asset?.uri || !asset.base64) {
-      Toast.show({ type: 'error', text1: 'Could not read the photo', text2: 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.couldNotReadPhoto'), text2: t('common.tryAgain') });
       return;
     }
     const mime = asset.mimeType && BILL_MIME_ALLOW.test(asset.mimeType) && asset.mimeType !== 'application/pdf'
       ? asset.mimeType : 'image/jpeg';
     processBillFile({ uri: asset.uri, base64: asset.base64, mime, name: asset.fileName || null, isImage: true });
-  }, [processBillFile]);
+  }, [processBillFile, t]);
 
   const pickBillPdf = useCallback(async () => {
     try {
@@ -1155,21 +1164,21 @@ export default function CreatePurchaseInvoiceScreen() {
       const doc = result.assets?.[0];
       if (!doc?.uri) return;
       if (doc.size && doc.size > BILL_PHOTO_MAX_BYTES) {
-        Toast.show({ type: 'error', text1: 'PDF too large', text2: 'Max 6 MB.' });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.pdfTooLarge'), text2: t('screens.purchaseCreateInvoice.max6mb') });
         return;
       }
       const base64 = await new FsFile(doc.uri).base64();
       processBillFile({ uri: doc.uri, base64, mime: 'application/pdf', name: doc.name || null, isImage: false });
     } catch {
-      Toast.show({ type: 'error', text1: 'Could not open the PDF', text2: 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.couldNotOpenPdf'), text2: t('common.tryAgain') });
     }
-  }, [processBillFile]);
+  }, [processBillFile, t]);
 
   const takeBillPhoto = useCallback(async () => {
     try {
       const camPerm = await ImagePicker.requestCameraPermissionsAsync();
       if (!camPerm.granted) {
-        Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow camera access to photograph the bill.' });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.permissionRequired'), text2: t('screens.purchaseCreateInvoice.allowCameraBill') });
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -1180,15 +1189,15 @@ export default function CreatePurchaseInvoiceScreen() {
       });
       if (!result.canceled) processBillPhoto(result.assets?.[0]);
     } catch {
-      Toast.show({ type: 'error', text1: 'Could not open camera' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.couldNotOpenCamera') });
     }
-  }, [processBillPhoto]);
+  }, [processBillPhoto, t]);
 
   const pickBillFromLibrary = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow photo library access to pick a bill image.' });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.permissionRequired'), text2: t('screens.purchaseCreateInvoice.allowLibraryBill') });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -1198,27 +1207,27 @@ export default function CreatePurchaseInvoiceScreen() {
       });
       if (!result.canceled) processBillPhoto(result.assets?.[0]);
     } catch {
-      Toast.show({ type: 'error', text1: 'Could not open photo library' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.couldNotOpenLibrary') });
     }
-  }, [processBillPhoto]);
+  }, [processBillPhoto, t]);
 
   // Android Alert shows at most 3 buttons, so upload sources are a second step.
   const openBillScanner = useCallback(() => {
     if (billChecking) return;
-    Alert.alert('Scan / Upload Bill', 'Attach the vendor bill (photo or PDF). We check it is a bill before attaching. If it has an e-Invoice QR, you can review and fill the details.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Take Photo', onPress: takeBillPhoto },
+    Alert.alert(t('screens.purchaseCreateInvoice.scanUploadBill'), t('screens.purchaseCreateInvoice.scanUploadBillMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('screens.purchaseCreateInvoice.takePhoto'), onPress: takeBillPhoto },
       {
-        text: 'Upload', onPress: () => {
-          Alert.alert('Upload Bill', 'Choose a bill photo or PDF.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Photo Library', onPress: pickBillFromLibrary },
-            { text: 'PDF', onPress: pickBillPdf },
+        text: t('screens.purchaseCreateInvoice.upload'), onPress: () => {
+          Alert.alert(t('screens.purchaseCreateInvoice.uploadBill'), t('screens.purchaseCreateInvoice.uploadBillMsg'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('screens.purchaseCreateInvoice.photoLibrary'), onPress: pickBillFromLibrary },
+            { text: t('screens.purchaseCreateInvoice.pdf'), onPress: pickBillPdf },
           ]);
         },
       },
     ]);
-  }, [billChecking, takeBillPhoto, pickBillFromLibrary, pickBillPdf]);
+  }, [billChecking, takeBillPhoto, pickBillFromLibrary, pickBillPdf, t]);
 
   const cancelQrPreview = useCallback(() => {
     qrSessionRef.current += 1;
@@ -1240,10 +1249,10 @@ export default function CreatePurchaseInvoiceScreen() {
     setShowQrPreview(false);
     Toast.show({
       type: 'success',
-      text1: 'Details filled from e-Invoice QR',
-      text2: match ? 'Review and edit if needed. Add items in the next step.' : 'Select the vendor, then add items. All fields are editable.',
+      text1: t('screens.purchaseCreateInvoice.filledFromQr'),
+      text2: match ? t('screens.purchaseCreateInvoice.filledFromQrMatch') : t('screens.purchaseCreateInvoice.filledFromQrNoMatch'),
     });
-  }, [qrSummary]);
+  }, [qrSummary, t]);
 
   const addVendorFromQr = useCallback(() => {
     if (!qrSummary) return;
@@ -1272,26 +1281,26 @@ export default function CreatePurchaseInvoiceScreen() {
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
     if (step === 1) {
-      if (!purchaseLedger) { Toast.show({ type: 'error', text1: 'Purchase Ledger required' }); return; }
-      if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor / Party required' }); return; }
+      if (!purchaseLedger) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.purchaseLedgerRequired') }); return; }
+      if (!vendor) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.vendorPartyRequired') }); return; }
       setStep(2);
     } else if (step === 2) {
       const filledItems = items.filter(i => i.product && (parseFloat(i.qty) || 0) > 0 && (parseFloat(i.rate) || 0) > 0);
       if (filledItems.length === 0) {
-        Toast.show({ type: 'error', text1: 'Add at least 1 item with qty and rate' }); return;
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.addAtLeastOneItem') }); return;
       }
       if (items.some(i => i.product && (!(parseFloat(i.qty) > 0) || !(parseFloat(i.rate) > 0)))) {
-        Toast.show({ type: 'error', text1: 'All items need qty and rate' }); return;
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.allItemsNeedQtyRate') }); return;
       }
       // Match submit: any company warehouse list requires an explicit destination pick
       // (auto-filled when length === 1; user may still clear it).
       const needsWarehouse = items.filter(i => i.product && warehouses.length > 0);
       if (needsWarehouse.some(i => !i.warehouse)) {
-        Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return;
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.selectWarehouseAll') }); return;
       }
       setStep(3);
     }
-  }, [step, purchaseLedger, vendor, items, warehouses]);
+  }, [step, purchaseLedger, vendor, items, warehouses, t]);
 
   const goBack = useCallback(() => {
     setStep(prev => Math.max(1, prev - 1) as 1 | 2 | 3);
@@ -1321,11 +1330,11 @@ export default function CreatePurchaseInvoiceScreen() {
       <View style={s.qrWarnBanner}>
         <Ionicons name="warning-outline" size={15} color={COLORS.warning} />
         <Text style={s.qrInfoTxt}>
-          Total does not match the e-Invoice QR. QR total {fmt(einvoiceImport.totalInvoiceValue)}, this entry {fmt(totals.grand)} (difference {fmt(Math.abs(diff))}). Please check items, taxes and charges.
+          {t('screens.purchaseCreateInvoice.qrTotalMismatch', { qr: fmt(einvoiceImport.totalInvoiceValue), entry: fmt(totals.grand), diff: fmt(Math.abs(diff)) })}
         </Text>
       </View>
     );
-  }, [einvoiceImport, items, totals.grand]);
+  }, [einvoiceImport, items, totals.grand, t]);
 
   // Layer 3: compare what the bill shows with what the user entered. Warn only — never blocks save.
   const billChecks = useMemo<BillCheck[] | null>(() => {
@@ -1338,13 +1347,13 @@ export default function CreatePurchaseInvoiceScreen() {
     const billGstins = new Set<string>([...(ex ? ex.gstins : []), ...(qr ? [qr.sellerGstin] : [])]);
     const vg = vendorGstin.trim().toUpperCase();
     if (!vg) {
-      out.push({ key: 'gstin', state: 'na', text: vendor ? 'Vendor has no GSTIN to compare' : 'Select vendor to compare GSTIN' });
+      out.push({ key: 'gstin', state: 'na', text: vendor ? t('screens.purchaseCreateInvoice.chkVendorNoGstin') : t('screens.purchaseCreateInvoice.chkSelectVendorGstin') });
     } else if (billGstins.size === 0) {
-      out.push({ key: 'gstin', state: 'na', text: 'GSTIN not readable on the bill' });
+      out.push({ key: 'gstin', state: 'na', text: t('screens.purchaseCreateInvoice.chkGstinUnreadable') });
     } else if (billGstins.has(vg)) {
-      out.push({ key: 'gstin', state: 'ok', text: 'Vendor GSTIN matches the bill' });
+      out.push({ key: 'gstin', state: 'ok', text: t('screens.purchaseCreateInvoice.chkGstinOk') });
     } else {
-      out.push({ key: 'gstin', state: 'warn', text: `Vendor GSTIN ${vg} not found on the bill (bill shows ${[...billGstins].slice(0, 2).join(', ')})` });
+      out.push({ key: 'gstin', state: 'warn', text: t('screens.purchaseCreateInvoice.chkGstinWarn', { gstin: vg, shown: [...billGstins].slice(0, 2).join(', ') }) });
     }
 
     const inv = normRef(vendorInvNo);
@@ -1354,38 +1363,38 @@ export default function CreatePurchaseInvoiceScreen() {
       ...(qr ? [normRef(qr.docNo)] : []),
     ]);
     if (!inv) {
-      out.push({ key: 'inv', state: 'na', text: 'Enter vendor invoice no. to compare' });
+      out.push({ key: 'inv', state: 'na', text: t('screens.purchaseCreateInvoice.chkEnterInvNo') });
     } else if (invPool.size === 0) {
-      out.push({ key: 'inv', state: 'na', text: 'Invoice no. not readable on the bill' });
+      out.push({ key: 'inv', state: 'na', text: t('screens.purchaseCreateInvoice.chkInvUnreadable') });
     } else if (invPool.has(inv)) {
-      out.push({ key: 'inv', state: 'ok', text: 'Vendor invoice no. matches the bill' });
+      out.push({ key: 'inv', state: 'ok', text: t('screens.purchaseCreateInvoice.chkInvOk') });
     } else {
       const shown = ex && ex.invoiceNos.length ? ex.invoiceNos : qr ? [qr.docNo] : [];
-      out.push({ key: 'inv', state: 'warn', text: `Invoice no. ${vendorInvNo.trim()} not found on the bill${shown.length ? ` (bill shows ${shown.slice(0, 2).join(', ')})` : ''}` });
+      out.push({ key: 'inv', state: 'warn', text: `${t('screens.purchaseCreateInvoice.chkInvWarn', { inv: vendorInvNo.trim() })}${shown.length ? t('screens.purchaseCreateInvoice.chkBillShows', { shown: shown.slice(0, 2).join(', ') }) : ''}` });
     }
 
     const totalCands = [...(ex ? ex.totalCandidates : []), ...(qr ? [qr.totalInvoiceValue] : [])];
     const totalPool = totalCands.length ? totalCands : ex ? ex.amounts : [];
     if (!items.some(i => i.product)) {
-      out.push({ key: 'total', state: 'na', text: 'Add items to compare the total' });
+      out.push({ key: 'total', state: 'na', text: t('screens.purchaseCreateInvoice.chkAddItems') });
     } else if (totalPool.length === 0) {
-      out.push({ key: 'total', state: 'na', text: 'Total not readable on the bill' });
+      out.push({ key: 'total', state: 'na', text: t('screens.purchaseCreateInvoice.chkTotalUnreadable') });
     } else if (totalPool.some(v => Math.abs(v - totals.grand) <= EINVOICE_TOTAL_TOLERANCE)) {
-      out.push({ key: 'total', state: 'ok', text: 'Grand total matches the bill' });
+      out.push({ key: 'total', state: 'ok', text: t('screens.purchaseCreateInvoice.chkTotalOk') });
     } else {
       out.push({
         key: 'total', state: 'warn',
-        text: `Grand total ${fmt(totals.grand)} not found on the bill${totalCands.length ? ` (bill total ${fmt(Math.max(...totalCands))})` : ''}`,
+        text: `${t('screens.purchaseCreateInvoice.chkTotalWarn', { total: fmt(totals.grand) })}${totalCands.length ? t('screens.purchaseCreateInvoice.chkBillTotal', { total: fmt(Math.max(...totalCands)) }) : ''}`,
       });
     }
     return out;
-  }, [billAttachment, vendor, vendorGstin, vendorInvNo, items, totals.grand]);
+  }, [billAttachment, vendor, vendorGstin, vendorInvNo, items, totals.grand, t]);
 
   const billChecksView = useMemo(() => {
     if (!billChecks) return null;
     return (
       <View style={s.billChecksBox}>
-        <Text style={s.billChecksTitle}>Bill match check (warning only)</Text>
+        <Text style={s.billChecksTitle}>{t('screens.purchaseCreateInvoice.billMatchTitle')}</Text>
         {billChecks.map(c => (
           <View key={c.key} style={s.billCheckRow}>
             <Ionicons
@@ -1398,7 +1407,7 @@ export default function CreatePurchaseInvoiceScreen() {
         ))}
       </View>
     );
-  }, [billChecks]);
+  }, [billChecks, t]);
 
   const paymentStatus = useMemo(() => {
     if (!makePayNow) return 'pending';
@@ -1415,57 +1424,57 @@ export default function CreatePurchaseInvoiceScreen() {
 
   const itemsSummary = useMemo(() => {
     const filled = items.filter(i => i.product);
-    if (filled.length === 0) return `${items.length} item${items.length !== 1 ? 's' : ''} (not filled)`;
+    if (filled.length === 0) return items.length !== 1 ? t('screens.purchaseCreateInvoice.itemsNotFilled', { count: items.length }) : t('screens.purchaseCreateInvoice.itemNotFilled', { count: items.length });
     const first = stockItems.find(si => si.name === filled[0].product);
     const firstName = first?.displayName || filled[0].product;
     if (filled.length === 1) return firstName;
-    return `${firstName} + ${filled.length - 1} more`;
-  }, [items, stockItems]);
+    return t('screens.purchaseCreateInvoice.firstPlusMore', { name: firstName, count: filled.length - 1 });
+  }, [items, stockItems, t]);
 
   // Invoice is already saved at this point; a failed photo upload never undoes it.
   const uploadBillPhoto = useCallback((companyGuid: string, invoiceUuid: string | undefined, dataUri: string) => {
     if (!invoiceUuid) {
-      Toast.show({ type: 'info', text1: 'Bill not saved', text2: 'Invoice saved, but it has no app reference to attach the bill to.' });
+      Toast.show({ type: 'info', text1: t('screens.purchaseCreateInvoice.billNotSaved'), text2: t('screens.purchaseCreateInvoice.billNoRef') });
       return;
     }
     const attempt = () => {
       uploadPurchaseBillAttachment({ companyGuid, invoiceUuid, file: dataUri })
         .then(() => {
           setBillAttachment(null);
-          Toast.show({ type: 'success', text1: 'Bill saved with invoice' });
+          Toast.show({ type: 'success', text1: t('screens.purchaseCreateInvoice.billSaved') });
         })
         .catch((err: any) => {
           Alert.alert(
-            'Bill not saved',
-            `The invoice is saved, but the bill file failed to upload.${err?.message ? `\n\n${err.message}` : ''}`,
-            [{ text: 'Skip', style: 'cancel' }, { text: 'Retry', onPress: attempt }],
+            t('screens.purchaseCreateInvoice.billNotSaved'),
+            `${t('screens.purchaseCreateInvoice.billUploadFailed')}${err?.message ? `\n\n${err.message}` : ''}`,
+            [{ text: t('common.skip'), style: 'cancel' }, { text: t('common.retry'), onPress: attempt }],
           );
         });
     };
     attempt();
-  }, []);
+  }, [t]);
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!assertCanCreate('purchase_invoice.create')) return;
     Keyboard.dismiss();
     if (submittingRef.current) return;
-    if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor required' }); return; }
-    if (items.some(i => !i.product)) { Toast.show({ type: 'error', text1: 'All items need a product selected' }); return; }
+    if (!vendor) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.vendorRequired') }); return; }
+    if (items.some(i => !i.product)) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.allItemsNeedProduct') }); return; }
     const needsWarehouse = items.filter(i => i.product && warehouses.length > 0);
-    if (needsWarehouse.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Warehouse required for all items' }); return; }
+    if (needsWarehouse.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.warehouseRequiredAll') }); return; }
     if (makePayNow && !payNowLedger) {
-      Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for Make Payment Now.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.payLedgerRequired'), text2: t('screens.purchaseCreateInvoice.payLedgerRequiredSub') });
       return;
     }
     if (makePayNow && payNowLedger) {
       const pAmt = parseFloat(payNowAmount) || 0;
       if (pAmt <= 0) {
-        Toast.show({ type: 'error', text1: 'Invalid payment amount', text2: 'Payment amount must be greater than 0.' });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.invalidPayAmount'), text2: t('screens.purchaseCreateInvoice.invalidPayAmountSub') });
         return;
       }
       if (pAmt > totals.grand) {
-        Toast.show({ type: 'error', text1: 'Payment exceeds invoice total', text2: `Payment ₹${pAmt.toLocaleString('en-IN')} cannot exceed invoice total ₹${totals.grand.toLocaleString('en-IN')}` });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.payExceeds'), text2: t('screens.purchaseCreateInvoice.payExceedsSub', { paid: pAmt.toLocaleString('en-IN'), total: totals.grand.toLocaleString('en-IN') }) });
         return;
       }
     }
@@ -1556,9 +1565,9 @@ export default function CreatePurchaseInvoiceScreen() {
       return;
     } catch (err: any) {
       if (err?.code === 'DUPLICATE_IRN') {
-        Alert.alert('Already booked', err?.message || 'This e-Invoice (IRN) is already booked as a purchase invoice.');
+        Alert.alert(t('screens.purchaseCreateInvoice.alreadyBooked'), err?.message || t('screens.purchaseCreateInvoice.alreadyBookedMsg'));
       } else {
-        Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
+        Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.submitFailed'), text2: err?.message || t('screens.purchaseCreateInvoice.checkTally') });
       }
       submittingRef.current = false;
       setSubmitting(false);
@@ -1567,7 +1576,7 @@ export default function CreatePurchaseInvoiceScreen() {
     vendor, items, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
     makePayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo, againstOrderNo, einvoiceImport,
-    billAttachment, uploadBillPhoto,
+    billAttachment, uploadBillPhoto, t,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1582,7 +1591,7 @@ export default function CreatePurchaseInvoiceScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{t('purchase.createInvoice')}</Text>
-          <Text style={s.headerSub}>PINV-Auto</Text>
+          <Text style={s.headerSub}>{t('screens.purchaseCreateInvoice.pinvAuto')}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
@@ -1602,24 +1611,24 @@ export default function CreatePurchaseInvoiceScreen() {
                     <Ionicons name="scan-outline" size={26} color={COLORS.brandPrimary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.scanTitle}>Scan Vendor Bill</Text>
-                    <Text style={s.scanSub}>Scan the e-Invoice QR or capture the bill</Text>
+                    <Text style={s.scanTitle}>{t('screens.purchaseCreateInvoice.scanVendorBill')}</Text>
+                    <Text style={s.scanSub}>{t('screens.purchaseCreateInvoice.scanVendorBillSub')}</Text>
                   </View>
                 </View>
                 <View style={s.scanBtns}>
                   <TouchableOpacity style={s.scanBtn} onPress={openQrScanner} activeOpacity={0.7}>
                     <Ionicons name="qr-code-outline" size={16} color={COLORS.white} />
-                    <Text style={s.scanBtnTxt}>Scan e-Invoice QR</Text>
+                    <Text style={s.scanBtnTxt}>{t('screens.purchaseCreateInvoice.scanEinvoiceQr')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[s.scanBtnOutline, billChecking && { opacity: 0.6 }]} onPress={openBillScanner} activeOpacity={0.7} disabled={billChecking}>
                     <Ionicons name="camera-outline" size={16} color={COLORS.brandPrimary} />
-                    <Text style={s.scanBtnOutlineTxt}>Scan / Upload Bill</Text>
+                    <Text style={s.scanBtnOutlineTxt}>{t('screens.purchaseCreateInvoice.scanUploadBill')}</Text>
                   </TouchableOpacity>
                 </View>
                 {billChecking ? (
                   <View style={s.billCheckingRow}>
                     <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                    <Text style={s.billCheckingTxt}>Checking bill… this can take a few seconds</Text>
+                    <Text style={s.billCheckingTxt}>{t('screens.purchaseCreateInvoice.checkingBill')}</Text>
                   </View>
                 ) : billAttachment ? (
                   <>
@@ -1630,7 +1639,7 @@ export default function CreatePurchaseInvoiceScreen() {
                         <Image source={{ uri: billAttachment.uri }} style={s.billThumb} />
                       )}
                       <Text style={s.billAttachedTxt} numberOfLines={1}>
-                        {billAttachment.qr ? 'Bill with e-Invoice QR' : billAttachment.mime === 'application/pdf' ? 'Bill PDF checked' : 'Bill photo checked'} · saved with invoice
+                        {billAttachment.qr ? t('screens.purchaseCreateInvoice.billWithQr') : billAttachment.mime === 'application/pdf' ? t('screens.purchaseCreateInvoice.billPdfChecked') : t('screens.purchaseCreateInvoice.billPhotoChecked')}{t('screens.purchaseCreateInvoice.savedWithInvoiceSuffix')}
                       </Text>
                       <TouchableOpacity onPress={() => { billSessionRef.current += 1; setBillAttachment(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
@@ -1642,31 +1651,31 @@ export default function CreatePurchaseInvoiceScreen() {
               </View>
 
               <BottomSheetSearch
-                label="Purchase Ledger" required
-                placeholder="Search ledger account..."
+                label={t('screens.purchaseCreateInvoice.purchaseLedger')} required
+                placeholder={t('screens.purchaseCreateInvoice.searchLedgerAccount')}
                 options={purchaseLedgers.map(l => ({ label: l.name, value: l.name }))}
                 value={purchaseLedger}
                 onSelect={opt => setPurchaseLedger(opt.value)}
                 onClear={() => setPurchaseLedger('')}
-                sheetTitle="Purchase Ledger"
+                sheetTitle={t('screens.purchaseCreateInvoice.purchaseLedger')}
                 icon="book-outline"
               />
 
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Invoice Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.purchaseCreateInvoice.invoiceDetails')}</Text>
                 </View>
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Our Ref. No.</Text>
+                    <Text style={s.fLabel}>{t('screens.purchaseCreateInvoice.ourRefNo')}</Text>
                     <View style={s.autoBox}>
-                      <Text style={s.autoTxt}>Auto</Text>
+                      <Text style={s.autoTxt}>{t('screens.purchaseCreateInvoice.auto')}</Text>
                       <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
+                    <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.star}>*</Text></Text>
                     {entryType === 'regular' ? (
                       <View style={[s.autoBox, { opacity: 0.55 }]}>
                         <Text style={s.autoTxt}>{date}</Text>
@@ -1674,7 +1683,7 @@ export default function CreatePurchaseInvoiceScreen() {
                       </View>
                     ) : (
                       <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
+                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || t('screens.purchaseCreateInvoice.selectDate')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1682,8 +1691,8 @@ export default function CreatePurchaseInvoiceScreen() {
               </View>
 
               <BottomSheetSearch
-                label="Vendor / Party" required
-                placeholder="Search vendor..."
+                label={t('screens.purchaseCreateInvoice.vendorParty')} required
+                placeholder={t('screens.purchaseCreateInvoice.searchVendor')}
                 options={vendors}
                 value={vendor}
                 onSelect={opt => {
@@ -1692,7 +1701,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   setVendorGstRegType(opt.data?.gst_registration_type || '');
                 }}
                 onClear={() => { setVendor(''); setVendorGstin(''); setVendorGstRegType(''); }}
-                sheetTitle="Vendor / Party"
+                sheetTitle={t('screens.purchaseCreateInvoice.vendorParty')}
                 icon="person-outline"
               />
               {vendor && vendorGstin ? (
@@ -1706,7 +1715,7 @@ export default function CreatePurchaseInvoiceScreen() {
               ) : vendor && !vendorGstin ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5, marginBottom: 2, paddingHorizontal: 2 }}>
                   <Ionicons name="alert-circle-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>No GSTIN registered</Text>
+                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>{t('screens.purchaseCreateInvoice.noGstinRegistered')}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -1716,7 +1725,7 @@ export default function CreatePurchaseInvoiceScreen() {
                 >
                   <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
                   <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' }}>
-                    Add New Vendor
+                    {t('screens.purchaseCreateInvoice.addNewVendor')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1724,13 +1733,13 @@ export default function CreatePurchaseInvoiceScreen() {
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="receipt-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={s.cardTitle}>Vendor Invoice Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.purchaseCreateInvoice.vendorInvoiceDetails')}</Text>
                 </View>
                 {einvoiceImport ? (
                   <View style={s.qrFilledRow}>
                     <Ionicons name="qr-code-outline" size={14} color={COLORS.brandPrimary} />
                     <Text style={s.qrFilledTxt} numberOfLines={2}>
-                      Filled from e-Invoice QR (not verified) · QR total ₹{einvoiceImport.totalInvoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })} · You can edit
+                      {t('screens.purchaseCreateInvoice.filledFromQrBanner', { total: einvoiceImport.totalInvoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 }) })}
                     </Text>
                     <TouchableOpacity onPress={() => setEinvoiceImport(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
@@ -1739,16 +1748,16 @@ export default function CreatePurchaseInvoiceScreen() {
                 ) : null}
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Vendor Invoice No.</Text>
-                    <ThemedFInput value={vendorInvNo} onChangeText={setVendorInvNo} placeholder="Optional" />
+                    <Text style={s.fLabel}>{t('screens.purchaseCreateInvoice.vendorInvoiceNo')}</Text>
+                    <ThemedFInput value={vendorInvNo} onChangeText={setVendorInvNo} placeholder={t('common.optional')} />
                   </View>
-                  <DateInput label="Vendor Inv. Date" value={vendorInvDate} onChange={setVendorInvDate} maxDate={todayLocalISO()} />
+                  <DateInput label={t('screens.purchaseCreateInvoice.vendorInvDate')} value={vendorInvDate} onChange={setVendorInvDate} maxDate={todayLocalISO()} />
                 </View>
                 <FormField
-                  label="Purchase Reference No."
+                  label={t('screens.purchaseCreateInvoice.purchaseRefNo')}
                   value={purchaseRefNo}
                   onChangeText={setPurchaseRefNo}
-                  placeholder="Optional"
+                  placeholder={t('common.optional')}
                   containerStyle={{ marginBottom: 0 }}
                 />
               </View>
@@ -1762,14 +1771,14 @@ export default function CreatePurchaseInvoiceScreen() {
                 <View style={s.qrInfoBanner}>
                   <Ionicons name="list-outline" size={15} color={COLORS.info} />
                   <Text style={s.qrInfoTxt}>
-                    e-Invoice QR says this bill has {einvoiceImport.itemCount} item{einvoiceImport.itemCount === 1 ? '' : 's'}
-                    {einvoiceImport.mainHsnCode ? ` (main HSN ${einvoiceImport.mainHsnCode})` : ''}. Add them below — the QR does not include item names, quantities or rates.
+                    {einvoiceImport.itemCount === 1 ? t('screens.purchaseCreateInvoice.qrItemCountOne', { count: einvoiceImport.itemCount }) : t('screens.purchaseCreateInvoice.qrItemCount', { count: einvoiceImport.itemCount })}
+                    {einvoiceImport.mainHsnCode ? t('screens.purchaseCreateInvoice.qrMainHsn', { hsn: einvoiceImport.mainHsnCode }) : ''}{t('screens.purchaseCreateInvoice.qrAddBelow')}
                   </Text>
                 </View>
               ) : null}
               <View style={s.sectionHdr}>
                 <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
-                <Text style={s.sectionTitle}>Items</Text>
+                <Text style={s.sectionTitle}>{t('screens.purchaseCreateInvoice.items')}</Text>
                 <View style={s.itemCount}><Text style={s.itemCountTxt}>{items.length}</Text></View>
                 <Text style={s.sectionSummary} numberOfLines={1}>{itemsSummary}</Text>
               </View>
@@ -1803,7 +1812,7 @@ export default function CreatePurchaseInvoiceScreen() {
 
               <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-                <Text style={s.addItemTxt}>+ Add Product</Text>
+                <Text style={s.addItemTxt}>{t('screens.purchaseCreateInvoice.addProduct')}</Text>
               </TouchableOpacity>
 
               <LogisticsSection
@@ -1819,37 +1828,37 @@ export default function CreatePurchaseInvoiceScreen() {
               />
 
               <View style={s.runningTotalCard}>
-                <Text style={s.runTotalTitle}>Running Total</Text>
+                <Text style={s.runTotalTitle}>{t('screens.purchaseCreateInvoice.runningTotal')}</Text>
                 <View style={s.runTotalRow}>
-                  <Text style={s.runTotalLabel}>Items Subtotal</Text>
+                  <Text style={s.runTotalLabel}>{t('screens.purchaseCreateInvoice.itemsSubtotal')}</Text>
                   <Text style={s.runTotalVal}>₹{totals.gross.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                 </View>
                 {totals.discTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={[s.runTotalLabel, { color: COLORS.positive }]}>Discount</Text>
+                    <Text style={[s.runTotalLabel, { color: COLORS.positive }]}>{t('pdf.discount')}</Text>
                     <Text style={[s.runTotalVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.taxTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Tax</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.tax')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.taxTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.logisticsTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Charges</Text>
+                    <Text style={s.runTotalLabel}>{t('screens.purchaseCreateInvoice.charges')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.roundOff !== 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Round Off</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.roundOff')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.roundOff.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 <View style={[s.runTotalRow, s.runTotalGrandRow]}>
-                  <Text style={s.runTotalGrandLabel}>Grand Total</Text>
+                  <Text style={s.runTotalGrandLabel}>{t('pdf.grandTotal')}</Text>
                   <Text style={s.runTotalGrandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
@@ -1868,8 +1877,8 @@ export default function CreatePurchaseInvoiceScreen() {
                       <Ionicons name="cash-outline" size={18} color={makePayNow ? COLORS.positive : COLORS.textSecondary} />
                     </View>
                     <View style={{ flex: 1, flexShrink: 1 }}>
-                      <Text style={s.payNowTitle}>Make Payment Now</Text>
-                      <Text style={s.payNowSub}>Record payment to vendor at the time of billing</Text>
+                      <Text style={s.payNowTitle}>{t('screens.purchaseCreateInvoice.makePaymentNow')}</Text>
+                      <Text style={s.payNowSub}>{t('screens.purchaseCreateInvoice.makePaymentNowSub')}</Text>
                     </View>
                   </View>
                   <BrandSwitch value={makePayNow} onValueChange={setMakePayNow} />
@@ -1877,10 +1886,10 @@ export default function CreatePurchaseInvoiceScreen() {
                 {makePayNow && (
                   <View style={s.payNowBody}>
                     <View style={s.divider} />
-                    <FormDropdown label="Mode of Payment" value={payNowMode} options={PAY_MODES} onSelect={(o: any) => {
+                    <FormDropdown label={t('screens.purchaseCreateInvoice.modeOfPayment')} value={payNowMode} options={PAY_MODES.map(o => (PAY_MODE_LABEL_KEYS[o.value] ? { ...o, label: t(PAY_MODE_LABEL_KEYS[o.value]) } : o))} onSelect={(o: any) => {
                       setPayNowMode(o.value);
                       setPayNowLedger('');
-                    }} placeholder="Select payment mode..." required />
+                    }} placeholder={t('screens.purchaseCreateInvoice.selectPaymentMode')} required />
                     {bankLedgers.length === 0 ? (
                       <TouchableOpacity
                         onPress={fetchBankLedgers}
@@ -1889,12 +1898,12 @@ export default function CreatePurchaseInvoiceScreen() {
                       >
                         <Ionicons name="refresh-outline" size={16} color={COLORS.warning} />
                         <Text style={{ color: COLORS.warning, fontWeight: '600', fontSize: 13, flex: 1 }}>
-                          Payment ledgers not loaded — Tap to retry
+                          {t('screens.purchaseCreateInvoice.payLedgersNotLoaded')}
                         </Text>
                       </TouchableOpacity>
                     ) : (
                       <BottomSheetSearch
-                        label="Payment Ledger"
+                        label={t('screens.purchaseCreateInvoice.paymentLedger')}
                         required
                         options={
                           payNowMode === 'cash'
@@ -1907,16 +1916,16 @@ export default function CreatePurchaseInvoiceScreen() {
                         onSelect={(opt) => setPayNowLedger(opt.value)}
                         onClear={() => setPayNowLedger('')}
                         placeholder={
-                          !payNowMode ? 'Select mode first...' :
-                          payNowMode === 'cash' ? 'Select cash ledger...' :
-                          'Select bank ledger...'
+                          !payNowMode ? t('screens.purchaseCreateInvoice.selectModeFirst') :
+                          payNowMode === 'cash' ? t('screens.purchaseCreateInvoice.selectCashLedger') :
+                          t('screens.purchaseCreateInvoice.selectBankLedger')
                         }
-                        sheetTitle="Payment Ledger"
+                        sheetTitle={t('screens.purchaseCreateInvoice.paymentLedger')}
                       />
                     )}
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Amount Paid (₹)</Text>
+                        <Text style={s.fLabel}>{t('screens.purchaseCreateInvoice.amountPaid')}</Text>
                         <TextInput
                           style={s.fInput}
                           value={payNowAmount}
@@ -1931,14 +1940,14 @@ export default function CreatePurchaseInvoiceScreen() {
                         />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Reference No.</Text>
-                        <TextInput style={s.fInput} value={payNowRef} onChangeText={setPayNowRef} placeholder="Txn / Cheque No." placeholderTextColor={COLORS.textTertiary} />
+                        <Text style={s.fLabel}>{t('screens.purchaseCreateInvoice.referenceNo')}</Text>
+                        <TextInput style={s.fInput} value={payNowRef} onChangeText={setPayNowRef} placeholder={t('screens.purchaseCreateInvoice.txnChequeNo')} placeholderTextColor={COLORS.textTertiary} />
                       </View>
                     </View>
                     <View style={[s.payStatusChip, paymentStatus === 'paid' ? s.payStatusPaid : paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending]}>
                       <Ionicons name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'} size={16} color={paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative} />
                       <Text style={[s.payStatusTxt, { color: paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative }]}>
-                        {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? `Partial — ₹${(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })} remaining` : 'Enter payment amount'}
+                        {paymentStatus === 'paid' ? t('screens.purchaseCreateInvoice.fullyPaid') : paymentStatus === 'partial' ? t('screens.purchaseCreateInvoice.partialRemaining', { amount: (totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 }) }) : t('screens.purchaseCreateInvoice.enterPaymentAmount')}
                       </Text>
                     </View>
                   </View>
@@ -1947,38 +1956,38 @@ export default function CreatePurchaseInvoiceScreen() {
 
               {/* Invoice Summary */}
               <View style={s.summaryCard}>
-                <Text style={s.summaryTitle}>Invoice Summary</Text>
+                <Text style={s.summaryTitle}>{t('screens.purchaseCreateInvoice.invoiceSummary')}</Text>
                 <View style={s.summaryRow}>
-                  <Text style={s.sumLabel}>Subtotal (Gross)</Text>
+                  <Text style={s.sumLabel}>{t('screens.purchaseCreateInvoice.subtotalGross')}</Text>
                   <Text style={s.sumVal}>₹{totals.gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
                 {totals.discTotal > 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Discount</Text>
+                    <Text style={s.sumLabel}>{t('pdf.discount')}</Text>
                     <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 {totals.taxTotal > 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Tax</Text>
+                    <Text style={s.sumLabel}>{t('pdf.tax')}</Text>
                     <Text style={s.sumVal}>₹{totals.taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 {totals.logisticsTotal > 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Logistics & Charges</Text>
+                    <Text style={s.sumLabel}>{t('screens.purchaseCreateInvoice.logisticsCharges')}</Text>
                     <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 {totals.roundOff !== 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Round Off</Text>
+                    <Text style={s.sumLabel}>{t('pdf.roundOff')}</Text>
                     <Text style={s.sumVal}>₹{totals.roundOff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 <View style={s.sumDivider} />
                 <View style={s.summaryRow}>
-                  <Text style={s.grandLabel}>Grand Total</Text>
+                  <Text style={s.grandLabel}>{t('pdf.grandTotal')}</Text>
                   <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
@@ -1992,14 +2001,14 @@ export default function CreatePurchaseInvoiceScreen() {
               >
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={s.cardTitle}>Narration</Text>
+                  <Text style={s.cardTitle}>{t('voucher.narration')}</Text>
                 </View>
                 <View onLayout={(e) => { narrationOffset.current = e.nativeEvent.layout.y; }}>
                   <FormField
-                    label="Narration"
+                    label={t('voucher.narration')}
                     value={narration}
                     onChangeText={setNarration}
-                    placeholder="Internal notes..."
+                    placeholder={t('screens.purchaseCreateInvoice.internalNotes')}
                     multiline
                     numberOfLines={2}
                     onFocus={() => scrollToFieldY(narrationOffset.current)}
@@ -2019,9 +2028,9 @@ export default function CreatePurchaseInvoiceScreen() {
             <View style={s.grandTotalBar}>
               <View>
                 <Text style={s.grandTotalMeta}>
-                  {items.filter(i => i.product).length} item{items.filter(i => i.product).length !== 1 ? 's' : ''} · {vendor || 'No vendor'}
+                  {items.filter(i => i.product).length !== 1 ? t('screens.purchaseCreateInvoice.itemsCount', { count: items.filter(i => i.product).length }) : t('screens.purchaseCreateInvoice.itemCount', { count: items.filter(i => i.product).length })} · {vendor || t('screens.purchaseCreateInvoice.noVendor')}
                 </Text>
-                <Text style={s.grandTotalLabel}>Grand Total</Text>
+                <Text style={s.grandTotalLabel}>{t('pdf.grandTotal')}</Text>
               </View>
               <Text style={s.grandTotalAmt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
@@ -2029,27 +2038,27 @@ export default function CreatePurchaseInvoiceScreen() {
           <View style={s.footerBtnRow}>
             {step === 1 && (
               <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextBtnTxt}>Next: Add Items →</Text>
+                <Text style={s.nextBtnTxt}>{t('screens.purchaseCreateInvoice.nextAddItems')}</Text>
               </TouchableOpacity>
             )}
             {step === 2 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                  <Text style={s.backOutlineTxt}>← Details</Text>
+                  <Text style={s.backOutlineTxt}>{t('screens.purchaseCreateInvoice.backDetails')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
-                  <Text style={s.nextBtnTxt}>Next: Review →</Text>
+                  <Text style={s.nextBtnTxt}>{t('screens.purchaseCreateInvoice.nextReview')}</Text>
                 </TouchableOpacity>
               </>
             )}
             {step === 3 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                  <Text style={s.backOutlineTxt}>← Items</Text>
+                  <Text style={s.backOutlineTxt}>{t('screens.purchaseCreateInvoice.backItems')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
                   {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                  <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Submit Invoice'}</Text>
+                  <Text style={s.submitTxt}>{submitting ? t('voucher.submitting') : t('screens.purchaseCreateInvoice.submitInvoice')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -2138,7 +2147,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   <TouchableOpacity style={cam.closeBtn} onPress={closeCamera} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Ionicons name="close" size={26} color="#fff" />
                   </TouchableOpacity>
-                  <Text style={cam.topTitle}>Scan e-Invoice QR</Text>
+                  <Text style={cam.topTitle}>{t('screens.purchaseCreateInvoice.scanEinvoiceQr')}</Text>
                   <View style={{ width: 44 }} />
                 </SafeAreaView>
 
@@ -2150,13 +2159,13 @@ export default function CreatePurchaseInvoiceScreen() {
                     <View style={[cam.corner, cam.br]} />
                     <View style={cam.scanLine} />
                   </View>
-                  <Text style={cam.frameHint}>Align the e-Invoice QR code within the frame</Text>
+                  <Text style={cam.frameHint}>{t('screens.purchaseCreateInvoice.alignQr')}</Text>
                 </View>
 
                 <View style={cam.bottomBar} pointerEvents="box-none">
-                  <Text style={cam.captureLabel}>Waiting for QR code...</Text>
+                  <Text style={cam.captureLabel}>{t('screens.purchaseCreateInvoice.waitingQr')}</Text>
                   <TouchableOpacity style={cam.skipBtn} onPress={closeCamera} activeOpacity={0.7}>
-                    <Text style={[cam.skipTxt, { color: 'rgba(255,255,255,0.85)' }]}>Cancel</Text>
+                    <Text style={[cam.skipTxt, { color: 'rgba(255,255,255,0.85)' }]}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2164,14 +2173,14 @@ export default function CreatePurchaseInvoiceScreen() {
           ) : (
             <View style={cam.permBox}>
               <View style={cam.permIconBox}><Ionicons name="camera-outline" size={52} color={COLORS.textTertiary} /></View>
-              <Text style={cam.permTitle}>Camera Access Required</Text>
-              <Text style={cam.permSub}>Allow camera access to scan e-Invoice QR codes</Text>
+              <Text style={cam.permTitle}>{t('screens.purchaseCreateInvoice.cameraAccessRequired')}</Text>
+              <Text style={cam.permSub}>{t('screens.purchaseCreateInvoice.cameraAccessSub')}</Text>
               <TouchableOpacity style={cam.permBtn} onPress={requestPermission} activeOpacity={0.7}>
                 <Ionicons name="camera" size={16} color="#fff" />
-                <Text style={cam.permBtnTxt}>Allow Camera Access</Text>
+                <Text style={cam.permBtnTxt}>{t('screens.purchaseCreateInvoice.allowCameraAccess')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={cam.skipBtn} onPress={closeCamera} activeOpacity={0.7}>
-                <Text style={cam.skipTxt}>Cancel</Text>
+                <Text style={cam.skipTxt}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2200,7 +2209,7 @@ export default function CreatePurchaseInvoiceScreen() {
             return;
           }
           setVendor(name);
-          if (success !== false) Alert.alert('✓ Vendor Added', `"${name}" has been added and selected.`);
+          if (success !== false) Alert.alert(t('screens.purchaseCreateInvoice.vendorAdded'), t('screens.purchaseCreateInvoice.vendorAddedMsg', { name }));
         }}
       />
 
@@ -2239,21 +2248,21 @@ export default function CreatePurchaseInvoiceScreen() {
                 color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Purchase Invoice Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? t('voucher.journalQueued') : t('screens.purchaseCreateInvoice.submitted')}</Text>
             <Text style={ss.sub}>
               {submitResult?.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Purchase invoice pushed to Tally successfully.'}
+                ? t('screens.purchaseCreateInvoice.queuedSub')
+                : t('screens.purchaseCreateInvoice.pushedSub')}
             </Text>
             {submitResult?.numberingPolicy === 'tallydekho_series' && submitResult?.invoiceNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Invoice No.</Text>
+                <Text style={ss.refLabel}>{t('screens.purchaseCreateInvoice.invoiceNo')}</Text>
                 <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult?.invoiceNumber}</Text>
               </View>
             )}
             {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refLabel}>{t('screens.purchaseCreateInvoice.referenceNo')}</Text>
                 <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
@@ -2268,7 +2277,7 @@ export default function CreatePurchaseInvoiceScreen() {
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
+              <Text style={ss.previewBtnTxt}>{t('currency.preview')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -2282,7 +2291,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   const isTDSeries = submitResult?.numberingPolicy === 'tallydekho_series';
                   const res = await invoiceSharePdf(submitResult?.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
                   const docData = res?.data;
-                  if (!docData) throw new Error('No invoice data returned');
+                  if (!docData) throw new Error(t('screens.purchaseCreateInvoice.noInvoiceData'));
 
                   const pdfDoc = toVoucherDocument(docData, { documentType: 'purchase_invoice' });
                   await shareVoucherPdf(pdfDoc, {
@@ -2290,11 +2299,11 @@ export default function CreatePurchaseInvoiceScreen() {
                     fileName: docData.fileName || `PurchaseInvoice-${submitResult?.tdkRef}.pdf`,
                     onBeforeShare: () => setSharePdfLoading(false),
                     fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                      Toast.show({ type: 'info', text1: t('screens.purchaseCreateInvoice.sharingUnavailable') });
                     },
                   });
                 } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                  Toast.show({ type: 'error', text1: t('screens.purchaseCreateInvoice.pdfError'), text2: err?.message || t('screens.purchaseCreateInvoice.couldNotGeneratePdf') });
                 } finally {
                   setSharePdfLoading(false);
                 }
@@ -2303,7 +2312,7 @@ export default function CreatePurchaseInvoiceScreen() {
               {sharePdfLoading
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? t('screens.purchaseCreateInvoice.pdfCreating') : t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
@@ -2311,7 +2320,7 @@ export default function CreatePurchaseInvoiceScreen() {
               setSharePdfLoading(false);
               router.back();
             }}>
-              <Text style={ss.doneTxt}>Done</Text>
+              <Text style={ss.doneTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

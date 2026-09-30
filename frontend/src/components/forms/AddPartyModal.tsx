@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   ScrollView, Switch,
@@ -35,15 +36,16 @@ const empty = (): PartyData => ({
 
 export default function AddPartyModal({ visible, type, onSave, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { assertCanCreate } = useRbasCreate();
   const [form, setForm] = useState<PartyData>(empty());
-  const label = type === 'customer' ? 'Customer' : 'Vendor';
+  const label = type === 'customer' ? t('screens.componentsFormsAddPartyModal.customer') : t('screens.componentsFormsAddPartyModal.vendor');
   const upd = (f: keyof PartyData, v: any) => setForm(p => ({ ...p, [f]: v }));
 
   const handleSave = () => {
     if (!assertCanCreate('ledger_master.create')) return;
     if (!form.name.trim()) {
-      Toast.show({ type: 'error', text1: 'Required', text2: `${label} name is required.` });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsAddPartyModal.nameRequired', { label }) });
       return;
     }
     onSave(form);
@@ -58,7 +60,7 @@ export default function AddPartyModal({ visible, type, onSave, onClose }: Props)
         <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={s.handle} />
           <View style={s.titleRow}>
-            <Text style={s.title}>Add New {label}</Text>
+            <Text style={s.title}>{t('screens.componentsFormsAddPartyModal.addNew', { label })}</Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
               <Ionicons name="close" size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -69,40 +71,40 @@ export default function AddPartyModal({ visible, type, onSave, onClose }: Props)
             contentContainerStyle={s.scroll}
             keyboardShouldPersistTaps="handled"
           >
-            <FormField label="Name" value={form.name} onChangeText={v => upd('name', v)} placeholder={`${label} name`} required />
-            <FormField label="Contact Number" value={form.contact} onChangeText={v => upd('contact', v)} keyboardType="phone-pad" placeholder="10-digit number" required />
-            <FormField label="Email" value={form.email} onChangeText={v => upd('email', v)} keyboardType="email-address" placeholder="Optional" />
+            <FormField label={t('screens.componentsFormsAddPartyModal.name')} value={form.name} onChangeText={v => upd('name', v)} placeholder={t('screens.componentsFormsAddPartyModal.namePlaceholder', { label })} required />
+            <FormField label={t('screens.componentsFormsAddPartyModal.contactNumber')} value={form.contact} onChangeText={v => upd('contact', v)} keyboardType="phone-pad" placeholder={t('screens.componentsFormsAddPartyModal.tenDigitNumber')} required />
+            <FormField label={t('profile.email')} value={form.email} onChangeText={v => upd('email', v)} keyboardType="email-address" placeholder={t('common.optional')} />
             <FormField
-              label="Billing Address" value={form.billingAddress}
+              label={t('screens.componentsFormsAddPartyModal.billingAddress')} value={form.billingAddress}
               onChangeText={v => upd('billingAddress', v)}
-              placeholder="Full address" required multiline numberOfLines={2}
+              placeholder={t('screens.componentsFormsAddPartyModal.fullAddress')} required multiline numberOfLines={2}
               style={{ minHeight: 64, textAlignVertical: 'top' } as any}
             />
             <View style={s.switchRow}>
-              <Text style={s.switchLabel}>Shipping same as Billing</Text>
+              <Text style={s.switchLabel}>{t('screens.componentsFormsAddPartyModal.shippingSameAsBilling')}</Text>
               <Switch value={form.sameAsBilling} onValueChange={v => upd('sameAsBilling', v)}
                 trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
                 thumbColor={COLORS.white} />
             </View>
             {!form.sameAsBilling && (
               <FormField
-                label="Shipping Address" value={form.shippingAddress}
+                label={t('screens.componentsFormsAddPartyModal.shippingAddress')} value={form.shippingAddress}
                 onChangeText={v => upd('shippingAddress', v)}
-                placeholder="Shipping address" multiline numberOfLines={2}
+                placeholder={t('screens.componentsFormsAddPartyModal.shippingAddressPlaceholder')} multiline numberOfLines={2}
                 style={{ minHeight: 64, textAlignVertical: 'top' } as any}
               />
             )}
-            <FormField label="GSTIN" value={form.gstin} onChangeText={v => upd('gstin', v.toUpperCase())}
-              placeholder="Optional • 15-digit GSTIN" autoCapitalize="characters"
+            <FormField label={t('company.gstin')} value={form.gstin} onChangeText={v => upd('gstin', v.toUpperCase())}
+              placeholder={t('screens.componentsFormsAddPartyModal.gstinPlaceholder')} autoCapitalize="characters"
               containerStyle={{ marginBottom: 0 }} />
           </ScrollView>
           <View style={[s.btnRow, { marginBottom: 4 }]}>
             <TouchableOpacity style={s.saveOnlyBtn} onPress={() => { setForm(empty()); onClose(); }} activeOpacity={0.7}>
-              <Text style={s.saveOnlyTxt}>Save Only</Text>
+              <Text style={s.saveOnlyTxt}>{t('screens.componentsFormsAddPartyModal.saveOnly')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.saveUseBtn} onPress={handleSave} activeOpacity={0.7}>
               <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-              <Text style={s.saveUseTxt}>Save & Use</Text>
+              <Text style={s.saveUseTxt}>{t('screens.componentsFormsAddPartyModal.saveAndUse')}</Text>
             </TouchableOpacity>
           </View>
         </View>

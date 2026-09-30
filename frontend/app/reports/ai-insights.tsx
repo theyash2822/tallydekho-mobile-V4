@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import Svg, { Path, Rect, G, Text as SvgText, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -264,6 +265,7 @@ function ExpenseSpikeChart({ data }: { data: ExpensePoint[] }) {
 // ─── Receivables Donut Chart ──────────────────────────────────────────────────
 type DonutSegment = { label: string; pct: number; color: string };
 function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
+  const { t } = useTranslation();
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const SIZE = 130; const cx = SIZE / 2; const cy = SIZE / 2;
   const outerR = 52; const innerR = 30;
@@ -271,15 +273,15 @@ function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
   const visible = segments.filter(seg => safeNum(seg.pct) > 0);
   const total = visible.reduce((s, seg) => s + safeNum(seg.pct), 0);
   if (!visible.length || total <= 0) {
-    return <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No receivables breakdown available</Text>;
+    return <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>{t('screens.reportsAiInsights.noBreakdown')}</Text>;
   }
 
-  let angle   = -90;
+  const sweeps = visible.map(seg => Math.max((safeNum(seg.pct) / total) * 360, 1));
+  const starts = sweeps.map((_, i) => sweeps.slice(0, i).reduce((acc, sweep) => acc + sweep, -90));
   const arcs  = visible.map((seg, i) => {
-    const sweep = Math.max((safeNum(seg.pct) / total) * 360, 1);
-    const start = angle;
-    const end   = angle + sweep - (visible.length > 1 ? 1.5 : 0);
-    angle += sweep;
+    const sweep = sweeps[i];
+    const start = starts[i];
+    const end   = start + sweep - (visible.length > 1 ? 1.5 : 0);
     const r    = activeIdx === i ? outerR + 5 : outerR;
     const path = donutArc(cx, cy, r, innerR, start, end);
     return { ...seg, path, idx: i };
@@ -312,10 +314,10 @@ function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
         ) : (
           <G>
             <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>
-              Receivables
+              {t('dashboard.receivables')}
             </SvgText>
             <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>
-              Risk
+              {t('screens.reportsAiInsights.risk')}
             </SvgText>
           </G>
         )}
@@ -351,6 +353,7 @@ const dn = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AIInsightsScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -364,12 +367,14 @@ export default function AIInsightsScreen() {
   const [aiData,         setAiData]         = useState<any>(null);
   const [isSharing,      setIsSharing]      = useState(false);
 
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState(`${fyFrom}|${fyTo}`);
+  if (prevFyRange !== `${fyFrom}|${fyTo}`) {
+    setPrevFyRange(`${fyFrom}|${fyTo}`);
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   // Cache disclaimer helpers
   const fmtDate = (iso: string) => {
@@ -416,11 +421,11 @@ export default function AIInsightsScreen() {
     receivablesAging
       .filter((s: any) => safeNum(s.pct) > 0)
       .map((s: any, i: number) => ({
-        label: s.label || `Bucket ${i + 1}`,
+        label: s.label || t('screens.reportsAiInsights.bucket', { n: i + 1 }),
         pct: safeNum(s.pct),
         color: s.color || RECEIVABLE_COLORS[i % RECEIVABLE_COLORS.length],
       })),
-  [receivablesAging]);
+  [receivablesAging, t]);
 
   // ── Revenue KPI badge from real summary data ─────────────────────────────────
   const revenueKPI = useMemo(() => {
@@ -438,36 +443,57 @@ export default function AIInsightsScreen() {
 
   // ── Cashflow from real summary ───────────────────────────────────────────────
   const cashflowData = aiData?.summary ? [
-    { label: 'Revenue (Inflows)',   value: `+${formatAmountCompact(summaryData.totalRevenue  || 0)}`, color: COLORS.positive },
-    { label: 'Expenses (Outflows)', value: `-${formatAmountCompact(summaryData.totalExpenses || 0)}`, color: COLORS.negative },
-    { label: 'Net',                 value: `${(summaryData.totalRevenue||0)-(summaryData.totalExpenses||0) >= 0 ? '+' : ''}${formatAmountCompact((summaryData.totalRevenue||0)-(summaryData.totalExpenses||0))}`, color: AMBER },
+    { label: t('screens.reportsAiInsights.revenueInflows'),   value: `+${formatAmountCompact(summaryData.totalRevenue  || 0)}`, color: COLORS.positive },
+    { label: t('screens.reportsAiInsights.expensesOutflows'), value: `-${formatAmountCompact(summaryData.totalExpenses || 0)}`, color: COLORS.negative },
+    { label: t('screens.reportsAiInsights.net'), value: `${(summaryData.totalRevenue||0)-(summaryData.totalExpenses||0) >= 0 ? '+' : ''}${formatAmountCompact((summaryData.totalRevenue||0)-(summaryData.totalExpenses||0))}`, color: AMBER },
   ] : [];
 
-  const fetchInsights = useCallback(async () => {
-    if (!company?.guid) return;
-    setRefreshing(true);
-    try {
-      let res: any;
-      if (isCurrFY || isDateActive) {
-        // Current FY or custom date range — use main endpoint
-        const from = fromDate || fyFrom || undefined;
-        const to   = toDate   || fyTo   || undefined;
-        res = await getAIInsights(company.guid, from, to);
-      } else {
-        // Historical FY — use dedicated deterministic endpoint (no LLM, no forecast)
-        const fyParam = fyInfoToParam(selectedFY);
-        if (!fyParam) throw new Error('Invalid FY');
-        res = await getAIInsightsHistory(company.guid, fyParam);
-      }
-      if (res?.data) setAiData(res.data);
-    } catch {
-      Toast.show({ type: 'error', text1: 'Failed to load insights', text2: 'Check your connection' });
-    } finally {
-      setRefreshing(false);
-    }
-  }, [company?.guid, fromDate, toDate, fyFrom, fyTo, selectedFY, isCurrFY, isDateActive]);
+  const companyGuid = company?.guid;
 
-  useEffect(() => { fetchInsights(); }, [fetchInsights]);
+  const requestInsights = useCallback(() => {
+    if (!companyGuid) return;
+    let request: Promise<any>;
+    if (isCurrFY || isDateActive) {
+      // Current FY or custom date range — use main endpoint
+      const from = fromDate || fyFrom || undefined;
+      const to   = toDate   || fyTo   || undefined;
+      request = getAIInsights(companyGuid, from, to);
+    } else {
+      // Historical FY — use dedicated deterministic endpoint (no LLM, no forecast)
+      const fyParam = fyInfoToParam(selectedFY);
+      request = fyParam
+        ? getAIInsightsHistory(companyGuid, fyParam)
+        : Promise.reject(new Error('Invalid FY'));
+    }
+    request
+      .then((res: any) => {
+        if (res?.data) setAiData(res.data);
+      })
+      .catch(() => {
+        Toast.show({ type: 'error', text1: t('screens.reportsAiInsights.loadFailed'), text2: t('screens.reportsAiInsights.checkConnection') });
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, selectedFY, isCurrFY, isDateActive, t]);
+
+  const fetchInsights = useCallback(() => {
+    if (!companyGuid) return;
+    setRefreshing(true);
+    requestInsights();
+  }, [companyGuid, requestInsights]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (
+    !loadDeps || loadDeps[0] !== companyGuid || loadDeps[1] !== fromDate || loadDeps[2] !== toDate ||
+    loadDeps[3] !== fyFrom || loadDeps[4] !== fyTo || loadDeps[5] !== selectedFY ||
+    loadDeps[6] !== isCurrFY || loadDeps[7] !== isDateActive
+  ) {
+    setLoadDeps([companyGuid, fromDate, toDate, fyFrom, fyTo, selectedFY, isCurrFY, isDateActive]);
+    if (companyGuid) setRefreshing(true);
+  }
+
+  useEffect(() => { requestInsights(); }, [requestInsights]);
 
   const handleRefresh = () => fetchInsights();
 
@@ -476,34 +502,34 @@ export default function AIInsightsScreen() {
     setIsSharing(true);
     try {
       const metrics = [
-        { label: 'Total Revenue', value: formatAmountCompact(summaryData.totalRevenue || 0) },
-        { label: 'Total Expense', value: formatAmountCompact(summaryData.totalExpense || 0) },
-        { label: 'Net', value: formatAmountCompact((summaryData.totalRevenue || 0) - (summaryData.totalExpense || 0)) },
+        { label: t('screens.reportsAiInsights.totalRevenue'), value: formatAmountCompact(summaryData.totalRevenue || 0) },
+        { label: t('screens.reportsAiInsights.totalExpense'), value: formatAmountCompact(summaryData.totalExpense || 0) },
+        { label: t('screens.reportsAiInsights.net'), value: formatAmountCompact((summaryData.totalRevenue || 0) - (summaryData.totalExpense || 0)) },
         ...(cashflowData || []).map((r: any) => ({ label: r.label, value: r.value })),
       ];
       const rows: (string | number)[][] = [];
       topCustomers.slice(0, 10).forEach((c: any) => {
-        rows.push(['Customer', c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
+        rows.push([t('screens.reportsAiInsights.rowCustomer'), c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
       });
       topSuppliers.slice(0, 10).forEach((c: any) => {
-        rows.push(['Supplier', c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
+        rows.push([t('screens.reportsAiInsights.rowSupplier'), c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
       });
       stockoutData.slice(0, 10).forEach((c: any) => {
-        rows.push(['Stock-out risk', c.name || c.item || '', String(c.days_remaining ?? c.qty ?? '')]);
+        rows.push([t('screens.reportsAiInsights.rowStockoutRisk'), c.name || c.item || '', String(c.days_remaining ?? c.qty ?? '')]);
       });
       recommendations.slice(0, 8).forEach((r: any) => {
-        rows.push(['Recommendation', r.title || r.text || String(r), '']);
+        rows.push([t('screens.reportsAiInsights.rowRecommendation'), r.title || r.text || String(r), '']);
       });
       await shareSummaryTablePdf({
         company: companyFromAuth(company),
-        title: isCurrFY || isDateActive ? 'AI Insights' : 'FY Summary',
+        title: isCurrFY || isDateActive ? t('reports.aiInsights') : t('screens.reportsAiInsights.fySummary'),
         period: isDateActive ? `${formatDate(fromDate)} → ${formatDate(toDate)}` : (selectedFY?.label || undefined),
         metrics,
-        columns: ['Section', 'Detail', 'Value'],
+        columns: [t('screens.reportsAiInsights.colSection'), t('screens.reportsAiInsights.colDetail'), t('screens.reportsAiInsights.colValue')],
         rows,
       }, { onBeforeShare: () => setIsSharing(false) });
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.reportsAiInsights.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -518,10 +544,10 @@ export default function AIInsightsScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>{isCurrFY || isDateActive ? 'AI Insights' : 'FY Summary'}</Text>
+          <Text style={s.headerTitle}>{isCurrFY || isDateActive ? t('reports.aiInsights') : t('screens.reportsAiInsights.fySummary')}</Text>
           <View style={[s.aiBadge, !isCurrFY && !isDateActive ? s.aiBadgeHistory : null]}>
             <Ionicons name={isCurrFY || isDateActive ? 'sparkles' : 'bar-chart-outline'} size={10} color={COLORS.white} />
-            <Text style={s.aiBadgeTxt}>{isCurrFY || isDateActive ? 'Powered by AI' : 'Historical Analysis'}</Text>
+            <Text style={s.aiBadgeTxt}>{isCurrFY || isDateActive ? t('screens.reportsAiInsights.poweredByAi') : t('screens.reportsAiInsights.historicalAnalysis')}</Text>
           </View>
         </View>
         <TouchableOpacity style={s.iconBtn} onPress={handleRefresh} activeOpacity={0.7}>
@@ -535,7 +561,7 @@ export default function AIInsightsScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? AMBER : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive ? s.dateStripActive : null]}>
-          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : t('screens.reportsAiInsights.allDates')}
         </Text>
         {isDateActive ? null : <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive ? (
@@ -571,12 +597,12 @@ export default function AIInsightsScreen() {
           <Ionicons name="time-outline" size={12} color={COLORS.textTertiary} />
           <Text style={s.updatedTxt}>
             {isDateActive
-              ? `Custom range: ${formatDate(fromDate)} → ${formatDate(toDate)}`
+              ? t('screens.reportsAiInsights.customRange', { from: formatDate(fromDate), to: formatDate(toDate) })
               : !isCurrFY
-                ? `Historical highlights — ${selectedFY?.label ?? 'Past FY'} · Deterministic analysis`
+                ? t('screens.reportsAiInsights.historicalHighlights', { fy: selectedFY?.label ?? t('screens.reportsAiInsights.pastFy') })
                 : generatedAt
-                  ? `AI insights generated on ${generatedAt}`
-                  : 'Smart insights based on your current business activity'}
+                  ? t('screens.reportsAiInsights.generatedOn', { date: generatedAt })
+                  : t('screens.reportsAiInsights.smartInsights')}
           </Text>
         </View>
         {/* Next update disclaimer (current FY only, when cached, not on custom date range) */}
@@ -584,7 +610,7 @@ export default function AIInsightsScreen() {
           <View style={s.disclaimerRow}>
             <Ionicons name="information-circle-outline" size={11} color={COLORS.textTertiary} />
             <Text style={s.disclaimerTxt}>
-              Recommendations refresh on {nextUpdateAt} · Live analytics update on every sync
+              {t('screens.reportsAiInsights.refreshOn', { date: nextUpdateAt })}
             </Text>
           </View>
         )}
@@ -594,7 +620,7 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'Revenue Forecast' : 'Revenue Trend'}</Text>
+            <Text style={s.cardTitle}>{isCurrFY || isDateActive ? t('screens.reportsAiInsights.revenueForecast') : t('screens.reportsAiInsights.revenueTrend')}</Text>
             {revenueKPI ? (
               <View style={[
                 s.kpiBadge,
@@ -617,18 +643,18 @@ export default function AIInsightsScreen() {
             ) : refreshing ? null : null}
           </View>
           {revenueForecastForChart.length === 0 ? (
-            <Text style={s.emptyTxt}>No revenue data for this period</Text>
+            <Text style={s.emptyTxt}>{t('screens.reportsAiInsights.noRevenue')}</Text>
           ) : (
             <>
               <View style={s.legendRow}>
                 <View style={[s.legendDot, { backgroundColor: AMBER }]} />
-                <Text style={s.legendTxt}>Actual</Text>
+                <Text style={s.legendTxt}>{t('reports.actual')}</Text>
                 {(isCurrFY || isDateActive) && revenueForecastForChart.some((d: any) => d.actual == null) && (
                   <>
                     <View style={[s.legendDash, { backgroundColor: COLORS.textPrimary }]} />
-                    <Text style={s.legendTxt}>AI Forecast</Text>
+                    <Text style={s.legendTxt}>{t('screens.reportsAiInsights.aiForecast')}</Text>
                     <View style={[s.legendDot, { backgroundColor: COLORS.borderDefault, opacity: 0.5 }]} />
-                    <Text style={s.legendTxt}>Forecast Zone</Text>
+                    <Text style={s.legendTxt}>{t('screens.reportsAiInsights.forecastZone')}</Text>
                   </>
                 )}
               </View>
@@ -641,9 +667,9 @@ export default function AIInsightsScreen() {
         {/* 2. Cash-Flow Projection */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'Cash-Flow Projection' : 'Cash Flow Summary'}</Text>
+          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? t('screens.reportsAiInsights.cashflowProjection') : t('screens.reportsAiInsights.cashflowSummary')}</Text>
           {cashflowData.length === 0 ? (
-            <Text style={s.emptyTxt}>No cash flow data for this period</Text>
+            <Text style={s.emptyTxt}>{t('screens.reportsAiInsights.noCashflow')}</Text>
           ) : cashflowData.map((row: any, i: number) => (
             <View key={row.label}
               style={[s.cashRow, i < cashflowData.length - 1 ? s.cashRowBorder : null]}
@@ -659,27 +685,27 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>Stock-out Risk</Text>
+            <Text style={s.cardTitle}>{t('screens.reportsAiInsights.stockoutRisk')}</Text>
             <View style={[s.kpiBadge, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="warning" size={12} color={COLORS.negative} />
               <Text style={[s.kpiBadgeTxt, { color: COLORS.negative }]}>
-                {stockoutData.filter((i: any) => i.critical).length} critical
+                {t('screens.reportsAiInsights.criticalCount', { n: stockoutData.filter((i: any) => i.critical).length })}
               </Text>
             </View>
           </View>
           {stockoutData.length === 0 ? (
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No low-stock items detected</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>{t('screens.reportsAiInsights.noLowStock')}</Text>
           ) : stockoutData.map((item: any, i: number) => (
             <View key={item.item ?? item.name}
               style={[s.stockRow, i < stockoutData.length - 1 ? s.stockRowBorder : null]}
             >
               <View style={s.stockLeft}>
                 <Text style={s.stockItem}>{item.item ?? item.name}</Text>
-                <Text style={s.stockCat}>{item.category ?? `${item.qty ?? 0} ${item.unit ?? ''} left`}</Text>
+                <Text style={s.stockCat}>{item.category ?? t('screens.reportsAiInsights.qtyLeft', { qty: item.qty ?? 0, unit: item.unit ?? '' })}</Text>
               </View>
               <View style={s.stockRight}>
                 <Text style={[s.stockDays, { color: item.critical ? COLORS.negative : AMBER }]}>
-                  {item.days ? `${item.days} days left` : (item.critical ? 'Out of stock' : `${item.qty} ${item.unit}`)}
+                  {item.days ? t('screens.reportsAiInsights.daysLeft', { days: item.days }) : (item.critical ? t('screens.reportsAiInsights.outOfStock') : `${item.qty} ${item.unit}`)}
                 </Text>
                 <Ionicons name="warning" size={16} color={item.critical ? COLORS.negative : AMBER} />
               </View>
@@ -692,16 +718,16 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>Expense Spike Alert</Text>
+            <Text style={s.cardTitle}>{t('screens.reportsAiInsights.expenseSpikeAlert')}</Text>
             {expenseDataForChart.some((d: any) => d.isSpike) && (
               <View style={s.spikeBadge}>
                 <Ionicons name="warning" size={11} color={COLORS.negative} />
-                <Text style={s.spikeBadgeTxt}>{expenseDataForChart.filter((d: any) => d.isSpike).length} spike{expenseDataForChart.filter((d: any) => d.isSpike).length > 1 ? 's' : ''} detected</Text>
+                <Text style={s.spikeBadgeTxt}>{t(expenseDataForChart.filter((d: any) => d.isSpike).length > 1 ? 'screens.reportsAiInsights.spikesMany' : 'screens.reportsAiInsights.spikesOne', { n: expenseDataForChart.filter((d: any) => d.isSpike).length })}</Text>
               </View>
             )}
           </View>
           {expenseDataForChart.length === 0 ? (
-            <Text style={s.emptyTxt}>No expense data for this period</Text>
+            <Text style={s.emptyTxt}>{t('screens.reportsAiInsights.noExpense')}</Text>
           ) : (
             <ExpenseSpikeChart data={expenseDataForChart} />
           )}
@@ -711,9 +737,9 @@ export default function AIInsightsScreen() {
         {/* 5. Receivables Risk Donut */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Receivables Risk</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsAiInsights.receivablesRisk')}</Text>
           {receivablesForChart.length === 0 ? (
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No outstanding receivables</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>{t('screens.reportsAiInsights.noReceivables')}</Text>
           ) : (
             <ReceivablesDonut segments={receivablesForChart} />
           )}
@@ -723,9 +749,9 @@ export default function AIInsightsScreen() {
         {/* 6. Top Customers */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Top Customers</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsAiInsights.topCustomers')}</Text>
           {topCustomers.length === 0 ? (
-            <Text style={s.emptyTxt}>No sales data for this period</Text>
+            <Text style={s.emptyTxt}>{t('screens.reportsAiInsights.noSales')}</Text>
           ) : topCustomers.map((cust: any, i: number) => (
             <View key={cust.name ?? i}
               style={[s.supRow, i < topCustomers.length - 1 ? s.supRowBorder : null]}
@@ -735,7 +761,7 @@ export default function AIInsightsScreen() {
               </View>
               <Text style={s.supName} numberOfLines={1}>{cust.name}</Text>
               <View style={s.supRight}>
-                <Text style={s.supPct}>{cust.pct}% of revenue</Text>
+                <Text style={s.supPct}>{t('screens.reportsAiInsights.pctOfRevenue', { pct: cust.pct })}</Text>
                 <Text style={s.supSpend}>
                   {cust.revenue ? `₹${(cust.revenue / 100000).toFixed(1)}L` : ''}
                 </Text>
@@ -748,9 +774,9 @@ export default function AIInsightsScreen() {
         {/* 7. Top Suppliers */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Top Suppliers</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsAiInsights.topSuppliers')}</Text>
           {topSuppliers.length === 0 ? (
-            <Text style={s.emptyTxt}>No purchase data for this period</Text>
+            <Text style={s.emptyTxt}>{t('screens.reportsAiInsights.noPurchase')}</Text>
           ) : topSuppliers.map((sup: any, i: number) => (
             <View key={sup.name ?? i}
               style={[s.supRow, i < topSuppliers.length - 1 ? s.supRowBorder : null]}
@@ -758,7 +784,7 @@ export default function AIInsightsScreen() {
               <View style={s.supRankBox}><Text style={s.supRank}>{i + 1}</Text></View>
               <Text style={s.supName} numberOfLines={1}>{sup.name}</Text>
               <View style={s.supRight}>
-                <Text style={s.supPct}>{sup.pct}% of spend</Text>
+                <Text style={s.supPct}>{t('screens.reportsAiInsights.pctOfSpend', { pct: sup.pct })}</Text>
                 <Text style={s.supSpend}>
                   {sup.spend ? `₹${(typeof sup.spend === 'number' ? sup.spend / 100000 : parseFloat(sup.spend)).toFixed(1)}L` : ''}
                 </Text>
@@ -771,9 +797,9 @@ export default function AIInsightsScreen() {
         {/* 9. Recommendations */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'AI Recommendations' : 'Business Highlights'}</Text>
+          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? t('screens.reportsAiInsights.aiRecommendations') : t('screens.reportsAiInsights.businessHighlights')}</Text>
           {recommendations.length === 0 ? (
-            <Text style={s.emptyTxt}>{isCurrFY || isDateActive ? 'No recommendations available' : 'No highlights available for this period'}</Text>
+            <Text style={s.emptyTxt}>{isCurrFY || isDateActive ? t('screens.reportsAiInsights.noRecommendations') : t('screens.reportsAiInsights.noHighlights')}</Text>
           ) : recommendations.map((rec: any, i: number) => {
             const severity = rec.severity || 'info';
             const iconColor = severity === 'critical' ? COLORS.negative : severity === 'warning' ? AMBER : severity === 'success' ? COLORS.positive : COLORS.brandPrimary;
@@ -799,7 +825,7 @@ export default function AIInsightsScreen() {
             ? <ActivityIndicator size="small" color={COLORS.white} />
             : <Ionicons name="share-outline" size={18} color={COLORS.white} />
           }
-          <Text style={s.shareBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+          <Text style={s.shareBtnTxt}>{isSharing ? t('screens.reportsAiInsights.preparing') : t('pdf.sharePdf')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -807,7 +833,7 @@ export default function AIInsightsScreen() {
         visible={showDatePicker}
         fromDate={fromDate || fyFrom}
         toDate={toDate || fyTo}
-        onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
+        onApply={(f, to) => { if (f && to) { setFromDate(f); setToDate(to); } }}
         onClose={() => setShowDatePicker(false)}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}

@@ -16,6 +16,7 @@ import { LedgerEntry, VoucherDocument } from '../../types/document';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/documentHelpers';
 import { shareVoucherPdfSafely } from '../../utils/voucherPdf';
+import { useTranslation } from 'react-i18next';
 
 const PAPER = '#FEFDFB';
 const INK = '#1A1A1A';
@@ -165,11 +166,12 @@ function SheetHeader({
   phone?: string;
   email?: string;
 }) {
+  const { t } = useTranslation();
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const ribbon =
     cfg?.label?.toUpperCase() ||
     doc.documentTitle?.split(' - ')[0]?.toUpperCase() ||
-    'VOUCHER';
+    t('screens.componentsDocumentAccountingVoucherPreview.voucherRibbon');
 
   return (
     <>
@@ -182,8 +184,8 @@ function SheetHeader({
           <Text style={p.companyAddr}>{companyAddress}</Text>
         )}
         <View style={p.companyMetaRow}>
-          {!!gstin && <Text style={p.companyMeta}>GSTIN/UIN: {gstin}</Text>}
-          {!!pan && <Text style={p.companyMeta}>PAN: {pan}</Text>}
+          {!!gstin && <Text style={p.companyMeta}>{t('screens.componentsDocumentAccountingVoucherPreview.gstinUin', { gstin })}</Text>}
+          {!!pan && <Text style={p.companyMeta}>{t('screens.componentsDocumentAccountingVoucherPreview.pan', { pan })}</Text>}
         </View>
         {(phone || email) && (
           <Text style={p.companyContact}>
@@ -196,14 +198,15 @@ function SheetHeader({
 }
 
 function VoucherMeta({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   return (
     <View style={p.vMetaRow}>
       <View style={[p.vMetaCell, { borderRightWidth: 1, borderRightColor: RULE }]}>
-        <Text style={p.kvLabel}>Voucher No.</Text>
+        <Text style={p.kvLabel}>{t('screens.componentsDocumentAccountingVoucherPreview.voucherNo')}</Text>
         <Text style={p.kvValue}>{doc.documentNumber}</Text>
       </View>
       <View style={p.vMetaCell}>
-        <Text style={p.kvLabel}>Dated</Text>
+        <Text style={p.kvLabel}>{t('screens.componentsDocumentAccountingVoucherPreview.dated')}</Text>
         <Text style={p.kvValue}>{doc.date}</Text>
       </View>
     </View>
@@ -245,6 +248,7 @@ function LedgerGrid({
   drTotal: number;
   crTotal: number;
 }) {
+  const { t } = useTranslation();
   // Wide enough for ₹99,99,999.00; still shrinks via adjustsFontSizeToFit if needed.
   const COL = 112;
   if (!rows.length) return null;
@@ -252,9 +256,9 @@ function LedgerGrid({
   return (
     <View>
       <View style={p.gHeadRow}>
-        <Text style={[p.gHead, { flex: 1 }]}>Particulars</Text>
-        <Text style={[p.gHead, p.right, { width: COL }]}>Debit</Text>
-        <Text style={[p.gHead, p.right, { width: COL, borderRightWidth: 0 }]}>Credit</Text>
+        <Text style={[p.gHead, { flex: 1 }]}>{t('screens.componentsDocumentAccountingVoucherPreview.particulars')}</Text>
+        <Text style={[p.gHead, p.right, { width: COL }]}>{t('screens.componentsDocumentAccountingVoucherPreview.debit')}</Text>
+        <Text style={[p.gHead, p.right, { width: COL, borderRightWidth: 0 }]}>{t('screens.componentsDocumentAccountingVoucherPreview.credit')}</Text>
       </View>
       {rows.map((e) => {
         const isDr = !!e.debit;
@@ -262,7 +266,7 @@ function LedgerGrid({
           <View key={e.id} style={p.gRow}>
             <View style={[p.gCellBox, { flex: 1, minWidth: 0 }]}>
               <Text style={p.ledgerName} numberOfLines={2}>
-                {e.showToPrefix ? 'To ' : ''}{e.particulars}
+                {e.showToPrefix ? t('screens.componentsDocumentAccountingVoucherPreview.toPrefix') : ''}{e.particulars}
               </Text>
               {!!e.narration && <Text style={p.gCellSub}>{e.narration}</Text>}
             </View>
@@ -272,7 +276,7 @@ function LedgerGrid({
         );
       })}
       <View style={[p.gRow, p.gTotalRow]}>
-        <Text style={[p.gCell, p.bold, { flex: 1, minWidth: 0 }]}>Total</Text>
+        <Text style={[p.gCell, p.bold, { flex: 1, minWidth: 0 }]}>{t('pdf.total')}</Text>
         <View style={[p.amtCol, { width: COL }]}>
           <Text style={[p.amtTxt, p.bold]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} allowFontScaling={false}>
             {formatCurrency(drTotal || 0)}
@@ -289,52 +293,56 @@ function LedgerGrid({
 }
 
 function AmountWords({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   const words = doc.totals.totalInWords || amountInWords(doc.totals.total || 0);
   return (
     <View style={p.wordsBlock}>
-      <Text style={p.wordsLabel}>Amount Chargeable (in words)</Text>
-      <Text style={p.wordsValue}>INR {words}</Text>
-      <Text style={p.eoe}>E. & O.E</Text>
+      <Text style={p.wordsLabel}>{t('screens.componentsDocumentAccountingVoucherPreview.amountChargeable')}</Text>
+      <Text style={p.wordsValue}>{t('screens.componentsDocumentAccountingVoucherPreview.inrWords', { words })}</Text>
+      <Text style={p.eoe}>{t('screens.componentsDocumentAccountingVoucherPreview.eoe')}</Text>
     </View>
   );
 }
 
 function PaymentLine({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   const pd = doc.paymentDetails;
   if (!pd) return null;
   const bits = [
-    (pd.ledgerName || pd.mode) && `Through: ${pd.ledgerName || pd.mode}`,
-    pd.bankName && `Bank: ${pd.bankName}`,
-    pd.chequeNo && `Instrument: ${pd.chequeNo}`,
-    pd.transactionRef && `Ref: ${pd.transactionRef}`,
-    pd.instrumentDate && `Dt: ${pd.instrumentDate}`,
+    (pd.ledgerName || pd.mode) && t('screens.componentsDocumentAccountingVoucherPreview.through', { value: pd.ledgerName || pd.mode }),
+    pd.bankName && t('screens.componentsDocumentAccountingVoucherPreview.bank', { value: pd.bankName }),
+    pd.chequeNo && t('screens.componentsDocumentAccountingVoucherPreview.instrument', { value: pd.chequeNo }),
+    pd.transactionRef && t('screens.componentsDocumentAccountingVoucherPreview.ref', { value: pd.transactionRef }),
+    pd.instrumentDate && t('screens.componentsDocumentAccountingVoucherPreview.dt', { value: pd.instrumentDate }),
   ].filter(Boolean) as string[];
   if (!bits.length) return null;
   return (
     <View style={p.softBlock}>
-      <Text style={p.softLabel}>Payment Details</Text>
+      <Text style={p.softLabel}>{t('screens.componentsDocumentAccountingVoucherPreview.paymentDetails')}</Text>
       <Text style={p.softText}>{bits.join('   •   ')}</Text>
     </View>
   );
 }
 
 function Narration({ doc }: { doc: VoucherDocument }) {
+  const { t } = useTranslation();
   if (!doc.narration) return null;
   return (
     <View style={p.softBlock}>
-      <Text style={p.softLabel}>Narration</Text>
+      <Text style={p.softLabel}>{t('voucher.narration')}</Text>
       <Text style={p.softTextItalic}>{doc.narration}</Text>
     </View>
   );
 }
 
 function FooterBlock({ doc, companyName }: { doc: VoucherDocument; companyName: string }) {
+  const { t } = useTranslation();
   const f = doc.footerInfo;
   return (
     <>
       {!!doc.terms && (
         <View style={p.softBlock}>
-          <Text style={p.softLabel}>Terms & Conditions</Text>
+          <Text style={p.softLabel}>{t('pdf.terms')}</Text>
           <Text style={p.softText}>{doc.terms}</Text>
         </View>
       )}
@@ -342,7 +350,7 @@ function FooterBlock({ doc, companyName }: { doc: VoucherDocument; companyName: 
         <View style={p.footDecl}>
           {!!f?.declaration && (
             <>
-              <Text style={p.softLabel}>Declaration</Text>
+              <Text style={p.softLabel}>{t('screens.componentsDocumentAccountingVoucherPreview.declaration')}</Text>
               <Text style={p.softText}>{f.declaration}</Text>
             </>
           )}
@@ -351,10 +359,10 @@ function FooterBlock({ doc, companyName }: { doc: VoucherDocument; companyName: 
           )}
         </View>
         <View style={p.footSig}>
-          <Text style={p.sigFor}>for {f?.authorizedSignatory || companyName}</Text>
+          <Text style={p.sigFor}>{t('screens.componentsDocumentAccountingVoucherPreview.forName', { name: f?.authorizedSignatory || companyName })}</Text>
           <View style={p.sigSpace} />
           <View style={p.sigLine} />
-          <Text style={p.sigCaption}>Authorised Signatory</Text>
+          <Text style={p.sigCaption}>{t('pdf.authorizedSignatory')}</Text>
         </View>
       </View>
       {!!f?.systemNote && <Text style={p.sysNote}>{f.systemNote}</Text>}
@@ -367,6 +375,7 @@ export default function AccountingVoucherPreview({
 }: {
   document: VoucherDocument;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company: authCompany } = useAuth();
@@ -389,7 +398,7 @@ export default function AccountingVoucherPreview({
     [rows, doc.totals.crTotal, doc.totals.total],
   );
 
-  const navTitle = DOC_TYPE_CONFIG[doc.documentType]?.label || doc.documentTitle || 'Voucher';
+  const navTitle = DOC_TYPE_CONFIG[doc.documentType]?.label || doc.documentTitle || t('quickActions.voucher');
 
   const handleShare = async () => {
     if (sharing) return;
@@ -443,7 +452,7 @@ export default function AccountingVoucherPreview({
           {sharing
             ? <ActivityIndicator size="small" color={COLORS.white} />
             : <Ionicons name="share-outline" size={18} color={COLORS.white} />}
-          <Text style={p.shareBtnText}>{sharing ? 'Preparing…' : 'Share as PDF'}</Text>
+          <Text style={p.shareBtnText}>{sharing ? t('screens.componentsDocumentAccountingVoucherPreview.preparing') : t('screens.componentsDocumentAccountingVoucherPreview.shareAsPdf')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

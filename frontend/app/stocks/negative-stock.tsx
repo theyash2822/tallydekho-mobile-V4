@@ -51,28 +51,35 @@ export default function NegativeStockScreen() {
   const [apiError,    setApiError]    = useState<string | null>(null);
   const [items,       setItems]       = useState<NegStockItem[]>([]);
 
+  const [loadDeps, setLoadDeps] = useState<unknown[]>([]);
+  if (loadDeps[0] !== companyGuid || loadDeps[1] !== selectedFY) {
+    setLoadDeps([companyGuid, selectedFY]);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
   useEffect(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     getNegativeStock(companyGuid, { pageSize: 500, ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
           id:         String(r.stockGuid ?? r.id),
-          name:       r.displayName || r.itemName || r.name || 'Unknown',
+          name:       r.displayName || r.itemName || r.name || t('screens.stocksNegativeStock.unknown'),
           sku:        r.sku || r.alias || '',
           group:      r.groupName ?? r.group ?? '—',
           unit:       r.unit ?? '',
           rate:       Number(r.rate ?? 0),
           total_qty:  Number(r.closingQty ?? r.total_qty ?? 0),
           warehouses: (r.warehouses ?? []).map((w: any) => ({
-            warehouse: w.warehouse ?? 'Main Location',
+            warehouse: w.warehouse ?? t('screens.stocksNegativeStock.mainLocation'),
             qty:       Number(w.qty ?? 0),
           })),
         }));
         setItems(rows);
       })
-      .catch((err: any) => setApiError(err?.message ?? 'Failed to load negative stock data'))
+      .catch((err: any) => setApiError(err?.message ?? t('screens.stocksNegativeStock.failedToLoad')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY]);
 
@@ -105,7 +112,7 @@ export default function NegativeStockScreen() {
     try {
       await shareStockRegisterPdf({
         company: companyFromAuth(company),
-        title: 'Negative Stock',
+        title: t('stocks.negativeStock'),
         rows: selected.map(item => ({
           date: '',
           particulars: item.displayName || item.name,
@@ -117,7 +124,7 @@ export default function NegativeStockScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       cancelSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksNegativeStock.couldNotSharePdf'));
     } finally {
       setIsSharing(false);
     }
@@ -143,18 +150,18 @@ export default function NegativeStockScreen() {
         <View style={s.selBanner}>
           <TouchableOpacity onPress={cancelSelection} style={s.selBannerBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selBannerCancel}>Cancel</Text>
+            <Text style={s.selBannerCancel}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={selectAll} style={s.selBannerBtn} activeOpacity={0.7}>
-            <Text style={s.selBannerAll}>All</Text>
+            <Text style={s.selBannerAll}>{t('common.all')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* ── Search */}
       {!isSelMode && (
-        <SearchBar value={search} onChangeText={setSearch} placeholder="Search products, group..." />
+        <SearchBar value={search} onChangeText={setSearch} placeholder={t('screens.stocksNegativeStock.searchPlaceholder')} />
       )}
 
       {/* ── Loading */}
@@ -168,7 +175,7 @@ export default function NegativeStockScreen() {
       {!isSelMode && !isLoading && visibleItems.length > 0 && (
         <View style={s.hintRow}>
           <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
-          <Text style={s.hintTxt}>Long press to select items</Text>
+          <Text style={s.hintTxt}>{t('screens.stocksNegativeStock.longPressHint')}</Text>
         </View>
       )}
 
@@ -178,8 +185,8 @@ export default function NegativeStockScreen() {
           {visibleItems.length === 0 && !apiError ? (
             <View style={s.empty}>
               <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.borderDefault} />
-              <Text style={s.emptyTxt}>No negative stock items</Text>
-              <Text style={s.emptySubTxt}>All stock levels are positive</Text>
+              <Text style={s.emptyTxt}>{t('screens.stocksNegativeStock.noItems')}</Text>
+              <Text style={s.emptySubTxt}>{t('screens.stocksNegativeStock.allPositive')}</Text>
             </View>
           ) : (
             visibleItems.map(item => {
@@ -207,7 +214,7 @@ export default function NegativeStockScreen() {
                       <View style={s.whHeader}>
                         <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
                         <Text style={s.whHeaderTxt}>
-                          {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
+                          {hasMultiWH ? t('screens.stocksNegativeStock.warehouseBreakdown') : t('screens.stocksNegativeStock.warehouse')}
                         </Text>
                       </View>
                       {item.warehouses.length > 0 ? (
@@ -228,7 +235,7 @@ export default function NegativeStockScreen() {
                       ) : (
                         <View style={s.whRow}>
                           <View style={s.whDot} />
-                          <Text style={s.whName}>All Warehouses</Text>
+                          <Text style={s.whName}>{t('screens.stocksNegativeStock.allWarehouses')}</Text>
                           <Text style={s.whQty}>
                             {fmtQty(item.total_qty)}{item.unit ? ` ${item.unit}` : ''}
                           </Text>
@@ -249,10 +256,10 @@ export default function NegativeStockScreen() {
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+            <Text style={s.cancelSelFooterTxt}>{t('screens.stocksNegativeStock.deselect')}</Text>
           </TouchableOpacity>
           <Text style={s.shareBarCount}>
-            {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}
+            {selectedIds.size !== 1 ? t('screens.stocksNegativeStock.itemsCount', { count: selectedIds.size }) : t('screens.stocksNegativeStock.itemCount', { count: selectedIds.size })}
           </Text>
           <TouchableOpacity
             style={[s.shareBtnView, isSharing && { opacity: 0.6 }]}
@@ -264,7 +271,7 @@ export default function NegativeStockScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareTxt}>{isSharing ? t('screens.stocksNegativeStock.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

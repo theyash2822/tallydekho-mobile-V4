@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Rect } from 'react-native-svg';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
@@ -46,7 +47,26 @@ function BarcodeSVG({ code, width = 240, height = 60 }: { code: string; width?: 
   );
 }
 
+// ── Header (always shown)
+function Header({ onBack, onPrint, printing }: { onBack: () => void; onPrint: () => void; printing: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <View style={s.header}>
+      <TouchableOpacity style={s.headerBtn} onPress={onBack} activeOpacity={0.7}>
+        <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
+      </TouchableOpacity>
+      <Text style={s.headerTitle}>{t('screens.stocksLabelPreview.title')}</Text>
+      <TouchableOpacity style={s.headerBtn} onPress={onPrint} activeOpacity={0.7} disabled={printing}>
+        {printing
+          ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+          : <Ionicons name="print-outline" size={22} color={COLORS.textPrimary} />}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function LabelPreviewScreen() {
+  const { t } = useTranslation();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const params  = useLocalSearchParams<{
@@ -68,10 +88,15 @@ export default function LabelPreviewScreen() {
   const [loading,    setLoading]    = useState(false);
   const [printing,   setPrinting]   = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [loadedFor,  setLoadedFor]  = useState<string | null>(null);
+
+  if (loadedFor !== companyGuid) {
+    setLoadedFor(companyGuid);
+    if (companyGuid && stockGuids.length) setLoading(true);
+  }
 
   useEffect(() => {
     if (!companyGuid || !stockGuids.length) return;
-    setLoading(true);
     getBarcodesByGuids(companyGuid, stockGuids)
       .then((res: any) => {
         setItems(res?.data?.items || res?.items || []);
@@ -85,25 +110,40 @@ export default function LabelPreviewScreen() {
   // Grid info for info strip
   const { perPage, total, sheets } = computeGrid(labelSize, copies, items.length);
 
-  // ── Header (always shown)
-  const Header = () => (
-    <View style={s.header}>
-      <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-        <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-      </TouchableOpacity>
-      <Text style={s.headerTitle}>Label Preview</Text>
-      <TouchableOpacity style={s.headerBtn} onPress={handlePrintNow} activeOpacity={0.7} disabled={printing}>
-        {printing
-          ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-          : <Ionicons name="print-outline" size={22} color={COLORS.textPrimary} />}
-      </TouchableOpacity>
-    </View>
-  );
+  // ── Build print HTML via shared labelPrint utility ─────────────────────────
+  const getHTML = () => buildLabelHTML(items, { labelSize, copies, showSku, showPrice, showBatch });
+
+  const handlePrintNow = async () => {
+    if (!items.length) return;
+    setPrinting(true);
+    try {
+      await Print.printAsync({ html: getHTML() });
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel'))
+        Alert.alert(t('screens.stocksLabelPreview.printFailed'), err?.message || t('screens.stocksLabelPreview.printFailedMsg'));
+    } finally { setPrinting(false); }
+  };
+
+  const handleSharePDF = async () => {
+    if (!items.length) return;
+    setPrinting(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: getHTML() });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksLabelPreview.shareDialogTitle') });
+      else Alert.alert(t('screens.stocksLabelPreview.pdfSaved'), uri);
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel'))
+        Alert.alert(t('screens.stocksLabelPreview.exportFailed'), err?.message || t('screens.stocksLabelPreview.exportFailedMsg'));
+    } finally { setPrinting(false); }
+  };
+
+  const onBack = () => router.back();
 
   if (loading) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
-        <Header />
+        <Header onBack={onBack} onPrint={handlePrintNow} printing={printing} />
         <View style={s.centeredWrap}>
           <ActivityIndicator size="large" color={COLORS.brandPrimary} />
         </View>
@@ -114,10 +154,10 @@ export default function LabelPreviewScreen() {
   if (!currentItem) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
-        <Header />
+        <Header onBack={onBack} onPrint={handlePrintNow} printing={printing} />
         <View style={s.centeredWrap}>
           <Ionicons name="barcode-outline" size={48} color={COLORS.textTertiary} />
-          <Text style={s.emptyText}>No items to preview</Text>
+          <Text style={s.emptyText}>{t('screens.stocksLabelPreview.noItems')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -143,49 +183,21 @@ export default function LabelPreviewScreen() {
   const fmtPrice = (rate: number) =>
     rate > 0 ? `₹${rate.toLocaleString('en-IN')}` : '—';
 
-  // ── Build print HTML via shared labelPrint utility ─────────────────────────
-  const getHTML = () => buildLabelHTML(items, { labelSize, copies, showSku, showPrice, showBatch });
-
-  const handlePrintNow = async () => {
-    if (!items.length) return;
-    setPrinting(true);
-    try {
-      await Print.printAsync({ html: getHTML() });
-    } catch (err: any) {
-      if (!err?.message?.includes('cancel'))
-        Alert.alert('Print failed', err?.message || 'Could not open print dialog');
-    } finally { setPrinting(false); }
-  };
-
-  const handleSharePDF = async () => {
-    if (!items.length) return;
-    setPrinting(true);
-    try {
-      const { uri } = await Print.printToFileAsync({ html: getHTML() });
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share barcode labels' });
-      else Alert.alert('PDF saved', uri);
-    } catch (err: any) {
-      if (!err?.message?.includes('cancel'))
-        Alert.alert('Export failed', err?.message || 'Could not export PDF');
-    } finally { setPrinting(false); }
-  };
-
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <Header />
+      <Header onBack={onBack} onPrint={handlePrintNow} printing={printing} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
         {/* ── Info strip */}
         <View style={s.infoStrip}>
-          <View style={s.infoItem}><Text style={s.infoLabel}>Per Sheet</Text><Text style={s.infoValue}>{perPage}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>{t('screens.stocksLabelPreview.perSheet')}</Text><Text style={s.infoValue}>{perPage}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Total Labels</Text><Text style={s.infoValue}>{total}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>{t('screens.stocksLabelPreview.totalLabels')}</Text><Text style={s.infoValue}>{total}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Sheets</Text><Text style={s.infoValue}>{sheets}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>{t('screens.stocksLabelPreview.sheets')}</Text><Text style={s.infoValue}>{sheets}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Size</Text><Text style={s.infoValue} numberOfLines={1}>{labelSize}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>{t('screens.stocksLabelPreview.size')}</Text><Text style={s.infoValue} numberOfLines={1}>{labelSize}</Text></View>
         </View>
 
         {/* ── Item navigator */}
@@ -206,7 +218,7 @@ export default function LabelPreviewScreen() {
         ════════════════════════════════════════ */}
         <View style={s.labelContainer}>
           {/* "Actual size" hint */}
-          <Text style={s.previewHint}>Preview — {labelSize} · {copies} cop{copies === 1 ? 'y' : 'ies'}</Text>
+          <Text style={s.previewHint}>{t(copies === 1 ? 'screens.stocksLabelPreview.previewHintOne' : 'screens.stocksLabelPreview.previewHintOther', { size: labelSize, count: copies })}</Text>
 
           {/* White paper shadow + label */}
           <View style={[s.labelPaper, { width: cardW, height: previewH }]}>
@@ -268,7 +280,7 @@ export default function LabelPreviewScreen() {
         {/* ── All items list */}
         {items.length > 1 && (
           <View style={s.allItemsSection}>
-            <Text style={s.allItemsTitle}>All items in queue</Text>
+            <Text style={s.allItemsTitle}>{t('screens.stocksLabelPreview.allItemsInQueue')}</Text>
             {items.map((item, idx) => (
               <TouchableOpacity
                 key={item.stockGuid}
@@ -309,7 +321,7 @@ export default function LabelPreviewScreen() {
             {printing
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="print-outline" size={18} color="#fff" />}
-            <Text style={s.printNowBtnText}>{printing ? 'Opening…' : 'Print Now'}</Text>
+            <Text style={s.printNowBtnText}>{printing ? t('screens.stocksLabelPreview.opening') : t('screens.stocksLabelPreview.printNow')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.sharePdfBtn, printing && s.btnDisabled]}
@@ -318,13 +330,13 @@ export default function LabelPreviewScreen() {
             disabled={printing}
           >
             <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
-            <Text style={s.sharePdfText}>Share PDF</Text>
+            <Text style={s.sharePdfText}>{t('screens.stocksLabelPreview.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
         {/* Row 2: Edit settings */}
         <TouchableOpacity style={s.editBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="settings-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={s.editBtnText}>Edit Settings</Text>
+          <Text style={s.editBtnText}>{t('screens.stocksLabelPreview.editSettings')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

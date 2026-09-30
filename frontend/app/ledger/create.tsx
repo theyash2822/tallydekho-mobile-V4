@@ -18,6 +18,7 @@ import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 import { useRbasCreate } from '../../src/hooks/useRbasCreate';
+import { useTranslation } from 'react-i18next';
 
 // ─── Themed TextInput ─────────────────────────────────────────────────────────
 function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -41,11 +42,11 @@ function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
 type LedgerType = 'sundry_creditor' | 'sundry_debtor' | 'duties_taxes' | 'custom';
 type CustomProfile = 'simple' | 'bank' | 'tradingGst' | 'pnlGst' | '';
 
-const TYPE_CONFIG: Record<LedgerType, { title: string; group: string }> = {
-  sundry_creditor: { title: 'Sundry Creditors', group: 'Sundry Creditors' },
-  sundry_debtor:   { title: 'Sundry Debtors',   group: 'Sundry Debtors' },
-  duties_taxes:    { title: 'Duties & Taxes',    group: 'Duties & Taxes' },
-  custom:          { title: 'Custom Groups',     group: '' },
+const TYPE_CONFIG: Record<LedgerType, { titleKey: string; group: string }> = {
+  sundry_creditor: { titleKey: 'quickActions.sundryCreditors', group: 'Sundry Creditors' },
+  sundry_debtor:   { titleKey: 'quickActions.sundryDebtors',   group: 'Sundry Debtors' },
+  duties_taxes:    { titleKey: 'quickActions.dutiesTaxes',     group: 'Duties & Taxes' },
+  custom:          { titleKey: 'quickActions.customGroups',    group: '' },
 };
 
 const DUTY_CATEGORIES = ['GST', 'CST', 'VAT', 'Others'] as const;
@@ -110,17 +111,17 @@ function profileForGroup(group: string): CustomProfile {
 }
 
 const GST_APPLICABILITY_OPTS = [
-  { label: 'Applicable', value: 'Applicable' },
-  { label: 'Not Applicable', value: 'Not Applicable' },
+  { labelKey: 'screens.ledgerCreate.applicable', value: 'Applicable' },
+  { labelKey: 'screens.ledgerCreate.notApplicable', value: 'Not Applicable' },
 ];
 const TYPE_OF_SUPPLY_OPTS = [
-  { label: 'Goods', value: 'Goods' },
-  { label: 'Services', value: 'Services' },
+  { labelKey: 'screens.ledgerCreate.goods', value: 'Goods' },
+  { labelKey: 'screens.ledgerCreate.services', value: 'Services' },
 ];
 const TAXABILITY_OPTS = [
-  { label: 'Taxable', value: 'Taxable' },
-  { label: 'Exempt', value: 'Exempt' },
-  { label: 'Nil Rated', value: 'Nil Rated' },
+  { labelKey: 'screens.ledgerCreate.taxable', value: 'Taxable' },
+  { labelKey: 'screens.ledgerCreate.exempt', value: 'Exempt' },
+  { labelKey: 'screens.ledgerCreate.nilRated', value: 'Nil Rated' },
 ];
 
 // ─── Opening Balance Row ──────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ function BalanceRow({ value, onChange, isCr, onToggleCr }: {
   value: string; onChange: (v: string) => void;
   isCr: boolean; onToggleCr: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
   return (
     <View style={[s.balanceBox, focused && s.balanceBoxFocused]}>
@@ -142,9 +144,9 @@ function BalanceRow({ value, onChange, isCr, onToggleCr }: {
         onBlur={() => setFocused(false)}
       />
       <View style={s.drCrWrap}>
-        <Text style={[s.drCrLabel, !isCr && s.drCrLabelActive]}>Dr</Text>
+        <Text style={[s.drCrLabel, !isCr && s.drCrLabelActive]}>{t('screens.ledgerCreate.dr')}</Text>
         <BrandSwitch value={isCr} onValueChange={onToggleCr} />
-        <Text style={[s.drCrLabel, isCr && s.drCrLabelActive]}>Cr</Text>
+        <Text style={[s.drCrLabel, isCr && s.drCrLabelActive]}>{t('screens.ledgerCreate.cr')}</Text>
       </View>
     </View>
   );
@@ -159,6 +161,7 @@ export default function CreateLedgerScreen() {
   const { company } = useAuth();
   const { pairingStatus } = useWorkspace();
   const { assertCanCreate } = useRbasCreate();
+  const { t } = useTranslation();
 
   const lType = (
     ['sundry_creditor', 'sundry_debtor', 'duties_taxes', 'custom'].includes(params.type || '')
@@ -235,35 +238,35 @@ export default function CreateLedgerScreen() {
   // ─── Save ─────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Required', 'Ledger name is required.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.nameRequired'));
       return;
     }
     if (isCustom && !customGroup) {
-      Alert.alert('Required', 'Please select Under (Group).');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectUnder'));
       return;
     }
     if (isDuties && !dutyCategory) {
-      Alert.alert('Required', 'Please select Type of Duty / Tax.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectDutyType'));
       return;
     }
     if (isDuties && showTaxType && !taxType) {
-      Alert.alert('Required', 'Please select Tax type.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectTaxType'));
       return;
     }
     if (isGstProfile && !gstApplicable) {
-      Alert.alert('Required', 'Please select GST Applicability.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectGstApplicability'));
       return;
     }
     if (gstDetailsVisible && !taxability) {
-      Alert.alert('Required', 'Please select Taxability.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectTaxability'));
       return;
     }
     if (gstDetailsVisible && showTypeOfSupply && !typeOfSupply) {
-      Alert.alert('Required', 'Please select Type of Supply.');
+      Alert.alert(t('common.required'), t('screens.ledgerCreate.selectTypeOfSupply'));
       return;
     }
     if (String(pairingStatus || '').toUpperCase() !== 'CONNECTED') {
-      Toast.show({ type: 'error', text1: 'Tally not connected', text2: 'Connect and sync Tally before creating masters.' });
+      Toast.show({ type: 'error', text1: t('screens.ledgerCreate.tallyNotConnected'), text2: t('screens.ledgerCreate.connectTally') });
       return;
     }
     if (!assertCanCreate('ledger_master.create')) return;
@@ -349,11 +352,11 @@ export default function CreateLedgerScreen() {
       if (queueId) {
         setSubmitResult({ queueId, isQueued, name: name.trim() });
       } else {
-        Toast.show({ type: 'success', text1: 'Ledger Created', text2: `"${name}" added to Tally.` });
+        Toast.show({ type: 'success', text1: t('screens.ledgerCreate.ledgerCreatedToast'), text2: t('screens.ledgerCreate.addedToTally', { name }) });
         setTimeout(() => router.back(), 1200);
       }
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not create ledger.' });
+      Toast.show({ type: 'error', text1: t('screens.ledgerCreate.failed'), text2: err?.message || t('screens.ledgerCreate.couldNotCreate') });
     } finally {
       setSubmitting(false);
     }
@@ -372,12 +375,12 @@ export default function CreateLedgerScreen() {
               />
             </View>
             <Text style={ss.title}>
-              {submitResult.isQueued ? 'Saved. Pending Sync' : 'Ledger Created!'}
+              {submitResult.isQueued ? t('voucher.journalQueued') : t('screens.ledgerCreate.ledgerCreated')}
             </Text>
             <Text style={ss.sub}>
               {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : `"${submitResult.name}" pushed to Tally successfully.`}
+                ? t('screens.ledgerCreate.queuedSub')
+                : t('screens.ledgerCreate.pushedSub', { name: submitResult.name })}
             </Text>
             <TouchableOpacity
               style={ss.previewBtn}
@@ -387,14 +390,14 @@ export default function CreateLedgerScreen() {
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
+              <Text style={ss.previewBtnTxt}>{t('currency.preview')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={ss.doneBtn}
               activeOpacity={0.85}
               onPress={() => router.back()}
             >
-              <Text style={ss.doneBtnTxt}>Done</Text>
+              <Text style={ss.doneBtnTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -414,7 +417,7 @@ export default function CreateLedgerScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>{cfg.title}</Text>
+        <Text style={s.headerTitle}>{t(cfg.titleKey)}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -432,18 +435,18 @@ export default function CreateLedgerScreen() {
         >
           {/* ── Name ── */}
           <View style={s.field}>
-            <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
-            <ThemedInput placeholder="Enter ledger name" value={name} onChangeText={setName} />
+            <Text style={s.label}>{t('screens.ledgerCreate.name')} <Text style={s.required}>*</Text></Text>
+            <ThemedInput placeholder={t('screens.ledgerCreate.enterName')} value={name} onChangeText={setName} />
           </View>
 
           {/* ── Custom: Under first (bottom sheet + search) ── */}
           {isCustom && (
             <BottomSheetSearch
-              label="Under (Group)"
+              label={t('screens.ledgerCreate.underGroup')}
               required
-              placeholder="Select group first..."
-              sheetTitle="Under (Group)"
-              searchPlaceholder="Search groups..."
+              placeholder={t('screens.ledgerCreate.selectGroupFirst')}
+              sheetTitle={t('screens.ledgerCreate.underGroup')}
+              searchPlaceholder={t('screens.ledgerCreate.searchGroups')}
               options={CUSTOM_GROUPS.map(g => ({ label: g, value: g }))}
               value={customGroup}
               onSelect={o => onSelectCustomGroup(o.value)}
@@ -454,15 +457,14 @@ export default function CreateLedgerScreen() {
 
           {isCustom && customGroup === 'Bank OD A/c' && (
             <Text style={s.helper}>
-              Use Bank OD A/c only for overdraft / cash-credit / loan-type bank accounts.
-              For a normal bank account, use Bank Accounts.
+              {t('screens.ledgerCreate.bankOdHelper')}
             </Text>
           )}
 
           {/* ── Opening Balance (hidden for P&L Custom groups) ── */}
           {showOpeningBalance && (
             <View style={s.field}>
-              <Text style={s.label}>Opening Balance</Text>
+              <Text style={s.label}>{t('ledger.opening')}</Text>
               <BalanceRow
                 value={openBalance} onChange={setOpenBalance}
                 isCr={isCr} onToggleCr={setIsCr}
@@ -473,36 +475,36 @@ export default function CreateLedgerScreen() {
           {/* ── Bank fields (Custom → Bank / Bank OD) ── */}
           {isBankProfile && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>Bank Details</Text>
+              <Text style={s.sectionTitle}>{t('pdf.bankDetails')}</Text>
               <View style={s.field}>
-                <Text style={s.label}>Account Number</Text>
+                <Text style={s.label}>{t('screens.ledgerCreate.accountNumber')}</Text>
                 <ThemedInput
-                  placeholder="Account number"
+                  placeholder={t('screens.ledgerCreate.accountNumberPh')}
                   value={bankAccountNo}
                   onChangeText={setBankAccountNo}
                   keyboardType="number-pad"
                 />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>IFSC Code</Text>
+                <Text style={s.label}>{t('screens.ledgerCreate.ifscCode')}</Text>
                 <ThemedInput
                   placeholder="IFSC"
                   value={bankIfsc}
-                  onChangeText={t => setBankIfsc(t.toUpperCase())}
+                  onChangeText={v => setBankIfsc(v.toUpperCase())}
                   autoCapitalize="characters"
                 />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>Branch</Text>
-                <ThemedInput placeholder="Branch name" value={bankBranch} onChangeText={setBankBranch} />
+                <Text style={s.label}>{t('screens.ledgerCreate.branch')}</Text>
+                <ThemedInput placeholder={t('screens.ledgerCreate.branchPh')} value={bankBranch} onChangeText={setBankBranch} />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>Account Holder Name</Text>
-                <ThemedInput placeholder="Account holder" value={bankHolder} onChangeText={setBankHolder} />
+                <Text style={s.label}>{t('screens.ledgerCreate.accountHolderName')}</Text>
+                <ThemedInput placeholder={t('screens.ledgerCreate.accountHolderPh')} value={bankHolder} onChangeText={setBankHolder} />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>Bank Name</Text>
-                <ThemedInput placeholder="Bank name" value={bankName} onChangeText={setBankName} />
+                <Text style={s.label}>{t('screens.ledgerCreate.bankName')}</Text>
+                <ThemedInput placeholder={t('screens.ledgerCreate.bankNamePh')} value={bankName} onChangeText={setBankName} />
               </View>
             </View>
           )}
@@ -510,13 +512,13 @@ export default function CreateLedgerScreen() {
           {/* ── GST block (Custom → Sales / Purchase / Income / Expense) ── */}
           {isGstProfile && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>GST Details</Text>
+              <Text style={s.sectionTitle}>{t('screens.ledgerCreate.gstDetails')}</Text>
               <FormDropdown
-                label="GST Applicability"
+                label={t('screens.ledgerCreate.gstApplicability')}
                 required
                 value={gstApplicable}
-                options={GST_APPLICABILITY_OPTS}
-                placeholder="Select"
+                options={GST_APPLICABILITY_OPTS.map(o => ({ label: t(o.labelKey), value: o.value }))}
+                placeholder={t('common.select')}
                 onSelect={o => {
                   setGstApplicable(o.value);
                   if (o.value !== 'Applicable') {
@@ -526,35 +528,35 @@ export default function CreateLedgerScreen() {
               />
               {gstDetailsVisible && showTypeOfSupply && (
                 <FormDropdown
-                  label="Type of Supply"
+                  label={t('screens.ledgerCreate.typeOfSupply')}
                   required
                   value={typeOfSupply}
-                  options={TYPE_OF_SUPPLY_OPTS}
-                  placeholder="Select"
+                  options={TYPE_OF_SUPPLY_OPTS.map(o => ({ label: t(o.labelKey), value: o.value }))}
+                  placeholder={t('common.select')}
                   onSelect={o => setTypeOfSupply(o.value)}
                 />
               )}
               {gstDetailsVisible && (
                 <>
                   <FormDropdown
-                    label="Taxability"
+                    label={t('screens.ledgerCreate.taxability')}
                     required
                     value={taxability}
-                    options={TAXABILITY_OPTS}
-                    placeholder="Select"
+                    options={TAXABILITY_OPTS.map(o => ({ label: t(o.labelKey), value: o.value }))}
+                    placeholder={t('common.select')}
                     onSelect={o => setTaxability(o.value)}
                   />
                   <View style={s.field}>
                     <Text style={s.label}>HSN / SAC</Text>
                     <ThemedInput
-                      placeholder="HSN or SAC code"
+                      placeholder={t('screens.ledgerCreate.hsnPh')}
                       value={hsnCode}
                       onChangeText={setHsnCode}
                       autoCapitalize="characters"
                     />
                   </View>
                   <View style={s.field}>
-                    <Text style={s.label}>GST Rate %</Text>
+                    <Text style={s.label}>{t('screens.ledgerCreate.gstRate')}</Text>
                     <View style={s.percentBox}>
                       <TextInput
                         style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
@@ -578,11 +580,11 @@ export default function CreateLedgerScreen() {
           {isDuties && (
             <View style={s.section}>
               <FormDropdown
-                label="Type of Duty / Tax"
+                label={t('screens.ledgerCreate.dutyType')}
                 required
                 value={dutyCategory}
                 options={DUTY_CATEGORIES.map(d => ({ label: d, value: d }))}
-                placeholder="Select type"
+                placeholder={t('screens.ledgerCreate.selectType')}
                 onSelect={o => {
                   setDutyCategory(o.value);
                   setTaxType('');
@@ -591,17 +593,17 @@ export default function CreateLedgerScreen() {
 
               {showTaxType && (
                 <FormDropdown
-                  label="Tax type"
+                  label={t('screens.ledgerCreate.taxType')}
                   required
                   value={taxType}
-                  options={taxTypeOptions.map(t => ({ label: t, value: t }))}
-                  placeholder="Select tax type"
+                  options={taxTypeOptions.map(tt => ({ label: tt, value: tt }))}
+                  placeholder={t('screens.ledgerCreate.selectTaxTypePh')}
                   onSelect={o => setTaxType(o.value)}
                 />
               )}
 
               <View style={s.field}>
-                <Text style={s.label}>% of Calculation</Text>
+                <Text style={s.label}>{t('screens.ledgerCreate.percentOfCalc')}</Text>
                 <View style={s.percentBox}>
                   <TextInput
                     style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
@@ -636,7 +638,7 @@ export default function CreateLedgerScreen() {
             disabled={submitting}
           >
             {submitting && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
-            <Text style={s.saveBtnText}>{submitting ? 'Saving...' : 'Save Ledger'}</Text>
+            <Text style={s.saveBtnText}>{submitting ? t('common.saving') : t('screens.ledgerCreate.saveLedger')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

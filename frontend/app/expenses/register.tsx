@@ -6,7 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -16,6 +16,7 @@ import { getExpenses, getExpenseCounts } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import {
   FilterIconWithBadge,
   ActiveFilterChips,
@@ -42,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Types ────────────────────────────────────────────────────────────
 type ExpenseItem = {
+  guid?: string;
   id: string; voucher?: string; party: string; date: string;
   time: string; amount: string; status: string; type: 'direct' | 'indirect';
   voucherType?: string;
@@ -84,12 +86,14 @@ export default function ExpenseRegisterScreen() {
   const [toDate,   setToDate]   = useState(fyTo);
 
   // When FY loads/changes, reset date range to full FY (same as Sales/Purchase registers).
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ fyFrom, fyTo });
+  if (prevFy.fyFrom !== fyFrom || prevFy.fyTo !== fyTo) {
+    setPrevFy({ fyFrom, fyTo });
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const mapExpenseItem = (r: any): ExpenseItem => {
     // Prefer API expense_type (recursive root). Fall back to anchored group name —
@@ -103,6 +107,7 @@ export default function ExpenseRegisterScreen() {
     else if (/^indirect\s*expenses?$/i.test(group)) kind = 'indirect';
     return {
       id: r.guid || String(r.id),
+      guid: r.guid || '',
       voucher: r.voucher_number || '',
       party: r.expense_ledger || r.party_name || r.narration || 'Expense',
       date: r.date || '',
@@ -151,14 +156,22 @@ export default function ExpenseRegisterScreen() {
     }).catch(() => {});
   };
 
+  const loadDeps = [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilters.join(','), categoryFilters.join(',')];
+  const [prevLoadDeps, setPrevLoadDeps] = useState<unknown[] | null>(null);
+  if (prevLoadDeps === null || loadDeps.some((d, i) => d !== prevLoadDeps[i])) {
+    setPrevLoadDeps(loadDeps);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+      setPage(1);
+      setHasMore(false);
+    }
+  }
+
   useEffect(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
-    setPage(1);
-    setHasMore(false);
     loadPage(1)
-      .catch((err: any) => setApiError(err?.message || 'Failed to load'))
+      .catch((err: any) => setApiError(err?.message || i18n.t('screens.expensesRegister.loadFailed')))
       .finally(() => setIsLoading(false));
     loadCounts();
   }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilters.join(','), categoryFilters.join(',')]);
@@ -208,7 +221,7 @@ export default function ExpenseRegisterScreen() {
       if (mode === 'combined') {
         await shareDayBookPdf({
           company: companyFromAuth(company),
-          title: 'Expense Register',
+          title: t('expenses.register'),
           period: fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : undefined,
           rows: items.map(item => dayBookRowFromListItem({
             date: item.date,
@@ -233,12 +246,12 @@ export default function ExpenseRegisterScreen() {
           }
         );
         if (failed > 0) {
-          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+          Toast.show({ type: 'info', text1: t('screens.expensesRegister.sharedOf', { shared, total: items.length }), text2: t('screens.expensesRegister.failedLoad', { failed }) });
         }
       }
       clearSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.expensesRegister.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -279,17 +292,17 @@ export default function ExpenseRegisterScreen() {
 
       <FilterPillRow>
         <FilterDatePill
-          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}
+          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : t('screens.expensesRegister.dates')}
           onPress={() => { setStatusOpen(false); setShowDatePicker(true); }}
         />
         <FilterDropdownPill
-          label={statusFilter}
+          label={statusFilter === 'Paid' ? t('sales.paid') : statusFilter === 'Unpaid' ? t('sales.unpaid') : statusFilter}
           open={statusOpen}
           onToggle={() => setStatusOpen(v => !v)}
           options={['All', 'Paid', 'Unpaid']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setStatusOpen(false); }}
-          placeholder="Status"
+          placeholder={t('screens.expensesRegister.status')}
         />
       </FilterPillRow>
 
@@ -307,11 +320,11 @@ export default function ExpenseRegisterScreen() {
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search expenses, parties..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder={t('screens.expensesRegister.searchPh')} />
 
       {apiError && <ErrorBanner message={apiError} onRetry={() => {
         setIsLoading(true);
-        loadPage(1).catch((err: any) => setApiError(err?.message || 'Failed to load')).finally(() => setIsLoading(false));
+        loadPage(1).catch((err: any) => setApiError(err?.message || t('screens.expensesRegister.loadFailed'))).finally(() => setIsLoading(false));
         loadCounts();
       }} />}
 
@@ -320,14 +333,14 @@ export default function ExpenseRegisterScreen() {
         {/* ── Stats Row (Total + Tax) ────────────────────────────────── */}
         <View style={s.statsRow}>
           <View style={s.statCell}>
-            <Text style={s.statLabel}>Total</Text>
+            <Text style={s.statLabel}>{t('sales.total')}</Text>
             <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>
               ₹{totalAmt.toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={s.statDivider} />
           <View style={s.statCell}>
-            <Text style={s.statLabel}>Tax</Text>
+            <Text style={s.statLabel}>{t('pdf.tax')}</Text>
             <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>
               ₹{taxAmt.toLocaleString('en-IN')}
             </Text>
@@ -335,7 +348,7 @@ export default function ExpenseRegisterScreen() {
         </View>
 
         {/* ── Section Heading ────────────────────────────────────────── */}
-        <Text style={s.sectionHeading}>List Of Expenses</Text>
+        <Text style={s.sectionHeading}>{t('screens.expensesRegister.listHeading')}</Text>
 
         {/* ── Collapsible Month Sections ────────────────────────────── */}
         {(() => {
@@ -343,7 +356,7 @@ export default function ExpenseRegisterScreen() {
           const monthMap: Record<string, { id: string; label: string; items: any[] }> = {};
           filterItems(liveItems).forEach(item => {
             const d = item.date;
-            let key = 'other', label = 'Other';
+            let key = 'other', label = t('screens.expensesRegister.other');
             if (d && d.includes('-') && d.length === 10) {
               const [y, m] = d.split('-');
               key = `${y}-${m}`;
@@ -356,7 +369,7 @@ export default function ExpenseRegisterScreen() {
           if (displayGroups.length === 0 && !isLoading) return (
             <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
               <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No expenses found</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>{t('expenses.noExpenses')}</Text>
             </View>
           );
           return displayGroups.map(group => {
@@ -370,7 +383,7 @@ export default function ExpenseRegisterScreen() {
                 <View style={s.monthHeaderLeft}>
                   <View style={s.monthDot} />
                   <Text style={s.monthLabel}>{group.label}</Text>
-                  <Text style={s.monthCount}>{groupItems.length} expenses</Text>
+                  <Text style={s.monthCount}>{t('screens.expensesRegister.expensesCount', { count: groupItems.length })}</Text>
                 </View>
                 <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
@@ -388,7 +401,7 @@ export default function ExpenseRegisterScreen() {
                             if (isSelecting) toggleSelect(item.id);
                             else {
                               const routeType = expenseRowToRouteType(item.voucherType);
-                              safePush(router, `/document/${item.id}?type=${routeType}` as any);
+                              openVoucherPreview(router, { guid: item.guid, docType: routeType });
                             }
                           }}
                           onLongPress={() => toggleSelect(item.id)}
@@ -423,12 +436,12 @@ export default function ExpenseRegisterScreen() {
           <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
             {isLoadingMore
               ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-              : <Text style={s.loadMoreTxt}>Load More</Text>
+              : <Text style={s.loadMoreTxt}>{t('screens.expensesRegister.loadMore')}</Text>
             }
           </TouchableOpacity>
         )}
         {!hasMore && liveItems.length > 0 && (
-          <Text style={s.endTxt}>All {liveItems.length} entries loaded</Text>
+          <Text style={s.endTxt}>{t('screens.expensesRegister.allLoaded', { count: liveItems.length })}</Text>
         )}
 
       </ScrollView>
@@ -437,12 +450,12 @@ export default function ExpenseRegisterScreen() {
       {isSelecting && (
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
-            <Text style={s.actionCount}>{selected.length} selected</Text>
+            <Text style={s.actionCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Select All</Text>
+              <Text style={s.cancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -455,7 +468,7 @@ export default function ExpenseRegisterScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.actionBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.actionBtnTxt}>{isSharing ? t('screens.expensesRegister.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

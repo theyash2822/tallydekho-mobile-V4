@@ -28,7 +28,9 @@ export function useAutoTorchAssist(opts: {
   const userSuppressedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onAutoOnRef = useRef(opts.onAutoOn);
-  onAutoOnRef.current = opts.onAutoOn;
+  useEffect(() => {
+    onAutoOnRef.current = opts.onAutoOn;
+  });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {

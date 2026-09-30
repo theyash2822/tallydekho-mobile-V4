@@ -3,31 +3,32 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 const SECURITY_SECTIONS = [
   {
-    title: 'Data at Rest',
+    titleKey: 'screens.settingsSecurity.dataAtRest',
     icon:  'lock-closed-outline',
     items: [
-      { label: 'Encrypt local database', badge: 'AES-256' },
-      { label: 'Cache is cleared on logout',  badge: undefined },
+      { labelKey: 'screens.settingsSecurity.encryptLocalDb', badge: 'AES-256' },
+      { labelKey: 'screens.settingsSecurity.cacheCleared',  badge: undefined },
     ],
   },
   {
-    title: 'Network',
+    titleKey: 'screens.settingsSecurity.network',
     icon:  'wifi-outline',
     items: [
-      { label: 'Allow only HTTPS endpoints', badge: undefined },
+      { labelKey: 'screens.settingsSecurity.httpsOnly', badge: undefined },
     ],
   },
   {
-    title: 'Data Retention',
+    titleKey: 'screens.settingsSecurity.dataRetention',
     icon:  'time-outline',
     items: [
-      { label: 'Anonymise deleted user data',           badge: undefined },
-      { label: 'Auto-purge recycle bin after [30] days', badge: undefined },
+      { labelKey: 'screens.settingsSecurity.anonymise',           badge: undefined },
+      { labelKey: 'screens.settingsSecurity.autoPurge', badge: undefined },
     ],
   },
 ];
@@ -64,6 +65,7 @@ const r = StyleSheet.create({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function DataSecurityScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -72,7 +74,7 @@ export default function DataSecurityScreen() {
         <TouchableOpacity onPress={()=>router.back()} style={s.back} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Data Security</Text>
+        <Text style={s.hdrTitle}>{t('settings.security')}</Text>
         <View style={{width:40}} />
       </View>
 
@@ -84,28 +86,28 @@ export default function DataSecurityScreen() {
             <Ionicons name="shield-checkmark" size={30} color={COLORS.positive} />
           </View>
           <View style={s.bannerText}>
-            <Text style={s.bannerTitle}>Your account and data is protected</Text>
-            <Text style={s.bannerSub}>Data is stored securely on AWS servers</Text>
+            <Text style={s.bannerTitle}>{t('screens.settingsSecurity.bannerTitle')}</Text>
+            <Text style={s.bannerSub}>{t('screens.settingsSecurity.bannerSub')}</Text>
           </View>
         </View>
 
         {/* Sections */}
         <View style={s.card}>
           {SECURITY_SECTIONS.map((sec, si) => (
-            <View key={sec.title}>
+            <View key={sec.titleKey}>
               {si > 0 && <View style={s.sectionDivider} />}
               {/* Section title */}
               <View style={s.secHeader}>
                 <View style={s.secIconBox}>
                   <Ionicons name={sec.icon as any} size={14} color={COLORS.textSecondary} />
                 </View>
-                <Text style={s.secTitle}>{sec.title}</Text>
+                <Text style={s.secTitle}>{t(sec.titleKey)}</Text>
               </View>
               {/* Items */}
               {sec.items.map((item, ii) => (
                 <CheckRow
-                  key={item.label}
-                  label={item.label}
+                  key={item.labelKey}
+                  label={t(item.labelKey)}
                   badge={item.badge}
                   isLast={ii === sec.items.length - 1}
                 />
@@ -118,7 +120,7 @@ export default function DataSecurityScreen() {
         <View style={s.awsNote}>
           <Ionicons name="cloud-outline" size={16} color={COLORS.textSecondary} />
           <Text style={s.awsNoteTxt}>
-            All your business data is encrypted and backed up on Amazon Web Services (AWS) — one of the world's most trusted cloud infrastructures.
+            {t('screens.settingsSecurity.awsNote')}
           </Text>
         </View>
 

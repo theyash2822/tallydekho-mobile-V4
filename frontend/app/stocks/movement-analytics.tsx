@@ -210,6 +210,7 @@ function ItemRow({
   item: MovItem; selected: boolean; onPress: () => void;
   formatAmountCompact: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const trDisplay  = item.sold_out ? '∞' : item.tr > 0 ? `${item.tr.toFixed(1)}x` : '—';
   const dsiDisplay = item.sold_out ? '0d' : item.dsi != null ? `${item.dsi}d` : '—';
   const trColor    = (item.sold_out || item.tr > 0) ? CHART_OUT : COLORS.textPrimary;
@@ -226,7 +227,7 @@ function ItemRow({
           {item.sku ? <Text style={s.itemSku}>{item.sku}</Text> : null}
           {item.sold_out && (
             <View style={s.soldBadge}>
-              <Text style={s.soldBadgeTxt}>SOLD OUT</Text>
+              <Text style={s.soldBadgeTxt}>{t('screens.stocksMovementAnalytics.soldOut')}</Text>
             </View>
           )}
         </View>
@@ -244,7 +245,7 @@ function ItemRow({
           <Text style={s.metricVal}>
             {item.sold_out ? '₹0' : formatAmountCompact(item.total_value)}
           </Text>
-          <Text style={s.metricLbl}>Value</Text>
+          <Text style={s.metricLbl}>{t('screens.stocksMovementAnalytics.value')}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -272,10 +273,8 @@ export default function MovementAnalyticsScreen() {
   const [activeIdx,    setActiveIdx]    = useState<number | null>(null);
 
   // Load all items
-  const loadItems = useCallback(() => {
+  const fetchItems = useCallback(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     const params: Record<string, string> = {};
     if (fyParam) params.fy = fyParam;
     getMovementAnalytics(companyGuid, params)
@@ -284,17 +283,40 @@ export default function MovementAnalyticsScreen() {
         setItems(data);
         if (data.length > 0 && !selectedItem) setSelectedItem(data[0].name);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load'))
+      .catch((e: any) => setApiError(e?.message || t('screens.stocksMovementAnalytics.failedToLoad')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, fyParam]);
 
-  useEffect(() => { loadItems(); }, [loadItems]);
+  const loadItems = useCallback(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    fetchItems();
+  }, [companyGuid, fetchItems]);
+
+  const [prevItemsDeps, setPrevItemsDeps] = useState<unknown[] | null>(null);
+  if (prevItemsDeps === null || prevItemsDeps[0] !== companyGuid || prevItemsDeps[1] !== fyParam) {
+    setPrevItemsDeps([companyGuid, fyParam]);
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   // Load chart for selected item
+  const [prevChartDeps, setPrevChartDeps] = useState<unknown[] | null>(null);
+  if (prevChartDeps === null || prevChartDeps[0] !== selectedItem || prevChartDeps[1] !== companyGuid) {
+    setPrevChartDeps([selectedItem, companyGuid]);
+    if (selectedItem && companyGuid) {
+      setChartLoading(true);
+      setActiveIdx(null);
+    }
+  }
+
   useEffect(() => {
     if (!selectedItem || !companyGuid) return;
-    setChartLoading(true);
-    setActiveIdx(null);
     getMovementChart(companyGuid, { item: selectedItem })
       .then((res: any) => {
         const raw = res?.data ?? [];
@@ -355,10 +377,10 @@ export default function MovementAnalyticsScreen() {
                   <Text style={s.chartSub}>
                     {selectedItemData
                       ? selectedItemData.sold_out
-                        ? 'Sold out · Last 30 entries'
+                        ? t('screens.stocksMovementAnalytics.soldOutLast30')
                         : selectedItemData.tr > 0
-                          ? `TR ${selectedItemData.tr.toFixed(1)}x${selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}  ·  Last 30 entries`
-                          : 'No sales in selected FY · Last 30 entries'
+                          ? `TR ${selectedItemData.tr.toFixed(1)}x${selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}  ·  ${t('screens.stocksMovementAnalytics.last30Entries')}`
+                          : t('screens.stocksMovementAnalytics.noSalesLast30')
                       : '—'}
                   </Text>
                 </View>
@@ -366,18 +388,18 @@ export default function MovementAnalyticsScreen() {
                   <View style={s.activeBox}>
                     {activePoint.value > 0 && (
                       <Text style={[s.activeVal, { color: CHART_OUT }]}>
-                        Sold {compactAmt(activePoint.value)}
+                        {t('screens.stocksMovementAnalytics.soldAmt', { amount: compactAmt(activePoint.value) })}
                       </Text>
                     )}
                     {activePoint.inward_value > 0 && (
                       <Text style={[s.activeVal, { color: CHART_IN }]}>
-                        Bought {compactAmt(activePoint.inward_value)}
+                        {t('screens.stocksMovementAnalytics.boughtAmt', { amount: compactAmt(activePoint.inward_value) })}
                       </Text>
                     )}
                     <Text style={s.activeDate}>{fmtShortDate(activePoint.date)}</Text>
                   </View>
                 ) : (
-                  <Text style={s.chartHint}>Tap chart to inspect</Text>
+                  <Text style={s.chartHint}>{t('screens.stocksMovementAnalytics.tapChart')}</Text>
                 )}
               </View>
 
@@ -385,18 +407,18 @@ export default function MovementAnalyticsScreen() {
               <View style={s.chartLegend}>
                 <View style={s.legendItem}>
                   <View style={[s.legendDot, { backgroundColor: CHART_OUT }]} />
-                  <Text style={s.legendTxt}>Sold</Text>
+                  <Text style={s.legendTxt}>{t('screens.stocksMovementAnalytics.sold')}</Text>
                 </View>
                 <View style={s.legendItem}>
                   <View style={[s.legendDot, { backgroundColor: CHART_IN }]} />
-                  <Text style={s.legendTxt}>Purchased</Text>
+                  <Text style={s.legendTxt}>{t('screens.stocksMovementAnalytics.purchased')}</Text>
                 </View>
               </View>
 
               {/* Chart */}
               {chartLoading ? (
                 <View style={s.chartLoading}>
-                  <Text style={s.chartLoadingTxt}>Loading…</Text>
+                  <Text style={s.chartLoadingTxt}>{t('screens.stocksMovementAnalytics.loading')}</Text>
                 </View>
               ) : hasChartData ? (
                 <LineChart
@@ -406,7 +428,7 @@ export default function MovementAnalyticsScreen() {
                 />
               ) : (
                 <View style={s.chartEmpty}>
-                  <Text style={s.chartEmptyTxt}>No stock movements found</Text>
+                  <Text style={s.chartEmptyTxt}>{t('screens.stocksMovementAnalytics.noMovements')}</Text>
                 </View>
               )}
             </View>
@@ -415,14 +437,14 @@ export default function MovementAnalyticsScreen() {
             <SearchBar
               value={search}
               onChangeText={setSearch}
-              placeholder="Search stock by name or SKU…"
+              placeholder={t('screens.stocksMovementAnalytics.searchPlaceholder')}
               inputProps={{ returnKeyType: 'search' }}
             />
 
             {/* Section header */}
             <View style={s.sectionHdr}>
-              <Text style={s.sectionTitle}>All Stocks by Turnover Ratio</Text>
-              <Text style={s.sectionSub}>{filtered.length} items · {selectedFY?.label ?? 'Current FY'}</Text>
+              <Text style={s.sectionTitle}>{t('screens.stocksMovementAnalytics.allStocksByTr')}</Text>
+              <Text style={s.sectionSub}>{t('screens.stocksMovementAnalytics.itemsFy', { count: filtered.length, fy: selectedFY?.label ?? t('screens.stocksMovementAnalytics.currentFy') })}</Text>
             </View>
           </View>
         }
@@ -443,7 +465,7 @@ export default function MovementAnalyticsScreen() {
             <View style={s.empty}>
               <Ionicons name="analytics-outline" size={48} color={COLORS.textTertiary} />
               <Text style={s.emptyTxt}>
-                {search.trim() ? 'No items match your search' : 'No stock data available'}
+                {search.trim() ? t('screens.stocksMovementAnalytics.noMatch') : t('screens.stocksMovementAnalytics.noStockData')}
               </Text>
             </View>
           ) : null

@@ -95,11 +95,11 @@ const SECTIONS: Section[] = [
 // ── Sub-item translation key map ─────────────────────────────────────────────
 const SUBITEM_KEY: Record<string, string> = {
   profile:      'settings.profile',
-  my_access:    'My Access',
+  my_access:    'screens.settings.myAccess',
   company:      'settings.companyInfo',
   license:      'settings.license',
-  approvals:    'settings.approvals',
-  invitations:  'settings.invitations',
+  approvals:    'screens.settings.approvals',
+  invitations:  'screens.settings.invitations',
   language:     'settings.language',
   currency:     'settings.currency',
   voucher:      'settings.voucher',
@@ -129,8 +129,8 @@ function LogoutConfirmSheet({
   onConfirm: () => void;
 }) {
   const { t } = useTranslation();
-  const slideY = useRef(new Animated.Value(300)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const slideY = useState(() => new Animated.Value(300))[0];
+  const opacity = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     if (visible) {
@@ -302,20 +302,20 @@ export default function SettingsScreen() {
             >
               <Ionicons name="briefcase-outline" size={14} color={COLORS.brandPrimary} />
               <Text style={styles.workspaceName} numberOfLines={1}>
-                {workspace?.name || 'Workspace'}
+                {workspace?.name || t('screens.settings.workspace')}
               </Text>
               <Ionicons name="chevron-down" size={14} color={COLORS.textTertiary} />
             </TouchableOpacity>
             {demoMode ? (
               <Text style={styles.demoHint}>
                 {pairingStatus === 'RECONNECTING'
-                  ? 'Paired · waiting for first sync'
-                  : 'Demo Mode · Tally not paired'}
+                  ? t('screens.settings.pairedWaiting')
+                  : t('screens.settings.demoModeNotPaired')}
               </Text>
             ) : null}
             {invitations?.length > 0 ? (
               <TouchableOpacity onPress={() => safePush(router, '/settings/invitations' as any)}>
-                <Text style={styles.inviteHint}>{invitations.length} pending invitation{invitations.length > 1 ? 's' : ''}</Text>
+                <Text style={styles.inviteHint}>{invitations.length > 1 ? t('screens.settings.pendingInvitations', { count: invitations.length }) : t('screens.settings.pendingInvitation', { count: invitations.length })}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -380,10 +380,10 @@ export default function SettingsScreen() {
                               const ps = String(pairingStatus || '').toUpperCase();
                               const badgeText  = sub.badge === '__TALLY_STATUS__'
                                 ? (ps === 'CONNECTED'
-                                  ? 'Connected'
+                                  ? t('screens.settings.connected')
                                   : ps === 'RECONNECTING'
-                                    ? 'Waiting for sync'
-                                    : 'Unpaired')
+                                    ? t('screens.settings.waitingForSync')
+                                    : t('screens.settings.unpaired'))
                                 : sub.badge;
                               const badgeColor = sub.badgeColor === '__TALLY_COLOR__'
                                 ? (ps === 'CONNECTED'
@@ -422,7 +422,7 @@ export default function SettingsScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.madeInIndia}>🇮🇳 Made in India with Love</Text>
+          <Text style={styles.madeInIndia}>{t('screens.settings.madeInIndia')}</Text>
           <Text style={styles.version}>TallyDekho v3.7.2 · Build 257</Text>
         </View>
 
@@ -445,7 +445,7 @@ export default function SettingsScreen() {
       <Modal visible={showWorkspacePicker} transparent animationType="slide" onRequestClose={() => setShowWorkspacePicker(false)}>
         <TouchableOpacity style={styles.wsOverlay} activeOpacity={1} onPress={() => setShowWorkspacePicker(false)}>
           <View style={styles.wsSheet} onStartShouldSetResponder={() => true}>
-            <Text style={styles.wsTitle}>Switch Workspace</Text>
+            <Text style={styles.wsTitle}>{t('screens.settings.switchWorkspace')}</Text>
             {workspaces.map((w) => {
               const selected = w.id === workspaceId;
               const unavailable = isWorkspaceUnavailable(w);
@@ -463,7 +463,7 @@ export default function SettingsScreen() {
                         onChangeText={setRenameText}
                         autoFocus
                         style={styles.wsRenameInput}
-                        placeholder="Workspace name"
+                        placeholder={t('screens.settings.workspaceName')}
                         placeholderTextColor={COLORS.textTertiary}
                       />
                       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -475,23 +475,23 @@ export default function SettingsScreen() {
                             try {
                               await renameWorkspace(w.id, renameText);
                               setRenamingId(null);
-                              Alert.alert('Renamed', 'Workspace name updated');
+                              Alert.alert(t('screens.settings.renamed'), t('screens.settings.workspaceNameUpdated'));
                             } catch (e: any) {
-                              Alert.alert('Rename failed', e?.message || 'Try again');
+                              Alert.alert(t('screens.settings.renameFailed'), e?.message || t('screens.settings.tryAgain'));
                             } finally {
                               setRenameBusy(false);
                             }
                           }}
                         >
                           {renameBusy ? <ActivityIndicator size="small" color="#fff" /> : (
-                            <Text style={styles.wsRenameBtnTxt}>Save</Text>
+                            <Text style={styles.wsRenameBtnTxt}>{t('common.save')}</Text>
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.wsRenameBtn, styles.wsRenameBtnGhost]}
                           onPress={() => setRenamingId(null)}
                         >
-                          <Text style={[styles.wsRenameBtnTxt, { color: COLORS.textPrimary }]}>Cancel</Text>
+                          <Text style={[styles.wsRenameBtnTxt, { color: COLORS.textPrimary }]}>{t('common.cancel')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -508,11 +508,11 @@ export default function SettingsScreen() {
                         <Text style={styles.wsItemName}>{w.name}</Text>
                         <Text style={styles.wsItemMeta}>
                           {unavailable
-                            ? 'Access unavailable — Contact your administrator'
+                            ? t('screens.settings.accessUnavailable')
                             : `${
                                 String(w.membershipType || '').toUpperCase() === 'OWNER'
-                                  ? 'Owner'
-                                  : (w.roleDisplayName || w.role_display_name || w.roleSystemKey || w.role_system_key || 'Member')
+                                  ? t('screens.settings.owner')
+                                  : (w.roleDisplayName || w.role_display_name || w.roleSystemKey || w.role_system_key || t('screens.settings.member'))
                               }${w.tallyConnection ? ` · ${w.tallyConnection}` : ''}`}
                         </Text>
                       </TouchableOpacity>
@@ -536,7 +536,7 @@ export default function SettingsScreen() {
               );
             })}
             <TouchableOpacity style={styles.wsCancel} onPress={() => { setRenamingId(null); setShowWorkspacePicker(false); }}>
-              <Text style={styles.wsCancelTxt}>Cancel</Text>
+              <Text style={styles.wsCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

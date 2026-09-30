@@ -15,6 +15,7 @@ import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import {
   autoSplitAmount,
@@ -56,6 +57,7 @@ export default function CashCountSheet({
   onApply,
   onClear,
 }: Props) {
+  const { t } = useTranslation();
   const sheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
   const master = useMemo(() => getCashDenomMaster(currency), [currency]);
@@ -63,13 +65,21 @@ export default function CashCountSheet({
 
   const [counts, setCounts] = useState<DenomCounts>(() => emptyDenomCounts(master.notes));
 
+  const openDeps = [visible, initialCounts, master.notes];
+  const [prevOpenDeps, setPrevOpenDeps] = useState<unknown[] | null>(null);
+  if (prevOpenDeps === null || openDeps.some((d, i) => d !== prevOpenDeps[i])) {
+    setPrevOpenDeps(openDeps);
+    if (visible) {
+      if (initialCounts && Object.keys(initialCounts).length) {
+        setCounts({ ...emptyDenomCounts(master.notes), ...initialCounts });
+      } else {
+        setCounts(emptyDenomCounts(master.notes));
+      }
+    }
+  }
+
   useEffect(() => {
     if (!visible) return;
-    if (initialCounts && Object.keys(initialCounts).length) {
-      setCounts({ ...emptyDenomCounts(master.notes), ...initialCounts });
-    } else {
-      setCounts(emptyDenomCounts(master.notes));
-    }
     sheetRef.current?.present();
   }, [visible, initialCounts, master.notes]);
 
@@ -153,22 +163,22 @@ export default function CashCountSheet({
     >
       <View style={[s.sticky, { paddingTop: 4 }]}>
         <View style={s.titleRow}>
-          <Text style={s.title}>Cash Count</Text>
+          <Text style={s.title}>{t('screens.componentsFormsCashCountSheet.title')}</Text>
           <TouchableOpacity onPress={() => { sheetRef.current?.dismiss(); onClose(); }} hitSlop={8}>
             <Ionicons name="close" size={22} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
         <View style={s.metrics}>
           <View style={s.metric}>
-            <Text style={s.metricL}>Target</Text>
+            <Text style={s.metricL}>{t('screens.componentsFormsCashCountSheet.target')}</Text>
             <Text style={s.metricV}>{fmt(targetAmount || 0)}</Text>
           </View>
           <View style={s.metric}>
-            <Text style={s.metricL}>Counted</Text>
+            <Text style={s.metricL}>{t('screens.componentsFormsCashCountSheet.counted')}</Text>
             <Text style={[s.metricV, matched && { color: COLORS.positive }]}>{fmt(counted)}</Text>
           </View>
           <View style={s.metric}>
-            <Text style={s.metricL}>Difference</Text>
+            <Text style={s.metricL}>{t('screens.componentsFormsCashCountSheet.difference')}</Text>
             <Text style={[s.metricV, { color: diffColor }]}>
               {diff > 0 ? '+' : ''}{fmt(diff)}
             </Text>
@@ -176,21 +186,21 @@ export default function CashCountSheet({
         </View>
         {!matched && (targetAmount || 0) > 0 && (
           <Text style={s.gateHint}>
-            Counted must match target to apply. Fix with − / + or Auto Split.
+            {t('screens.componentsFormsCashCountSheet.gateHint')}
           </Text>
         )}
         <View style={s.actions}>
           <TouchableOpacity style={s.chip} onPress={handleAutoSplit} activeOpacity={0.8}>
             <Ionicons name="flash-outline" size={14} color={COLORS.brandPrimary} />
-            <Text style={s.chipTxt}>Auto Split</Text>
+            <Text style={s.chipTxt}>{t('screens.componentsFormsCashCountSheet.autoSplit')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.chip} onPress={handleClear} activeOpacity={0.8}>
             <Ionicons name="trash-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={[s.chipTxt, { color: COLORS.textSecondary }]}>Clear</Text>
+            <Text style={[s.chipTxt, { color: COLORS.textSecondary }]}>{t('common.clear')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.chip} onPress={handleUseLast} activeOpacity={0.8}>
             <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={[s.chipTxt, { color: COLORS.textSecondary }]}>Use Last</Text>
+            <Text style={[s.chipTxt, { color: COLORS.textSecondary }]}>{t('screens.componentsFormsCashCountSheet.useLast')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -215,7 +225,7 @@ export default function CashCountSheet({
                 <TextInput
                   style={s.qtyInput}
                   value={String(qty)}
-                  onChangeText={(t) => setQty(face, parseInt(t.replace(/\D/g, ''), 10) || 0)}
+                  onChangeText={(v) => setQty(face, parseInt(v.replace(/\D/g, ''), 10) || 0)}
                   keyboardType="number-pad"
                   selectTextOnFocus
                 />
@@ -230,7 +240,7 @@ export default function CashCountSheet({
 
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <TouchableOpacity style={s.clearBtn} onPress={handleClearCount} activeOpacity={0.8}>
-          <Text style={s.clearBtnTxt}>Clear Count</Text>
+          <Text style={s.clearBtnTxt}>{t('screens.componentsFormsCashCountSheet.clearCount')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.applyBtn, !matched && s.applyDisabled]}
@@ -238,7 +248,7 @@ export default function CashCountSheet({
           disabled={!matched}
           activeOpacity={0.85}
         >
-          <Text style={s.applyTxt}>{matched ? 'Apply Count' : 'Match Required'}</Text>
+          <Text style={s.applyTxt}>{matched ? t('screens.componentsFormsCashCountSheet.applyCount') : t('screens.componentsFormsCashCountSheet.matchRequired')}</Text>
         </TouchableOpacity>
       </View>
     </BottomSheetModal>

@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNotificationSettings, updateNotificationSettings } from '../../src/services/api';
@@ -15,7 +16,7 @@ import { getNotificationSettings, updateNotificationSettings } from '../../src/s
 // CustomToggle
 // ─────────────────────────────────────────────────────────────────────────────
 function CustomToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
   useEffect(() => {
     Animated.spring(anim, { toValue: value ? 1 : 0, useNativeDriver: false, tension: 60, friction: 7 }).start();
   }, [value]);
@@ -189,18 +190,21 @@ function TimePickerSheet({
   onClose:     () => void;
   onConfirm:   (t: string) => void;
 }) {
+  const { t } = useTranslation();
   const { h: initH, m: initM, p: initP } = parseTime(initialTime);
   const [selH, setSelH] = useState(initH);
   const [selM, setSelM] = useState(initM);
   const [selP, setSelP] = useState(initP);
 
   // Re-sync whenever the sheet opens
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
     if (visible) {
       const { h, m, p } = parseTime(initialTime);
       setSelH(h); setSelM(m); setSelP(p);
     }
-  }, [visible]);
+  }
 
   const handleDone = () => {
     onConfirm(`${selH}:${selM} ${selP}`);
@@ -227,10 +231,10 @@ function TimePickerSheet({
           {/* Action buttons */}
           <View style={tp.btnRow}>
             <TouchableOpacity style={tp.cancelBtn} onPress={onClose} activeOpacity={0.75}>
-              <Text style={tp.cancelTxt}>Cancel</Text>
+              <Text style={tp.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={tp.doneBtn} onPress={handleDone} activeOpacity={0.85}>
-              <Text style={tp.doneTxt}>Done</Text>
+              <Text style={tp.doneTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ height: 24 }} />
@@ -283,16 +287,43 @@ const tp = StyleSheet.create({
 // Notification channel data
 // ─────────────────────────────────────────────────────────────────────────────
 const CHANNELS = [
-  { id:'email',    label:'Email',             icon:'mail-outline',          sub:'Get notified via email' },
-  { id:'whatsapp', label:'WhatsApp',           icon:'logo-whatsapp',         sub:'Alerts on WhatsApp' },
-  { id:'sms',      label:'SMS',               icon:'chatbox-outline',       sub:'Text message alerts' },
-  { id:'push',     label:'Push Notification', icon:'notifications-outline', sub:'In-app push alerts' },
-];
+  { id:'email',    labelKey:'screens.settingsNotificationChannels.email',    icon:'mail-outline',          subKey:'screens.settingsNotificationChannels.emailSub' },
+  { id:'whatsapp', label:'WhatsApp',          icon:'logo-whatsapp',         subKey:'screens.settingsNotificationChannels.whatsappSub' },
+  { id:'sms',      labelKey:'screens.settingsNotificationChannels.sms',      icon:'chatbox-outline',       subKey:'screens.settingsNotificationChannels.smsSub' },
+  { id:'push',     labelKey:'screens.settingsNotificationChannels.push',     icon:'notifications-outline', subKey:'screens.settingsNotificationChannels.pushSub' },
+] as { id: string; label?: string; labelKey?: string; icon: string; subKey: string }[];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NotificationChannelsScreen() {
+  const { t } = useTranslation();
+  const saveAll = async () => {
+    try {
+      await updateNotificationSettings({
+        push_enabled: enabled.push, email_enabled: enabled.email,
+        whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
+        quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
+      });
+      Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsNotificationChannels.settingsUpdated') });
+    } catch { Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsNotificationChannels.couldNotSave') }); }
+  };
+
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
+  const [enabled, setEnabled] = useState<Record<string,boolean>>({
+    email:true, whatsapp:true, sms:false, push:true,
+  });
+  const [quietHours,     setQuietHours]     = useState(false);
+  const [startTime,      setStartTime]      = useState('10:00 PM');
+  const [endTime,        setEndTime]        = useState('07:00 AM');
+  const [saturday,       setSaturday]       = useState(false);
+  const [sunday,         setSunday]         = useState(true);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker,   setShowEndPicker]   = useState(false);
+
   // Load settings from backend on mount
   React.useEffect(() => {
     getNotificationSettings().then((res: any) => {
@@ -313,37 +344,11 @@ export default function NotificationChannelsScreen() {
     }).catch(() => {});
   }, []);
 
-  const saveAll = async () => {
-    try {
-      await updateNotificationSettings({
-        push_enabled: enabled.push, email_enabled: enabled.email,
-        whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
-        quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
-      });
-      Toast.show({ type: 'success', text1: 'Saved', text2: 'Notification settings updated.' });
-    } catch { Toast.show({ type: 'error', text1: 'Error', text2: 'Could not save settings.' }); }
-  };
-
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
-  const [enabled, setEnabled] = useState<Record<string,boolean>>({
-    email:true, whatsapp:true, sms:false, push:true,
-  });
-  const [quietHours,     setQuietHours]     = useState(false);
-  const [startTime,      setStartTime]      = useState('10:00 PM');
-  const [endTime,        setEndTime]        = useState('07:00 AM');
-  const [saturday,       setSaturday]       = useState(false);
-  const [sunday,         setSunday]         = useState(true);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker,   setShowEndPicker]   = useState(false);
-
   const save = () => {
     Toast.show({
       type: 'success',
-      text1: 'Settings Saved',
-      text2: 'Notification preferences updated.',
+      text1: t('screens.settingsNotificationChannels.settingsSaved'),
+      text2: t('screens.settingsNotificationChannels.prefsUpdated'),
     });
   };
 
@@ -354,7 +359,7 @@ export default function NotificationChannelsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.title}>Channels & Quiet Hours</Text>
+        <Text style={s.title}>{t('settings.notificationChannels')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -364,7 +369,7 @@ export default function NotificationChannelsScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="notifications-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Notification Channels</Text>
+            <Text style={s.cardTitle}>{t('screens.settingsNotificationChannels.notificationChannels')}</Text>
           </View>
           {CHANNELS.map((ch, idx) => (
             <View key={ch.id} style={[s.row, idx > 0 && s.rowBorder]}>
@@ -372,8 +377,8 @@ export default function NotificationChannelsScreen() {
                 <Ionicons name={ch.icon as any} size={18} color={COLORS.textSecondary} />
               </View>
               <View style={s.rowInfo}>
-                <Text style={s.rowLabel}>{ch.label}</Text>
-                <Text style={s.rowSub}>{ch.sub}</Text>
+                <Text style={s.rowLabel}>{ch.labelKey ? t(ch.labelKey) : ch.label}</Text>
+                <Text style={s.rowSub}>{t(ch.subKey)}</Text>
               </View>
               <CustomToggle
                 value={enabled[ch.id]}
@@ -388,7 +393,7 @@ export default function NotificationChannelsScreen() {
           <View style={[s.row, { paddingVertical: 14 }]}>
             <View style={s.cardHdr}>
               <Ionicons name="moon-outline" size={18} color={COLORS.textSecondary} />
-              <Text style={s.cardTitle}>Quiet Hours</Text>
+              <Text style={s.cardTitle}>{t('screens.settingsNotificationChannels.quietHours')}</Text>
             </View>
             <CustomToggle value={quietHours} onChange={v => { setQuietHours(v); markDirty(); }} />
           </View>
@@ -399,7 +404,7 @@ export default function NotificationChannelsScreen() {
               <View style={s.timeRow}>
                 {/* Start Time */}
                 <View style={s.timeBox}>
-                  <Text style={s.timeLabel}>Start Time</Text>
+                  <Text style={s.timeLabel}>{t('screens.settingsNotificationChannels.startTime')}</Text>
                   <TouchableOpacity
                     style={s.timeField}
                     onPress={() => setShowStartPicker(true)}
@@ -415,7 +420,7 @@ export default function NotificationChannelsScreen() {
 
                 {/* End Time */}
                 <View style={s.timeBox}>
-                  <Text style={s.timeLabel}>End Time</Text>
+                  <Text style={s.timeLabel}>{t('screens.settingsNotificationChannels.endTime')}</Text>
                   <TouchableOpacity
                     style={s.timeField}
                     onPress={() => setShowEndPicker(true)}
@@ -429,19 +434,19 @@ export default function NotificationChannelsScreen() {
               </View>
 
               {/* Weekends */}
-              <Text style={s.weekendLabel}>Weekends</Text>
+              <Text style={s.weekendLabel}>{t('screens.settingsNotificationChannels.weekends')}</Text>
               <View style={s.weekendRow}>
                 {[
-                  { label: 'Saturday', val: saturday, set: setSaturday },
-                  { label: 'Sunday',   val: sunday,   set: setSunday   },
+                  { id: 'Saturday', labelKey: 'screens.settingsNotificationChannels.saturday', val: saturday, set: setSaturday },
+                  { id: 'Sunday',   labelKey: 'screens.settingsNotificationChannels.sunday',   val: sunday,   set: setSunday   },
                 ].map(d => (
                   <TouchableOpacity
-                    key={d.label}
+                    key={d.id}
                     style={[s.dayBox, d.val && s.dayBoxActive]}
                     onPress={() => { d.set(!d.val); markDirty(); }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[s.dayTxt, d.val && s.dayTxtActive]}>{d.label}</Text>
+                    <Text style={[s.dayTxt, d.val && s.dayTxtActive]}>{t(d.labelKey)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -451,7 +456,7 @@ export default function NotificationChannelsScreen() {
 
         {isDirty && (
         <TouchableOpacity style={s.saveBtn} onPress={() => { save(); setIsDirty(false); }} activeOpacity={0.8}>
-          <Text style={s.saveTxt}>Save Settings</Text>
+          <Text style={s.saveTxt}>{t('screens.settingsNotificationChannels.saveSettings')}</Text>
         </TouchableOpacity>
         )}
       </ScrollView>
@@ -459,17 +464,17 @@ export default function NotificationChannelsScreen() {
       {/* ── Time Picker Sheets ────────────────────────────────────────── */}
       <TimePickerSheet
         visible={showStartPicker}
-        label="Select Start Time"
+        label={t('screens.settingsNotificationChannels.selectStartTime')}
         initialTime={startTime}
         onClose={() => setShowStartPicker(false)}
-        onConfirm={(t) => { setStartTime(t); setShowStartPicker(false); markDirty(); }}
+        onConfirm={(time) => { setStartTime(time); setShowStartPicker(false); markDirty(); }}
       />
       <TimePickerSheet
         visible={showEndPicker}
-        label="Select End Time"
+        label={t('screens.settingsNotificationChannels.selectEndTime')}
         initialTime={endTime}
         onClose={() => setShowEndPicker(false)}
-        onConfirm={(t) => { setEndTime(t); setShowEndPicker(false); markDirty(); }}
+        onConfirm={(time) => { setEndTime(time); setShowEndPicker(false); markDirty(); }}
       />
     </SafeAreaView>
   );

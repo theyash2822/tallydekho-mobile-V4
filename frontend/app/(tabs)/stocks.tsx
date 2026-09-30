@@ -22,10 +22,15 @@ const SEG_COUNT = 20;
 
 function SegmentedBar({ pct, color }: { pct: number; color: string }) {
   const target = Math.round((Math.min(pct, 100) / 100) * SEG_COUNT);
-  const [filled, setFilled] = useState(0);
-  useEffect(() => {
-    if (Platform.OS === 'web') { setFilled(target); return; }
+  const [animFilled, setFilled] = useState(0);
+  const [prevTarget, setPrevTarget] = useState<number | null>(null);
+  if (Platform.OS !== 'web' && prevTarget !== target) {
+    setPrevTarget(target);
     setFilled(0);
+  }
+  const filled = Platform.OS === 'web' ? target : animFilled;
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (target === 0) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < target; i++) {
@@ -50,7 +55,7 @@ const bar = StyleSheet.create({
 function CategoryBar({ value, maxVal, color, delay = 0 }: {
   value: number; maxVal: number; color: string; delay?: number;
 }) {
-  const w = useRef(new Animated.Value(0)).current;
+  const w = useState(() => new Animated.Value(0))[0];
   const pct = maxVal > 0 ? Math.min(value / maxVal, 1) : 0;
   useEffect(() => {
     w.setValue(0);

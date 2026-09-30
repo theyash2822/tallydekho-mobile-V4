@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const SCREEN_H = Dimensions.get('window').height;
@@ -50,17 +51,18 @@ interface FilterBottomSheetProps {
 export default function FilterBottomSheet({
   visible,
   onClose,
-  title = 'Filter',
+  title,
   activeCount = 0,
   onClear,
   onApply,
-  applyLabel = 'Apply Filters',
-  cancelLabel = 'Cancel',
+  applyLabel,
+  cancelLabel,
   applyDisabled = false,
   children,
   heightFraction = 0.72,
   hideFooter = false,
 }: FilterBottomSheetProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   // Dynamic max height — never more than 72% of screen, never less than 30%
   const sheetH = Math.min(SCREEN_H * heightFraction, SCREEN_H * 0.72);
@@ -86,11 +88,11 @@ export default function FilterBottomSheet({
 
           {/* Title row */}
           <View style={s.titleRow}>
-            <Text style={s.title}>{title}</Text>
+            <Text style={s.title}>{title ?? t('common.filter')}</Text>
             {onClear && (
               <TouchableOpacity onPress={onClear} activeOpacity={0.7}>
                 <Text style={s.clearTxt}>
-                  {activeCount > 0 ? `Clear All (${activeCount})` : 'Clear All'}
+                  {activeCount > 0 ? t('screens.componentsFilterBottomSheet.clearAllCount', { count: activeCount }) : t('screens.componentsFilterBottomSheet.clearAll')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -109,7 +111,7 @@ export default function FilterBottomSheet({
           {!hideFooter && (
             <View style={s.footer}>
               <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-                <Text style={s.cancelTxt}>{cancelLabel}</Text>
+                <Text style={s.cancelTxt}>{cancelLabel ?? t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.applyBtn, applyDisabled && s.applyBtnDisabled]}
@@ -118,7 +120,7 @@ export default function FilterBottomSheet({
                 disabled={applyDisabled}
               >
                 <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-                <Text style={s.applyTxt}>{applyLabel}</Text>
+                <Text style={s.applyTxt}>{applyLabel ?? t('screens.componentsFilterBottomSheet.applyFilters')}</Text>
               </TouchableOpacity>
             </View>
           )}

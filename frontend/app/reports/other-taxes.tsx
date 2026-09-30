@@ -6,10 +6,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import {
   getOtherTaxesSummary,
   getOtherTaxesTransactions,
@@ -18,15 +19,15 @@ import {
 
 // ── Tab Config ───────────────────────────────────────────────────────────────
 const TABS = [
-  { label: 'TDS',          taxType: 'TDS' },
-  { label: 'TCS',          taxType: 'TCS' },
-  { label: 'VAT',          taxType: 'VAT' },
-  { label: 'Cess',         taxType: 'CESS' },
-  { label: 'Excise Duty',  taxType: 'EXCISE_DUTY' },
-  { label: 'Service Tax',  taxType: 'SERVICE_TAX' },
-  { label: 'Import Duty',  taxType: 'IMPORT_DUTY' },
-  { label: 'Export Duty',  taxType: 'EXPORT_DUTY' },
-  { label: 'WHT',          taxType: 'WITHHOLDING_TAX' },
+  { labelKey: 'screens.reportsOtherTaxes.tabTds', taxType: 'TDS' },
+  { labelKey: 'screens.reportsOtherTaxes.tabTcs', taxType: 'TCS' },
+  { labelKey: 'screens.reportsOtherTaxes.tabVat', taxType: 'VAT' },
+  { labelKey: 'screens.reportsOtherTaxes.tabCess', taxType: 'CESS' },
+  { labelKey: 'screens.reportsOtherTaxes.tabExciseDuty', taxType: 'EXCISE_DUTY' },
+  { labelKey: 'screens.reportsOtherTaxes.tabServiceTax', taxType: 'SERVICE_TAX' },
+  { labelKey: 'screens.reportsOtherTaxes.tabImportDuty', taxType: 'IMPORT_DUTY' },
+  { labelKey: 'screens.reportsOtherTaxes.tabExportDuty', taxType: 'EXPORT_DUTY' },
+  { labelKey: 'screens.reportsOtherTaxes.tabWht', taxType: 'WITHHOLDING_TAX' },
 ] as const;
 
 type TabItem = typeof TABS[number];
@@ -53,17 +54,18 @@ interface TaxTxn {
 }
 
 // ── Nature badge config ──────────────────────────────────────────────────────────────────
-const NATURE_CFG: Record<string, { bg: string; text: string; icon: string; label: string }> = {
-  input:      { bg: '#F0FBF4', text: '#2D7D46', icon: 'arrow-down-circle-outline', label: 'Input'      },
-  output:     { bg: '#FFF7ED', text: '#D97706', icon: 'arrow-up-circle-outline',   label: 'Output'     },
-  settlement: { bg: '#EFF6FF', text: '#1D4ED8', icon: 'checkmark-circle-outline',  label: 'Settlement' },
-  adjustment: { bg: '#F5F3FF', text: '#7C3AED', icon: 'swap-horizontal-outline',   label: 'Adjustment' },
+const NATURE_CFG: Record<string, { bg: string; text: string; icon: string; labelKey?: string; label?: string }> = {
+  input:      { bg: '#F0FBF4', text: '#2D7D46', icon: 'arrow-down-circle-outline', labelKey: 'screens.reportsOtherTaxes.natureInput' },
+  output:     { bg: '#FFF7ED', text: '#D97706', icon: 'arrow-up-circle-outline',   labelKey: 'screens.reportsOtherTaxes.natureOutput' },
+  settlement: { bg: '#EFF6FF', text: '#1D4ED8', icon: 'checkmark-circle-outline',  labelKey: 'screens.reportsOtherTaxes.natureSettlement' },
+  adjustment: { bg: '#F5F3FF', text: '#7C3AED', icon: 'swap-horizontal-outline',   labelKey: 'screens.reportsOtherTaxes.natureAdjustment' },
 };
 const getNatureCfg = (n: string | null) =>
   NATURE_CFG[(n || 'other').toLowerCase()] ??
-  { bg: '#F4F4F5', text: '#71717A', icon: 'ellipse-outline', label: n || 'Other' };
+  { bg: '#F4F4F5', text: '#71717A', icon: 'ellipse-outline', labelKey: n ? undefined : 'screens.reportsOtherTaxes.natureOther', label: n || undefined };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+const UNDATED_KEY = 'Undated Entries';
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function fmt(n: number | string | null | undefined): string {
@@ -97,7 +99,7 @@ function groupByMonth(txns: TaxTxn[]): Array<{ month: string; items: TaxTxn[] }>
       const parts = String(txn.financial_year).split('-');
       key = parts.length === 2 ? `FY ${parts[0]}-${parts[1].slice(2)}` : `FY ${txn.financial_year}`;
     } else {
-      key = 'Undated Entries';
+      key = UNDATED_KEY;
     }
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(txn);
@@ -150,69 +152,104 @@ export default function OtherTaxesScreen() {
   const groupedTxns = useMemo(() => groupByMonth(txns), [txns]);
 
   // ── Load Summary (FY-level, unaffected by month filter) ─────────────────────
-  const loadSummary = useCallback(async () => {
+  const fetchSummary = useCallback(() => {
+    if (!companyGuid) return;
+    getOtherTaxesSummary(companyGuid, fyParam ? { fy: fyParam } : {})
+      .then((res) => {
+        setSummary(res?.data ?? []);
+      })
+      .catch((e: any) => {
+        setSummaryError(e?.message ?? i18n.t('screens.reportsOtherTaxes.loadSummaryFailed'));
+      })
+      .finally(() => {
+        setSummaryLoading(false);
+      });
+  }, [companyGuid, fyParam]);
+
+  const loadSummary = useCallback(() => {
     if (!companyGuid) return;
     setSummaryLoading(true);
     setSummaryError(null);
-    try {
-      const res = await getOtherTaxesSummary(companyGuid, fyParam ? { fy: fyParam } : {});
-      setSummary(res?.data ?? []);
-    } catch (e: any) {
-      setSummaryError(e?.message ?? 'Failed to load summary');
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [companyGuid, fyParam]);
+    fetchSummary();
+  }, [companyGuid, fetchSummary]);
 
   // ── Load Transactions ───────────────────────────────────────────────────────
-  const loadTxns = useCallback(async (tab: TabItem) => {
+  const fetchTxns = useCallback((tab: TabItem) => {
+    if (!companyGuid) return;
+    const params: any = {
+      taxType: tab.taxType,
+      limit:   500,
+      page:    1,
+      ...(fyParam ? { fy: fyParam } : {}),
+    };
+    getOtherTaxesTransactions(companyGuid, params)
+      .then((res) => {
+        const rows: TaxTxn[] = res?.data ?? [];
+        setTxns(rows);
+        setTxnsTotal(res?.meta?.total ?? rows.length);
+      })
+      .catch((e: any) => {
+        setTxnsError(e?.message ?? i18n.t('screens.reportsOtherTaxes.loadTxnsFailed'));
+      })
+      .finally(() => {
+        setTxnsLoading(false);
+      });
+  }, [companyGuid, fyParam]);
+
+  const loadTxns = useCallback((tab: TabItem) => {
     if (!companyGuid) return;
     setTxnsLoading(true);
     setTxnsError(null);
-    try {
-      const params: any = {
-        taxType: tab.taxType,
-        limit:   500,
-        page:    1,
-        ...(fyParam ? { fy: fyParam } : {}),
-      };
-      const res  = await getOtherTaxesTransactions(companyGuid, params);
-      const rows: TaxTxn[] = res?.data ?? [];
-      setTxns(rows);
-      setTxnsTotal(res?.meta?.total ?? rows.length);
-    } catch (e: any) {
-      setTxnsError(e?.message ?? 'Failed to load transactions');
-    } finally {
-      setTxnsLoading(false);
-    }
-  }, [companyGuid, fyParam]);
+    fetchTxns(tab);
+  }, [companyGuid, fetchTxns]);
 
   // ── Load Late Challans ──────────────────────────────────────────────────────
-  const loadChallans = useCallback(async (tab: TabItem) => {
+  const fetchChallans = useCallback((tab: TabItem) => {
     if (!companyGuid) return;
-    setChallansLoading(true);
-    try {
-      const params: any = { taxType: tab.taxType, ...(fyParam ? { fy: fyParam } : {}) };
-      const res = await getOtherTaxesLateChallans(companyGuid, params);
-      setChallans(res?.data ?? []);
-      setHasChallans(res?.has_challan_data ?? false);
-    } catch {
-      setChallans([]); setHasChallans(false);
-    } finally {
-      setChallansLoading(false);
-    }
+    const params: any = { taxType: tab.taxType, ...(fyParam ? { fy: fyParam } : {}) };
+    getOtherTaxesLateChallans(companyGuid, params)
+      .then((res) => {
+        setChallans(res?.data ?? []);
+        setHasChallans(res?.has_challan_data ?? false);
+      })
+      .catch(() => {
+        setChallans([]); setHasChallans(false);
+      })
+      .finally(() => {
+        setChallansLoading(false);
+      });
   }, [companyGuid, fyParam]);
 
   // ── Initial + FY change ─────────────────────────────────────────────────────
-  useEffect(() => { loadSummary(); }, [loadSummary]);
+  const [prevSummaryDeps, setPrevSummaryDeps] = useState<unknown[] | null>(null);
+  if (prevSummaryDeps === null || prevSummaryDeps[0] !== companyGuid || prevSummaryDeps[1] !== fyParam) {
+    setPrevSummaryDeps([companyGuid, fyParam]);
+    if (companyGuid) {
+      setSummaryLoading(true);
+      setSummaryError(null);
+    }
+  }
+
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
   // ── Tab change → reload txns + challans ────────────────────────────────────
-  useEffect(() => {
+  const tabDeps = [activeTab, companyGuid, fyParam];
+  const [prevTabDeps, setPrevTabDeps] = useState<unknown[] | null>(null);
+  if (prevTabDeps === null || tabDeps.some((d, i) => d !== prevTabDeps[i])) {
+    setPrevTabDeps(tabDeps);
     setTxns([]);
     setCollapsedMonths(new Set());
-    loadTxns(activeTab);
-    loadChallans(activeTab);
-  }, [activeTab, loadTxns, loadChallans]);
+    if (companyGuid) {
+      setTxnsLoading(true);
+      setTxnsError(null);
+      setChallansLoading(true);
+    }
+  }
+
+  useEffect(() => {
+    fetchTxns(activeTab);
+    fetchChallans(activeTab);
+  }, [activeTab, fetchTxns, fetchChallans]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleTabPress = (tab: TabItem) => {
@@ -230,6 +267,7 @@ export default function OtherTaxesScreen() {
 
   // ── Summary stats for active tab ────────────────────────────────────────────
   const activeSummary = summary.find(s => s.taxType === activeTab.taxType);
+  const activeLabel = t(activeTab.labelKey);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -248,7 +286,7 @@ export default function OtherTaxesScreen() {
       {selectedFY && (
         <View style={s.fyStrip}>
           <Ionicons name="calendar-outline" size={13} color={COLORS.brandPrimary} />
-          <Text style={s.fyStripTxt}>{selectedFY.label ?? 'Current FY'}</Text>
+          <Text style={s.fyStripTxt}>{selectedFY.label ?? t('screens.reportsOtherTaxes.currentFy')}</Text>
         </View>
       )}
 
@@ -268,7 +306,7 @@ export default function OtherTaxesScreen() {
                 onPress={() => handleTabPress(tab)}
                 activeOpacity={0.7}
               >
-                <Text style={[s.tabTxt, isActive && s.tabTxtActive]}>{tab.label}</Text>
+                <Text style={[s.tabTxt, isActive && s.tabTxtActive]}>{t(tab.labelKey)}</Text>
                 {tabSummary && tabSummary.totalTaxAmount > 0 && (
                   <View style={[s.tabBadge, isActive && s.tabBadgeActive]}>
                     <Text style={[s.tabBadgeTxt, isActive && s.tabBadgeTxtActive]}>
@@ -301,7 +339,7 @@ export default function OtherTaxesScreen() {
             <Ionicons name="alert-circle-outline" size={16} color={'#E74C3C'} />
             <Text style={s.errorTxt}>{summaryError}</Text>
             <TouchableOpacity onPress={loadSummary}>
-              <Text style={s.retryTxt}>Retry</Text>
+              <Text style={s.retryTxt}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -312,34 +350,34 @@ export default function OtherTaxesScreen() {
             <View style={s.statsCard}>
               <View style={s.statsRow}>
                 <View style={s.statCell}>
-                  <Text style={s.statLabel}>Total Tax Amount</Text>
+                  <Text style={s.statLabel}>{t('screens.reportsOtherTaxes.totalTaxAmount')}</Text>
                   <Text style={s.statValue}>{fmt(activeSummary.totalTaxAmount)}</Text>
                 </View>
                 <View style={s.statDivV} />
                 <View style={s.statCell}>
-                  <Text style={s.statLabel}>Vouchers</Text>
+                  <Text style={s.statLabel}>{t('nav.vouchers')}</Text>
                   <Text style={s.statValue}>{activeSummary.voucherCount}</Text>
                 </View>
               </View>
               <View style={s.statDivH} />
               <View style={s.statsRow}>
                 <View style={s.statCell}>
-                  <Text style={s.statLabel}>Last Transaction</Text>
+                  <Text style={s.statLabel}>{t('screens.reportsOtherTaxes.lastTransaction')}</Text>
                   <Text style={s.statValue}>{fmtDate(activeSummary.lastTransactionDate)}</Text>
                 </View>
                 <View style={s.statDivV} />
                 <View style={s.statCell}>
-                  <Text style={s.statLabel}>Tax Type</Text>
-                  <Text style={s.statValue}>{activeTab.label}</Text>
+                  <Text style={s.statLabel}>{t('screens.reportsOtherTaxes.taxType')}</Text>
+                  <Text style={s.statValue}>{activeLabel}</Text>
                 </View>
               </View>
             </View>
           ) : (
             <View style={s.emptyCard}>
               <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
-              <Text style={s.emptyTitle}>No {activeTab.label} data found</Text>
+              <Text style={s.emptyTitle}>{t('screens.reportsOtherTaxes.noDataTitle', { tax: activeLabel })}</Text>
               <Text style={s.emptySubtitle}>
-                No {activeTab.label} entries found in synced Tally vouchers for the selected period.
+                {t('screens.reportsOtherTaxes.noDataSub', { tax: activeLabel })}
               </Text>
             </View>
           )
@@ -347,12 +385,12 @@ export default function OtherTaxesScreen() {
 
         {/* Late Challans */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Top 5 Late Challans</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsOtherTaxes.lateChallans')}</Text>
           {challansLoading ? (
             <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 12 }} />
           ) : !hasChallans ? (
             <Text style={s.challansUnavailable}>
-              Late challans: Not available from current Tally data
+              {t('screens.reportsOtherTaxes.challansUnavailable')}
             </Text>
           ) : (
             challans.map((item, idx) => (
@@ -360,11 +398,11 @@ export default function OtherTaxesScreen() {
                 <Text style={s.challanRank}>{idx + 1}.</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={s.challanId}>{item.return_period ?? item.challan_no ?? '-'}</Text>
-                  <Text style={s.challanMeta}>{item.tax_type} · Due: {fmtDate(item.due_date)}</Text>
+                  <Text style={s.challanMeta}>{t('screens.reportsOtherTaxes.challanMeta', { taxType: item.tax_type, date: fmtDate(item.due_date) })}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={s.challanAmt}>{fmt(item.tax_amount)}</Text>
-                  <Text style={s.challanLate}>{item.late_days ?? '-'} days late</Text>
+                  <Text style={s.challanLate}>{t('screens.reportsOtherTaxes.daysLate', { days: item.late_days ?? '-' })}</Text>
                 </View>
               </View>
             ))
@@ -374,8 +412,8 @@ export default function OtherTaxesScreen() {
         {/* Transactions section — tiles directly on pageBg */}
         {(txnsTotal > 0 || txnsLoading) && (
           <View style={s.txnSectionHeader}>
-            <Text style={s.txnSectionTitle}>{activeTab.label} Transactions</Text>
-            {txnsTotal > 0 && <Text style={s.txnSectionCount}>{txnsTotal} records</Text>}
+            <Text style={s.txnSectionTitle}>{t('screens.reportsOtherTaxes.txnsTitle', { tax: activeLabel })}</Text>
+            {txnsTotal > 0 && <Text style={s.txnSectionCount}>{t('screens.reportsOtherTaxes.records', { count: txnsTotal })}</Text>}
           </View>
         )}
 
@@ -386,12 +424,12 @@ export default function OtherTaxesScreen() {
             <Ionicons name="alert-circle-outline" size={14} color={'#E74C3C'} />
             <Text style={s.errorTxt}>{txnsError}</Text>
             <TouchableOpacity onPress={() => loadTxns(activeTab)}>
-              <Text style={s.retryTxt}>Retry</Text>
+              <Text style={s.retryTxt}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : txns.length === 0 ? (
           <View style={s.emptyInline}>
-            <Text style={s.emptyInlineTxt}>No {activeTab.label} data in synced Tally vouchers</Text>
+            <Text style={s.emptyInlineTxt}>{t('screens.reportsOtherTaxes.noDataInline', { tax: activeLabel })}</Text>
           </View>
         ) : (
           groupedTxns.map((group) => {
@@ -404,9 +442,9 @@ export default function OtherTaxesScreen() {
                     onPress={() => toggleMonth(group.month)}
                     activeOpacity={0.7}
                   >
-                    <Text style={s.monthGroupLabel}>{group.month}</Text>
+                    <Text style={s.monthGroupLabel}>{group.month === UNDATED_KEY ? t('screens.reportsOtherTaxes.undated') : group.month}</Text>
                     <View style={s.monthGroupRight}>
-                      <Text style={s.monthGroupCount}>{group.items.length} entries</Text>
+                      <Text style={s.monthGroupCount}>{t('screens.reportsOtherTaxes.entries', { count: group.items.length })}</Text>
                       <Ionicons
                         name={collapsed ? 'chevron-down' : 'chevron-up'}
                         size={14} color={COLORS.textSecondary}
@@ -426,7 +464,7 @@ export default function OtherTaxesScreen() {
                         activeOpacity={0.8}
                         onPress={() => {
                           if (selected.size > 0) { toggleSelect(String(txn.id)); }
-                          else { safePush(router, `/document/${txn.voucher_guid}` as any); }
+                          else { openVoucherPreview(router, { guid: txn.voucher_guid }); }
                         }}
                         onLongPress={() => toggleSelect(String(txn.id))}
                         delayLongPress={500}
@@ -443,7 +481,7 @@ export default function OtherTaxesScreen() {
                         {/* Nature badge */}
                         <View style={[s.natureBadge, { backgroundColor: nat.bg }]}>
                           <Ionicons name={nat.icon as any} size={11} color={nat.text} />
-                          <Text style={[s.natureBadgeTxt, { color: nat.text }]}>{nat.label}</Text>
+                          <Text style={[s.natureBadgeTxt, { color: nat.text }]}>{nat.labelKey ? t(nat.labelKey) : nat.label}</Text>
                         </View>
 
                         {/* Body: icon + party/ledger/date + amount */}
@@ -463,7 +501,7 @@ export default function OtherTaxesScreen() {
                           <View style={{ alignItems: 'flex-end' }}>
                             <Text style={s.txnCardAmt}>{fmt(txn.tax_amount)}</Text>
                             {base > 0 && (
-                              <Text style={s.txnCardBase}>Base: {fmt(base)}</Text>
+                              <Text style={s.txnCardBase}>{t('screens.reportsOtherTaxes.base', { amount: fmt(base) })}</Text>
                             )}
                           </View>
                         </View>
@@ -482,9 +520,9 @@ export default function OtherTaxesScreen() {
       {selected.size > 0 && (
         <View style={s.selectBar}>
           <View style={s.selectLeft}>
-            <Text style={s.selectCount}>{selected.size} selected</Text>
+            <Text style={s.selectCount}>{t('common.selected', { count: selected.size })}</Text>
             <TouchableOpacity onPress={clearSelect} hitSlop={{top:8,bottom:8,left:8,right:8}} activeOpacity={0.7}>
-              <Text style={s.selectCancelTxt}>Cancel</Text>
+              <Text style={s.selectCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -496,14 +534,14 @@ export default function OtherTaxesScreen() {
                 .map(t => `${t.voucher_number || '-'}  ${t.party_ledger_name || '-'}  ${fmt(t.tax_amount)}  ${t.transaction_nature || '-'}`);
               const { Share } = require('react-native');
               Share.share({
-                message: `TallyDekho — ${activeTab.label} Transactions\n${lines.join('\n')}`,
-                title: `${activeTab.label} Export`,
+                message: `TallyDekho — ${t('screens.reportsOtherTaxes.txnsTitle', { tax: activeLabel })}\n${lines.join('\n')}`,
+                title: t('screens.reportsOtherTaxes.exportTitle', { tax: activeLabel }),
               }).catch(() => {});
               clearSelect();
             }}
           >
             <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={s.selectExportTxt}>Export</Text>
+            <Text style={s.selectExportTxt}>{t('screens.reportsOtherTaxes.export')}</Text>
           </TouchableOpacity>
         </View>
       )}

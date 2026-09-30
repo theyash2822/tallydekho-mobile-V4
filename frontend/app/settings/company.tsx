@@ -33,10 +33,24 @@ const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
+const MONTH_KEYS: Record<string, string> = {
+  January: 'screens.settingsCompany.january',
+  February: 'screens.settingsCompany.february',
+  March: 'screens.settingsCompany.march',
+  April: 'screens.settingsCompany.april',
+  May: 'screens.settingsCompany.may',
+  June: 'screens.settingsCompany.june',
+  July: 'screens.settingsCompany.july',
+  August: 'screens.settingsCompany.august',
+  September: 'screens.settingsCompany.september',
+  October: 'screens.settingsCompany.october',
+  November: 'screens.settingsCompany.november',
+  December: 'screens.settingsCompany.december',
+};
 
 // ── Custom Toggle ─────────────────────────────────────────────────────────────
 function CustomToggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
   const handlePress = () => {
     const next = !value;
     Animated.spring(anim, { toValue: next ? 1 : 0, useNativeDriver: false, tension: 80, friction: 8 }).start();
@@ -101,6 +115,7 @@ function MonthPickerSheet({
   visible: boolean; title: string; selected: string;
   onSelect: (m: string) => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={mp.overlay}>
@@ -118,7 +133,7 @@ function MonthPickerSheet({
                   onPress={() => { onSelect(month); onClose(); }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[mp.rowText, active && mp.rowTextActive]}>{month}</Text>
+                  <Text style={[mp.rowText, active && mp.rowTextActive]}>{t(MONTH_KEYS[month])}</Text>
                   {active && <Ionicons name="checkmark" size={18} color={COLORS.white} />}
                 </TouchableOpacity>
               );
@@ -155,23 +170,33 @@ export default function CompanyScreen() {
   const { company } = useAuth();
 
   // Company Identity — pre-filled from AuthContext / Tally sync
-  const [companyName, setCompanyName] = useState(company?.name || 'Your Company');
+  const [companyName, setCompanyName] = useState(company?.name || t('screens.settingsCompany.yourCompany'));
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [gstin,       setGstin]       = useState(company?.gstin || '');
   const [pan,         setPan]         = useState('');
 
   // Sync when company data loads
-  useEffect(() => {
+  const [prevCompanyIdentity, setPrevCompanyIdentity] = useState({ name: company?.name, gstin: company?.gstin });
+  if (prevCompanyIdentity.name !== company?.name || prevCompanyIdentity.gstin !== company?.gstin) {
+    setPrevCompanyIdentity({ name: company?.name, gstin: company?.gstin });
     if (company?.name) setCompanyName(company.name);
     if (company?.gstin) setGstin(company.gstin);
-  }, [company?.name, company?.gstin]);
+  }
 
   // Contact
   const [address, setAddress] = useState('');
   const [email,   setEmail]   = useState('');
   const [phone,   setPhone]   = useState('');
   const [website, setWebsite] = useState('');
+
+  // Financial Settings
+  const [fyStartMonth,    setFyStartMonth]    = useState('April');
+  const [bookLockEnabled, setBookLockEnabled] = useState(true);
+  const [bookLockDays,    setBookLockDays]    = useState('30');
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [state,           setState]           = useState('');
+  const [showStatePicker, setShowStatePicker] = useState(false);
 
   // Load company profile from backend on mount
   useEffect(() => {
@@ -184,14 +209,6 @@ export default function CompanyScreen() {
       if (d.state)   { setState(d.state); }
     }).catch(() => {});
   }, [company?.guid]);
-
-  // Financial Settings
-  const [fyStartMonth,    setFyStartMonth]    = useState('April');
-  const [bookLockEnabled, setBookLockEnabled] = useState(true);
-  const [bookLockDays,    setBookLockDays]    = useState('30');
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [state,           setState]           = useState('');
-  const [showStatePicker, setShowStatePicker] = useState(false);
 
   // Logo — load from backend (cross-device), fallback to AsyncStorage cache
   const [logoUri, setLogoUri] = useState<string | null>(null);
@@ -217,7 +234,7 @@ export default function CompanyScreen() {
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      Alert.alert(t('screens.settingsCompany.permissionNeeded'), t('screens.settingsCompany.permissionMsg'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -261,7 +278,7 @@ export default function CompanyScreen() {
       });
       setIsDirty(false);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not save.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsCompany.failed'), text2: err?.message || t('screens.settingsCompany.saveFailed') });
     } finally { setSaving(false); }
   };
 
@@ -324,7 +341,7 @@ export default function CompanyScreen() {
                 style={s.fieldInput}
                 value={companyName}
                 onChangeText={v => { setCompanyName(v); markDirty(); }}
-                placeholder="Enter company name"
+                placeholder={t('screens.settingsCompany.namePh')}
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
@@ -365,7 +382,7 @@ export default function CompanyScreen() {
                 value={address}
                 onChangeText={v => { setAddress(v); markDirty(); }}
                 multiline
-                placeholder="Enter registered address"
+                placeholder={t('screens.settingsCompany.addressPh')}
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
@@ -437,7 +454,7 @@ export default function CompanyScreen() {
                 onPress={() => setShowMonthPicker(true)}
                 activeOpacity={0.7}
               >
-                <Text style={s.dropdownValue}>{fyStartMonth}</Text>
+                <Text style={s.dropdownValue}>{MONTH_KEYS[fyStartMonth] ? t(MONTH_KEYS[fyStartMonth]) : fyStartMonth}</Text>
                 <View style={s.dropdownChevron}>
                   <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
                 </View>
@@ -466,10 +483,10 @@ export default function CompanyScreen() {
                       selectTextOnFocus
                     />
                   </View>
-                  <Text style={s.lockDaysText}>days after FY end</Text>
+                  <Text style={s.lockDaysText}>{t('screens.settingsCompany.daysAfterFyEnd')}</Text>
                 </View>
               ) : (
-                <Text style={s.lockOffHint}>Books will remain open for editing</Text>
+                <Text style={s.lockOffHint}>{t('screens.settingsCompany.booksOpen')}</Text>
               )}
             </View>
           </View>

@@ -28,6 +28,7 @@ import DatePickerModal, { parseDMY } from '../../src/components/forms/DatePicker
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,9 +137,10 @@ function ThemedFInput({ style, onFocus, onBlur, keyboardType, ...props }: TextIn
 
 // ─── StepIndicator ────────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: 1 | 2 }) {
+  const { t } = useTranslation();
   const STEPS = [
-    { num: 1 as const, label: 'Order Details' },
-    { num: 2 as const, label: 'Items & Review' },
+    { num: 1 as const, label: t('screens.purchaseCreateOrder.orderDetails') },
+    { num: 2 as const, label: t('screens.purchaseCreateOrder.itemsReview') },
   ];
   return (
     <View style={si.wrap}>
@@ -169,6 +171,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
   onRemove: () => void;
   taxable: number;
 }) {
+  const { t } = useTranslation();
   const taxOpts: BSSOption[] = taxLedgers.map(l => {
     const rate = resolveTaxLedgerRate(l);
     return { label: l.name, value: l.name, subtitle: rate > 0 ? `${rate}%` : undefined };
@@ -193,8 +196,8 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
               onUpdate('taxRate', '');
               onUpdate('taxAmount', '');
             }}
-            placeholder="Select tax ledger..."
-            sheetTitle="Tax Ledger"
+            placeholder={t('screens.purchaseCreateOrder.selectTaxLedger')}
+            sheetTitle={t('screens.purchaseCreateOrder.taxLedger')}
           />
         </View>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
@@ -204,7 +207,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
       {/* Row 2: Rate % → Amount ₹ — disabled until ledger selected */}
       <View style={[ir.taxEntryBottomRow, !entry.ledgerName && { opacity: 0.38 }]} pointerEvents={entry.ledgerName ? 'auto' : 'none'}>
         <View style={ir.taxFieldGroup}>
-          <Text style={ir.taxMiniLbl}>Rate</Text>
+          <Text style={ir.taxMiniLbl}>{t('pdf.rate')}</Text>
           <View style={ir.taxFieldInputRow}>
             <TextInput
               style={ir.taxRateInput}
@@ -215,7 +218,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
                 onUpdate('taxAmount', auto);
               }}
               keyboardType="numeric"
-              placeholder={entry.ledgerName ? '0' : 'Select ledger first'}
+              placeholder={entry.ledgerName ? '0' : t('screens.purchaseCreateOrder.selectLedgerFirst')}
               placeholderTextColor={COLORS.textTertiary}
               editable={!!entry.ledgerName}
             />
@@ -224,7 +227,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
         </View>
         <Ionicons name="arrow-forward-outline" size={13} color={COLORS.textTertiary} style={{ marginTop: 16 }} />
         <View style={[ir.taxFieldGroup, { flex: 1 }]}>
-          <Text style={ir.taxMiniLbl}>Amount</Text>
+          <Text style={ir.taxMiniLbl}>{t('pdf.amount')}</Text>
           <View style={ir.taxFieldInputRow}>
             <Text style={ir.taxRateSign}>₹</Text>
             <TextInput
@@ -267,6 +270,7 @@ function ItemRow({
   itemIndex: number;
   canRemove: boolean;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
   const calc = calcItem(item);
 
@@ -278,7 +282,7 @@ function ItemRow({
 
   const stockItem = stockItems.find(si2 => si2.name === item.product);
   const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
-  const headerLabel = productLabel || `Item ${itemIndex + 1}`;
+  const headerLabel = productLabel || t('screens.purchaseCreateOrder.itemN', { n: itemIndex + 1 });
 
   // Purchase = destination godown: show ALL company warehouses (not only those with qty>0).
   const qtyByWh = useMemo(() => {
@@ -291,11 +295,11 @@ function ItemRow({
         label: w.name,
         value: w.name,
         subtitle: qtyByWh[w.name] != null
-          ? `On hand: ${Math.round(qtyByWh[w.name])} ${stockItem?.unit || 'units'}`
-          : 'Receive stock here',
+          ? t('screens.purchaseCreateOrder.onHand', { qty: Math.round(qtyByWh[w.name]), unit: stockItem?.unit || t('screens.purchaseCreateOrder.units') })
+          : t('screens.purchaseCreateOrder.receiveStockHere'),
       }))
     : item.product
-      ? [{ label: 'Main Location', value: 'Main Location', subtitle: 'Default warehouse' }]
+      ? [{ label: 'Main Location', value: 'Main Location', subtitle: t('screens.purchaseCreateOrder.defaultWarehouse') }]
       : [];
   const needsWarehouseDropdown = !!item.product && warehouseOpts.length >= 1;
 
@@ -324,16 +328,16 @@ function ItemRow({
         <View style={ir.expandedContent}>
           {/* Product / Service */}
           <View>
-            <Text style={ir.fieldLabel}>Product / Service <Text style={ir.star}>*</Text></Text>
+            <Text style={ir.fieldLabel}>{t('screens.purchaseCreateOrder.productService')} <Text style={ir.star}>*</Text></Text>
             <View style={ir.productRow}>
               <View style={{ flex: 1 }}>
                 <BottomSheetSearch
-                  placeholder="Select product..."
+                  placeholder={t('screens.purchaseCreateOrder.selectProduct')}
                   options={stockOpts}
                   value={item.product}
                   onSelect={opt => onProductSelect(item.id, opt)}
                   onClear={() => onProductClear(item.id)}
-                  sheetTitle="Product / Service"
+                  sheetTitle={t('screens.purchaseCreateOrder.productService')}
                   containerStyle={{ marginBottom: 0 }}
                 />
               </View>
@@ -346,14 +350,14 @@ function ItemRow({
           {/* Warehouse — only shown when product is selected */}
           {item.product && needsWarehouseDropdown ? (
             <View>
-              <Text style={ir.fieldLabel}>Warehouse <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.fieldLabel}>{t('screens.purchaseCreateOrder.warehouse')} <Text style={ir.star}>*</Text></Text>
               <BottomSheetSearch
-                placeholder="Select warehouse..."
+                placeholder={t('screens.purchaseCreateOrder.selectWarehouse')}
                 options={warehouseOpts}
                 value={item.warehouse}
                 onSelect={opt => onUpdate(item.id, 'warehouse', opt.value)}
                 onClear={() => onUpdate(item.id, 'warehouse', '')}
-                sheetTitle="Warehouse"
+                sheetTitle={t('screens.purchaseCreateOrder.warehouse')}
                 containerStyle={{ marginBottom: 0 }}
               />
             </View>
@@ -362,7 +366,7 @@ function ItemRow({
           {/* Row: Qty | Unit | Rate */}
           <View style={ir.qurRow}>
             <View style={ir.qtyBox}>
-              <Text style={ir.miniLabel}>Qty <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('pdf.qty')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'center' }]}
                 value={item.qty}
@@ -374,14 +378,14 @@ function ItemRow({
               />
             </View>
             <View style={ir.unitBox}>
-              <Text style={ir.miniLabel}>Unit</Text>
+              <Text style={ir.miniLabel}>{t('screens.purchaseCreateOrder.unit')}</Text>
               <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
                 <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
                 <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
             <View style={ir.rateBox}>
-              <Text style={ir.miniLabel}>Rate (₹) <Text style={ir.star}>*</Text></Text>
+              <Text style={ir.miniLabel}>{t('screens.purchaseCreateOrder.rateRupee')} <Text style={ir.star}>*</Text></Text>
               <TextInput
                 style={[ir.miniInput, { textAlign: 'right' }]}
                 value={item.rate}
@@ -396,7 +400,7 @@ function ItemRow({
 
           {/* Row: Discount (compact inline) */}
           <View style={ir.discFullRow}>
-            <Text style={ir.miniLabel}>Discount</Text>
+            <Text style={ir.miniLabel}>{t('screens.purchaseCreateOrder.discount')}</Text>
             <View style={ir.discInner}>
               <TouchableOpacity style={ir.discTypeBtn} onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')} activeOpacity={0.7}>
                 <Text style={ir.discTypeTxt}>{item.discountType === '%' ? '%' : '₹'}</Text>
@@ -415,15 +419,15 @@ function ItemRow({
 
           {/* Taxable Amount */}
           <View style={ir.taxableRow}>
-            <Text style={ir.taxableLabel}>Taxable Amount</Text>
+            <Text style={ir.taxableLabel}>{t('screens.purchaseCreateOrder.taxableAmount')}</Text>
             <Text style={ir.taxableVal}>₹{calc.taxable.toFixed(2)}</Text>
           </View>
 
           {/* Tax Section */}
           <View style={ir.taxSection}>
             <View style={ir.taxSectionHdr}>
-              <Text style={ir.taxSectionTitle}>Taxes</Text>
-              <Text style={ir.taxColHint}>Type · Rate % · Amount ₹</Text>
+              <Text style={ir.taxSectionTitle}>{t('screens.purchaseCreateOrder.taxes')}</Text>
+              <Text style={ir.taxColHint}>{t('screens.purchaseCreateOrder.taxColHint')}</Text>
             </View>
             {item.taxEntries.map(te => (
               <TaxEntryRow
@@ -441,13 +445,13 @@ function ItemRow({
               activeOpacity={0.7}
             >
               <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
-              <Text style={ir.addTaxDashedTxt}>Add Tax</Text>
+              <Text style={ir.addTaxDashedTxt}>{t('screens.purchaseCreateOrder.addTax')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Item Total */}
           <View style={ir.subtotalRow}>
-            <Text style={ir.subtotalLabel}>Item Total</Text>
+            <Text style={ir.subtotalLabel}>{t('screens.purchaseCreateOrder.itemTotal')}</Text>
             <Text style={ir.subtotalVal}>₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
           </View>
         </View>
@@ -541,8 +545,8 @@ export default function CreatePurchaseOrderScreen() {
           setStep(2);
           Toast.show({
             type: 'success',
-            text1: 'Items added to PO',
-            text2: `${mapped.length} stock line${mapped.length === 1 ? '' : 's'} · set qty to continue`,
+            text1: i18n.t('screens.purchaseCreateOrder.itemsAddedToPo'),
+            text2: mapped.length === 1 ? i18n.t('screens.purchaseCreateOrder.prefillLinesOne', { count: mapped.length }) : i18n.t('screens.purchaseCreateOrder.prefillLinesOther', { count: mapped.length }),
           });
         }
       } catch { /* ignore bad prefill */ }
@@ -658,10 +662,11 @@ export default function CreatePurchaseOrderScreen() {
       rate: si2?.rate != null ? String(si2.rate) : i.rate,
       warehouse: autoWh,
     } : i));
-    if (!si2 || !company?.guid) return;
+    const guid = company?.guid;
+    if (!si2 || !guid) return;
     try {
       const stockIdentifier = si2.guid || si2.name;
-      const res: any = await getStockGodowns(company.guid, stockIdentifier);
+      const res: any = await getStockGodowns(guid, stockIdentifier);
       const godownList: Godown[] = res?.data?.warehouses || [];
       setItemGodowns(prev => ({ ...prev, [itemId]: godownList }));
     } catch {
@@ -699,10 +704,10 @@ export default function CreatePurchaseOrderScreen() {
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
-    if (!purchaseLedger) { Toast.show({ type: 'error', text1: 'Purchase Ledger required' }); return; }
-    if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor required' }); return; }
+    if (!purchaseLedger) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.purchaseLedgerRequired') }); return; }
+    if (!vendor) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.vendorRequired') }); return; }
     setStep(2);
-  }, [purchaseLedger, vendor]);
+  }, [purchaseLedger, vendor, t]);
 
   const goBack = useCallback(() => {
     setStep(1);
@@ -730,12 +735,12 @@ export default function CreatePurchaseOrderScreen() {
 
   const itemsSummary = useMemo(() => {
     const filled = items.filter(i => i.product);
-    if (filled.length === 0) return `${items.length} item${items.length !== 1 ? 's' : ''} (not filled)`;
+    if (filled.length === 0) return items.length !== 1 ? t('screens.purchaseCreateOrder.itemsNotFilledOther', { count: items.length }) : t('screens.purchaseCreateOrder.itemsNotFilledOne', { count: items.length });
     const first = stockItems.find(si2 => si2.name === filled[0].product);
     const firstName = first?.displayName || filled[0].product;
     if (filled.length === 1) return firstName;
-    return `${firstName} + ${filled.length - 1} more`;
-  }, [items, stockItems]);
+    return t('screens.purchaseCreateOrder.firstPlusMore', { name: firstName, count: filled.length - 1 });
+  }, [items, stockItems, t]);
 
   // Build a local VoucherDocument snapshot from current form state — used for
   // Share PDF so it doesn't depend on the backend having persisted an
@@ -795,16 +800,16 @@ export default function CreatePurchaseOrderScreen() {
   const handleSubmit = useCallback(async () => {
     if (!assertCanCreate('purchase_order.create')) return;
     Keyboard.dismiss();
-    if (!purchaseLedger) { Toast.show({ type: 'error', text1: 'Purchase Ledger required' }); return; }
-    if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor required' }); return; }
+    if (!purchaseLedger) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.purchaseLedgerRequired') }); return; }
+    if (!vendor) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.vendorRequired') }); return; }
     const filledItems = items.filter(i => i.product && (parseFloat(i.qty) || 0) > 0 && (parseFloat(i.rate) || 0) > 0);
-    if (filledItems.length === 0) { Toast.show({ type: 'error', text1: 'Add at least 1 item with qty and rate' }); return; }
+    if (filledItems.length === 0) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.addAtLeastOneItem') }); return; }
     if (items.some(i => i.product && (!(parseFloat(i.qty) > 0) || !(parseFloat(i.rate) > 0)))) {
-      Toast.show({ type: 'error', text1: 'All items need qty and rate' }); return;
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.allItemsNeedQtyRate') }); return;
     }
     // Match PI: any company warehouse list requires an explicit destination pick
     const needsWarehouse = items.filter(i => i.product && warehouses.length > 0);
-    if (needsWarehouse.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return; }
+    if (needsWarehouse.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.selectWarehouseAll') }); return; }
 
     setSubmitting(true);
     try {
@@ -863,18 +868,19 @@ export default function CreatePurchaseOrderScreen() {
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', voucherNumber, numberingPolicy: respNumberingPolicy });
       setShowSuccess(true);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.submitFailed'), text2: err?.message || t('screens.purchaseCreateOrder.checkTallyConnection') });
     } finally {
       setSubmitting(false);
     }
   }, [
     purchaseLedger, vendor, items, company, date, dueDate, entryType, totals.grand,
-    refNo, narration, termsText, warehouses, logEntries, roundOffLedger, roundOffAmount, numberingPolicy,
+    refNo, narration, termsText, warehouses, logEntries, roundOffLedger, roundOffAmount, numberingPolicy, t,
   ]);
 
   // ── Convert to Purchase Invoice ───────────────────────────────────────────────
   const handleConvertToInvoice = useCallback(async () => {
-    if (!company?.guid) return;
+    const guid = company?.guid;
+    if (!guid) return;
     try {
       const prefill = {
         // Keys mirror SI reader expectations; PI maps party→vendor, ledger→purchaseLedger.
@@ -888,13 +894,13 @@ export default function CreatePurchaseOrderScreen() {
         dueDate,
         savedAt: Date.now(),
       };
-      await AsyncStorage.setItem(currentTenantKey(company.guid, prefillFeature('tdpo')), JSON.stringify(prefill));
+      await AsyncStorage.setItem(currentTenantKey(guid, prefillFeature('tdpo')), JSON.stringify(prefill));
       setShowSuccess(false);
       router.replace('/purchase/create-invoice');
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Could not start invoice', text2: err?.message || '' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.couldNotStartInvoice'), text2: err?.message || '' });
     }
-  }, [company?.guid, vendor, purchaseLedger, date, refNo, narration, termsText, items, logEntries, roundOffLedger, roundOffAmount, submitResult, dueDate, router]);
+  }, [company?.guid, vendor, purchaseLedger, date, refNo, narration, termsText, items, logEntries, roundOffLedger, roundOffAmount, submitResult, dueDate, router, t]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (!allowed) return null;
@@ -908,7 +914,7 @@ export default function CreatePurchaseOrderScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{t('purchase.createOrder')}</Text>
-          <Text style={s.headerSub}>{orderNo || 'PO-Auto'}</Text>
+          <Text style={s.headerSub}>{orderNo || t('screens.purchaseCreateOrder.poAuto')}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
@@ -922,39 +928,39 @@ export default function CreatePurchaseOrderScreen() {
           {step === 1 && (
             <>
               <BottomSheetSearch
-                label="Purchase Ledger" required
-                placeholder="Search ledger account..."
+                label={t('screens.purchaseCreateOrder.purchaseLedger')} required
+                placeholder={t('screens.purchaseCreateOrder.searchLedgerAccount')}
                 options={purchaseLedgers.map(l => ({ label: l.name, value: l.name }))}
                 value={purchaseLedger}
                 onSelect={opt => setPurchaseLedger(opt.value)}
                 onClear={() => setPurchaseLedger('')}
-                sheetTitle="Purchase Ledger"
+                sheetTitle={t('screens.purchaseCreateOrder.purchaseLedger')}
                 icon="book-outline"
               />
 
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Order Details</Text>
+                  <Text style={s.cardTitle}>{t('screens.purchaseCreateOrder.orderDetails')}</Text>
                 </View>
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Order No.</Text>
+                    <Text style={s.fLabel}>{t('screens.purchaseCreateOrder.orderNo')}</Text>
                     <View style={s.autoBox}>
-                      <Text style={s.autoTxt}>{orderNo || 'Auto'}</Text>
+                      <Text style={s.autoTxt}>{orderNo || t('screens.purchaseCreateOrder.auto')}</Text>
                       <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
+                    <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.star}>*</Text></Text>
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
+                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || t('screens.purchaseCreateOrder.selectDate')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Due Date</Text>
+                    <Text style={s.fLabel}>{t('pdf.dueDate')}</Text>
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDueDatePicker(true)}>
                       <Text style={{ color: dueDate ? COLORS.textPrimary : COLORS.textTertiary }} numberOfLines={1}>
                         {dueDate ? formatDueDisplay(dueDate) : 'DD/MM/YYYY'}
@@ -962,15 +968,15 @@ export default function CreatePurchaseOrderScreen() {
                     </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Reference No.</Text>
-                    <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
+                    <Text style={s.fLabel}>{t('screens.purchaseCreateOrder.referenceNo')}</Text>
+                    <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder={t('common.optional')} />
                   </View>
                 </View>
               </View>
 
               <BottomSheetSearch
-                label="Vendor" required
-                placeholder="Search vendor..."
+                label={t('screens.purchaseCreateOrder.vendor')} required
+                placeholder={t('screens.purchaseCreateOrder.searchVendor')}
                 options={vendors}
                 value={vendor}
                 onSelect={opt => {
@@ -979,7 +985,7 @@ export default function CreatePurchaseOrderScreen() {
                   setVendorGstRegType(opt.data?.gst_registration_type || '');
                 }}
                 onClear={() => { setVendor(''); setVendorGstin(''); setVendorGstRegType(''); }}
-                sheetTitle="Vendor"
+                sheetTitle={t('screens.purchaseCreateOrder.vendor')}
                 icon="person-outline"
               />
               {vendor && vendorGstin ? (
@@ -993,7 +999,7 @@ export default function CreatePurchaseOrderScreen() {
               ) : vendor && !vendorGstin ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5, marginBottom: 2, paddingHorizontal: 2 }}>
                   <Ionicons name="alert-circle-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>No GSTIN registered</Text>
+                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>{t('screens.purchaseCreateOrder.noGstin')}</Text>
                 </View>
               ) : null}
             </>
@@ -1004,7 +1010,7 @@ export default function CreatePurchaseOrderScreen() {
             <>
               <View style={s.sectionHdr}>
                 <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
-                <Text style={s.sectionTitle}>Items & Services</Text>
+                <Text style={s.sectionTitle}>{t('screens.purchaseCreateOrder.itemsServices')}</Text>
                 <View style={s.itemCount}><Text style={s.itemCountTxt}>{items.length}</Text></View>
                 <Text style={s.sectionSummary} numberOfLines={1}>{itemsSummary}</Text>
               </View>
@@ -1049,7 +1055,7 @@ export default function CreatePurchaseOrderScreen() {
 
               <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-                <Text style={s.addItemTxt}>+ Add Item / Service</Text>
+                <Text style={s.addItemTxt}>{t('screens.purchaseCreateOrder.addItemService')}</Text>
               </TouchableOpacity>
 
               <LogisticsSection
@@ -1066,37 +1072,37 @@ export default function CreatePurchaseOrderScreen() {
 
               {/* Running total */}
               <View style={s.runningTotalCard}>
-                <Text style={s.runTotalTitle}>Running Total</Text>
+                <Text style={s.runTotalTitle}>{t('screens.purchaseCreateOrder.runningTotal')}</Text>
                 <View style={s.runTotalRow}>
-                  <Text style={s.runTotalLabel}>Items Subtotal</Text>
+                  <Text style={s.runTotalLabel}>{t('screens.purchaseCreateOrder.itemsSubtotal')}</Text>
                   <Text style={s.runTotalVal}>₹{totals.gross.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                 </View>
                 {totals.discTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={[s.runTotalLabel, { color: COLORS.positive }]}>Discount</Text>
+                    <Text style={[s.runTotalLabel, { color: COLORS.positive }]}>{t('pdf.discount')}</Text>
                     <Text style={[s.runTotalVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.taxTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Tax</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.tax')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.taxTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.logisticsTotal > 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Charges</Text>
+                    <Text style={s.runTotalLabel}>{t('screens.purchaseCreateOrder.charges')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
                   </View>
                 )}
                 {totals.roundOff !== 0 && (
                   <View style={s.runTotalRow}>
-                    <Text style={s.runTotalLabel}>Round Off</Text>
+                    <Text style={s.runTotalLabel}>{t('pdf.roundOff')}</Text>
                     <Text style={s.runTotalVal}>₹{totals.roundOff.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 <View style={[s.runTotalRow, s.runTotalGrandRow]}>
-                  <Text style={s.runTotalGrandLabel}>Grand Total</Text>
+                  <Text style={s.runTotalGrandLabel}>{t('pdf.grandTotal')}</Text>
                   <Text style={s.runTotalGrandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
@@ -1105,19 +1111,19 @@ export default function CreatePurchaseOrderScreen() {
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={s.cardTitle}>Notes & Terms</Text>
+                  <Text style={s.cardTitle}>{t('screens.purchaseCreateOrder.notesTerms')}</Text>
                 </View>
                 <FormField
-                  label="Narration"
+                  label={t('voucher.narration')}
                   value={narration}
                   onChangeText={setNarration}
-                  placeholder="Internal notes..."
+                  placeholder={t('screens.purchaseCreateOrder.internalNotes')}
                   multiline
                   numberOfLines={2}
                   style={{ minHeight: 60, textAlignVertical: 'top' } as any}
                 />
                 <FormField
-                  label="Terms & Conditions"
+                  label={t('pdf.terms')}
                   value={termsText}
                   onChangeText={setTermsText}
                   multiline
@@ -1137,9 +1143,9 @@ export default function CreatePurchaseOrderScreen() {
             <View style={s.grandTotalBar}>
               <View>
                 <Text style={s.grandTotalMeta}>
-                  {items.filter(i => i.product).length} item{items.filter(i => i.product).length !== 1 ? 's' : ''} · {vendor || 'No vendor'}
+                  {items.filter(i => i.product).length !== 1 ? t('screens.purchaseCreateOrder.footerMetaOther', { count: items.filter(i => i.product).length, vendor: vendor || t('screens.purchaseCreateOrder.noVendor') }) : t('screens.purchaseCreateOrder.footerMetaOne', { count: items.filter(i => i.product).length, vendor: vendor || t('screens.purchaseCreateOrder.noVendor') })}
                 </Text>
-                <Text style={s.grandTotalLabel}>Grand Total</Text>
+                <Text style={s.grandTotalLabel}>{t('pdf.grandTotal')}</Text>
               </View>
               <Text style={s.grandTotalAmt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
@@ -1147,17 +1153,17 @@ export default function CreatePurchaseOrderScreen() {
           <View style={s.footerBtnRow}>
             {step === 1 && (
               <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextBtnTxt}>Next: Add Items →</Text>
+                <Text style={s.nextBtnTxt}>{t('screens.purchaseCreateOrder.nextAddItems')}</Text>
               </TouchableOpacity>
             )}
             {step === 2 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                  <Text style={s.backOutlineTxt}>← Details</Text>
+                  <Text style={s.backOutlineTxt}>{t('screens.purchaseCreateOrder.backDetails')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
                   {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                  <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Create Purchase Order'}</Text>
+                  <Text style={s.submitTxt}>{submitting ? t('voucher.submitting') : t('screens.purchaseCreateOrder.createPoButton')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1183,8 +1189,8 @@ export default function CreatePurchaseOrderScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title="Order Date" />
-      <DatePickerModal visible={showDueDatePicker} value={dueDate || date} onSelect={(d) => { setDueDate(d); setShowDueDatePicker(false); }} onClose={() => setShowDueDatePicker(false)} title="Due Date" />
+      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title={t('screens.purchaseCreateOrder.orderDate')} />
+      <DatePickerModal visible={showDueDatePicker} value={dueDate || date} onSelect={(d) => { setDueDate(d); setShowDueDatePicker(false); }} onClose={() => setShowDueDatePicker(false)} title={t('pdf.dueDate')} />
 
       {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}
       <Modal
@@ -1207,21 +1213,21 @@ export default function CreatePurchaseOrderScreen() {
                 color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Purchase Order Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? t('voucher.journalQueued') : t('screens.purchaseCreateOrder.submitted')}</Text>
             <Text style={ss.sub}>
               {submitResult?.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Purchase order pushed to Tally successfully.'}
+                ? t('screens.purchaseCreateOrder.queuedSub')
+                : t('screens.purchaseCreateOrder.pushedSub')}
             </Text>
             {!!submitResult?.voucherNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Order No.</Text>
+                <Text style={ss.refLabel}>{t('screens.purchaseCreateOrder.orderNo')}</Text>
                 <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult?.voucherNumber}</Text>
               </View>
             )}
             {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refLabel}>{t('screens.purchaseCreateOrder.referenceNo')}</Text>
                 <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
@@ -1237,7 +1243,7 @@ export default function CreatePurchaseOrderScreen() {
                 }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.previewBtnTxt}>Preview</Text>
+                <Text style={ss.previewBtnTxt}>{t('screens.purchaseCreateOrder.preview')}</Text>
               </TouchableOpacity>
             )}
 
@@ -1252,7 +1258,7 @@ export default function CreatePurchaseOrderScreen() {
                 try {
                   const fileName = `PurchaseOrder-${submitResult?.voucherNumber || submitResult?.tdkRef || Date.now()}.pdf`;
                   const noSharing = async () => {
-                    Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                    Toast.show({ type: 'info', text1: t('screens.purchaseCreateOrder.sharingUnavailable') });
                   };
                   if (submitResult?.tdkRef && company?.guid) {
                     await shareVoucherPdfByRef(submitResult?.tdkRef, company.guid, {
@@ -1270,7 +1276,7 @@ export default function CreatePurchaseOrderScreen() {
                     });
                   }
                 } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                  Toast.show({ type: 'error', text1: t('screens.purchaseCreateOrder.pdfError'), text2: err?.message || t('screens.purchaseCreateOrder.couldNotGeneratePdf') });
                 } finally {
                   setSharePdfLoading(false);
                 }
@@ -1279,7 +1285,7 @@ export default function CreatePurchaseOrderScreen() {
               {sharePdfLoading
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? t('screens.purchaseCreateOrder.pdfCreating') : t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
 
             {/* Convert to Purchase Invoice */}
@@ -1289,7 +1295,7 @@ export default function CreatePurchaseOrderScreen() {
               onPress={handleConvertToInvoice}
             >
               <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
-              <Text style={ss.convertBtnTxt}>Convert to Purchase Invoice</Text>
+              <Text style={ss.convertBtnTxt}>{t('screens.purchaseCreateOrder.convertToInvoice')}</Text>
             </TouchableOpacity>
 
             {/* Done */}
@@ -1298,7 +1304,7 @@ export default function CreatePurchaseOrderScreen() {
               setSharePdfLoading(false);
               router.back();
             }}>
-              <Text style={ss.doneTxt}>Done</Text>
+              <Text style={ss.doneTxt}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

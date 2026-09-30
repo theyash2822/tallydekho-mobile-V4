@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Linking,
@@ -13,6 +14,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getEWBStatus } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 
 const { width: W } = Dimensions.get('window');
@@ -30,16 +32,17 @@ const Y_LEVELS  = [0, 25, 50, 75, 100];
 
 // ── Transport defaults (always show 4 modes, 0 if no data) ──────────────────
 const DEFAULT_TRANSPORT = [
-  { mode: 'Road', color: '#2D7D46' },
-  { mode: 'Rail', color: '#2563EB' },
-  { mode: 'Air',  color: '#D97706' },
-  { mode: 'Sea',  color: '#7C3AED' },
+  { mode: 'Road', labelKey: 'screens.reportsEwbCompliance.road', color: '#2D7D46' },
+  { mode: 'Rail', labelKey: 'screens.reportsEwbCompliance.rail', color: '#2563EB' },
+  { mode: 'Air',  labelKey: 'screens.reportsEwbCompliance.air', color: '#D97706' },
+  { mode: 'Sea',  labelKey: 'screens.reportsEwbCompliance.sea', color: '#7C3AED' },
 ];
 
 // ── Donut: shows grey ring when total=0, real segments when data exists ──────
 function EWBDonut({
   generated, pending, errors, expiring,
 }: { generated: number; pending: number; errors: number; expiring: number }) {
+  const { t } = useTranslation();
   const total = generated + pending + errors + expiring;
   const r = DONUT_W * 0.38; const ir = DONUT_W * 0.26;
   const cx = DONUT_W / 2;   const cy = DONUT_W / 2;
@@ -51,7 +54,7 @@ function EWBDonut({
         <Circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.borderDefault} strokeWidth={r - ir} />
         <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
         <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textTertiary}>0</SvgText>
-        <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>Total</SvgText>
+        <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>{t('sales.total')}</SvgText>
       </Svg>
     );
   }
@@ -84,7 +87,7 @@ function EWBDonut({
       {paths}
       <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
       <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textPrimary}>{total}</SvgText>
-      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>Total</SvgText>
+      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>{t('sales.total')}</SvgText>
     </Svg>
   );
 }
@@ -135,6 +138,7 @@ function EWBBarChart({ data }: { data: number[] }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBComplianceScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company, selectedFY } = useAuth();
   const { formatDate } = useSettings();
   const fyFrom = selectedFY?.startDate ?? '';
@@ -144,14 +148,19 @@ export default function EWBComplianceScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [ewbStatus,      setEwbStatus]      = useState<any>(null);
 
-  useEffect(() => {
+  const [prevFy, setPrevFy] = useState({ fyFrom, fyTo });
+  if (prevFy.fyFrom !== fyFrom || prevFy.fyTo !== fyTo) {
+    setPrevFy({ fyFrom, fyTo });
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
+
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -163,10 +172,16 @@ export default function EWBComplianceScreen() {
     } else if (fyParam) {
       params.fy = fyParam;
     }
+    let cancelled = false;
     getEWBStatus(company.guid, params)
-      .then((res: any) => { if (res?.data) setEwbStatus(res.data); })
-      .catch(() => {});
-  }, [company?.guid, selectedFY, fromDate, toDate]);
+      .then((res: any) => {
+        if (cancelled) return;
+        if (res?.data) { setEwbStatus(res.data); setLoadError(null); }
+        else setLoadError(t('screens.reportsEwbCompliance.loadFailed'));
+      })
+      .catch((err: any) => { if (!cancelled) setLoadError(err?.message || t('screens.reportsEwbCompliance.loadFailed')); });
+    return () => { cancelled = true; };
+  }, [company?.guid, selectedFY, fromDate, toDate, reloadKey]);
 
   const generatedCount     = ewbStatus?.generated_count  ?? 0;
   const pendingCount       = ewbStatus?.pending_count     ?? 0;
@@ -182,10 +197,10 @@ export default function EWBComplianceScreen() {
   }));
 
   const donutSegs = [
-    { label: 'Generated', count: generatedCount, color: '#2D7D46' },
-    { label: 'Pending',   count: pendingCount,   color: '#D97706' },
-    { label: 'Errors',    count: errorCount,     color: '#DC2626' },
-    { label: 'Expiring',  count: expiringCount,  color: '#2563EB' },
+    { label: 'Generated', labelKey: 'screens.reportsEwbCompliance.generated', count: generatedCount, color: '#2D7D46' },
+    { label: 'Pending',   labelKey: 'screens.reportsEwbCompliance.pending', count: pendingCount,   color: '#D97706' },
+    { label: 'Errors',    labelKey: 'screens.reportsEwbCompliance.errors', count: errorCount,     color: '#DC2626' },
+    { label: 'Expiring',  labelKey: 'screens.reportsEwbCompliance.expiring', count: expiringCount,  color: '#2563EB' },
   ];
 
   return (
@@ -196,7 +211,7 @@ export default function EWBComplianceScreen() {
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>E-Way Bill</Text>
+        <Text style={s.headerTitle}>{t('sales.ewayBill')}</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20}
             color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
@@ -208,7 +223,7 @@ export default function EWBComplianceScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : t('screens.reportsEwbCompliance.allDates')}
         </Text>
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
@@ -219,29 +234,30 @@ export default function EWBComplianceScreen() {
       </TouchableOpacity>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+        {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
 
         {/* ── KPI Stats 2×2 ──────────────────────────────────────────────── */}
         <View style={s.statsCard}>
           <View style={s.statsRow}>
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Pending Gen</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEwbCompliance.pendingGen')}</Text>
               <Text style={s.statValue}>{pendingCount}</Text>
             </View>
             <View style={s.statDivV} />
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Errors</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEwbCompliance.errors')}</Text>
               <Text style={[s.statValue, { color: errorCount > 0 ? '#DC2626' : COLORS.textPrimary }]}>{errorCount}</Text>
             </View>
           </View>
           <View style={s.statDivH} />
           <View style={s.statsRow}>
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Expiring {'<'}24h</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEwbCompliance.expiring24h')}</Text>
               <Text style={[s.statValue, { color: expiringCount > 0 ? '#D97706' : COLORS.textPrimary }]}>{expiringCount}</Text>
             </View>
             <View style={s.statDivV} />
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Generated</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEwbCompliance.generated')}</Text>
               <Text style={[s.statValue, { color: generatedCount > 0 ? '#2D7D46' : COLORS.textPrimary }]}>{generatedCount}</Text>
             </View>
           </View>
@@ -253,7 +269,7 @@ export default function EWBComplianceScreen() {
           onPress={() => safePush(router, '/reports/ewb-list' as any)}
           activeOpacity={0.85}
         >
-          <Text style={s.generatedBtnTxt}>Generated  {generatedCount}</Text>
+          <Text style={s.generatedBtnTxt}>{t('screens.reportsEwbCompliance.generatedCount', { count: generatedCount })}</Text>
           <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
         </TouchableOpacity>
 
@@ -271,7 +287,7 @@ export default function EWBComplianceScreen() {
                 <View key={seg.label} style={s.legendItem}>
                   <View style={[s.legendDot, { backgroundColor: seg.count > 0 ? seg.color : COLORS.borderStrong }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.legendLbl}>{seg.label}</Text>
+                    <Text style={s.legendLbl}>{t(seg.labelKey)}</Text>
                     <Text style={[s.legendCount, { color: seg.count > 0 ? seg.color : COLORS.textTertiary }]}>{seg.count}</Text>
                   </View>
                 </View>
@@ -282,21 +298,21 @@ export default function EWBComplianceScreen() {
 
         {/* ── Bar Chart ──────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Bills Generated Per Day</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsEwbCompliance.billsPerDay')}</Text>
           <EWBBarChart data={dailyCounts} />
           {generatedCount === 0 && (
-            <Text style={s.chartEmptyTxt}>No bills generated in this period</Text>
+            <Text style={s.chartEmptyTxt}>{t('screens.reportsEwbCompliance.noBills')}</Text>
           )}
         </View>
 
         {/* ── Transport Mode ─────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Transport Mode</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsEwbCompliance.transportMode')}</Text>
           <View style={s.modesGrid}>
             {transportDisplay.map(tm => (
               <View key={tm.mode} style={s.modeCell}>
                 <View style={[s.modeDot, { backgroundColor: tm.color }]} />
-                <Text style={s.modeName}>{tm.mode}</Text>
+                <Text style={s.modeName}>{t(tm.labelKey)}</Text>
                 <Text style={[s.modeCount, { color: tm.count > 0 ? COLORS.textPrimary : COLORS.textTertiary }]}>{tm.count}</Text>
               </View>
             ))}
@@ -310,7 +326,7 @@ export default function EWBComplianceScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="open-outline" size={16} color={COLORS.white} />
-          <Text style={s.viewDetailsTxt}>View on NIC Portal</Text>
+          <Text style={s.viewDetailsTxt}>{t('screens.reportsEwbCompliance.viewNic')}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />

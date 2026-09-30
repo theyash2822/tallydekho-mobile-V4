@@ -13,11 +13,13 @@ import {
   kindFromStatus,
   notifyAuthFailure,
   setDeviceOnline,
+  markServerReachable,
   friendlyUserMessage,
 } from './apiErrors';
 import { toastRbasError } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
 import { beginSingleFlight } from '../utils/singleFlight';
+import { reportError } from './monitoring';
 
 export {
   ApiError,
@@ -25,6 +27,7 @@ export {
   isApiError,
   setAuthFailureHandler,
   subscribeDeviceOnline,
+  subscribeServerReachability,
   getDeviceOnline,
   friendlyUserMessage,
   type ApiErrorKind,
@@ -60,11 +63,26 @@ const getToken = async (): Promise<string | null> => {
   }
 };
 
+/** Current access token as stored (same source every request uses). */
+export const getStoredAccessToken = getToken;
+
+type TokenListener = (token: string) => void;
+const _tokenListeners = new Set<TokenListener>();
+
+/** Fires after a refresh stores a new access token (e.g. socket re-register). */
+export function subscribeAccessTokenRefreshed(cb: TokenListener): () => void {
+  _tokenListeners.add(cb);
+  return () => { _tokenListeners.delete(cb); };
+}
+
 const storeAccessToken = async (token: string) => {
   if (Platform.OS === 'web') {
     try { window.localStorage.setItem('auth_token', token); } catch { /* private mode */ }
   }
   await AsyncStorage.setItem('auth_token', token);
+  _tokenListeners.forEach((cb) => {
+    try { cb(token); } catch { /* ignore */ }
+  });
 };
 
 // ── Refresh token ────────────────────────────────────────────
@@ -125,12 +143,16 @@ async function performRefresh(): Promise<RefreshOutcome> {
     });
   } catch {
     // Offline / DNS / connection refused — do not destroy a session over a blip.
+    markServerReachable(false);
     return 'unavailable';
   }
   const data = await safeParseJson(res);
   const next = data?.data ?? data;
   if (!res.ok || !next?.access_token) {
-    if (res.status >= 500) return 'unavailable';
+    if (res.status >= 500) {
+      markServerReachable(false);
+      return 'unavailable';
+    }
     await clearRefreshToken();
     return 'rejected';
   }
@@ -138,7 +160,30 @@ async function performRefresh(): Promise<RefreshOutcome> {
   // are deliberately left alone so a mid-session refresh cannot move the user.
   await storeAccessToken(String(next.access_token));
   if (next.refresh_token) await setRefreshToken(String(next.refresh_token));
+  markServerReachable(true);
   return 'refreshed';
+}
+
+const REFRESH_RETRY_MIN_MS = 2_000;
+const REFRESH_RETRY_MAX_MS = 30_000;
+let _refreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let _refreshRetryDelay = REFRESH_RETRY_MIN_MS;
+
+/**
+ * Server blip during refresh: keep the session and keep retrying quietly with
+ * backoff. Only a definite rejection from /auth/refresh signs the user out.
+ */
+function scheduleRefreshRetry() {
+  if (_refreshRetryTimer) return;
+  const delay = _refreshRetryDelay;
+  _refreshRetryDelay = Math.min(_refreshRetryDelay * 2, REFRESH_RETRY_MAX_MS);
+  _refreshRetryTimer = setTimeout(async () => {
+    _refreshRetryTimer = null;
+    const outcome = await tryRefreshSession();
+    if (outcome === 'rejected' && (await getToken())) {
+      notifyAuthFailure(new ApiError('Session expired', { status: 401, kind: 'auth', code: 'REFRESH_REJECTED' }));
+    }
+  }, delay);
 }
 
 /**
@@ -148,7 +193,15 @@ async function performRefresh(): Promise<RefreshOutcome> {
  * sign the user out.
  */
 export function tryRefreshSession(): Promise<RefreshOutcome> {
-  return beginSingleFlight(_refreshSlot, performRefresh);
+  return beginSingleFlight(_refreshSlot, performRefresh).then((outcome) => {
+    if (outcome === 'unavailable') {
+      scheduleRefreshRetry();
+    } else {
+      _refreshRetryDelay = REFRESH_RETRY_MIN_MS;
+      if (_refreshRetryTimer) { clearTimeout(_refreshRetryTimer); _refreshRetryTimer = null; }
+    }
+    return outcome;
+  });
 }
 
 async function safeParseJson(res: Response): Promise<any> {
@@ -217,6 +270,8 @@ async function request<T>(
     });
 
     setDeviceOnline(true);
+    if (res.ok) markServerReachable(true);
+    else if (res.status === 502 || res.status === 503 || res.status === 504) markServerReachable(false);
     if (responseType === 'text') {
       if (!res.ok) {
         const data = await safeParseJson(res);
@@ -273,6 +328,8 @@ async function request<T>(
         notifyAuthFailure(err);
       } else if (res.status === 403 || res.status === 402 || res.status === 409) {
         toastRbasError(err);
+      } else if (res.status >= 500) {
+        reportError(err, { method, endpoint: endpoint.split('?')[0], status: res.status, code });
       }
       throw err;
     }
@@ -285,6 +342,7 @@ async function request<T>(
       e?.name === 'AbortError' ||
       e?.message === 'Aborted' ||
       controller.signal.aborted;
+    markServerReachable(false);
     if (aborted) {
       setDeviceOnline(false);
       throw new ApiError('Request timed out. Please try again.', {
@@ -658,6 +716,8 @@ export const markAllNotificationsRead = (companyGuid?: string) => patch<any>(wit
 // ══════════════════════════════════════════════════════════════
 
 export const getAlerts           = (companyGuid?: string, params?: any) => get<any>(withCompany('/alerts', companyGuid, params));
+export const getPaymentReminderLog = (companyGuid: string, page = 1) =>
+  get<any>(withCompany('/payment-reminders/log', companyGuid, { page: String(page), limit: '30' }));
 export const getEWBStatus        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/status', companyGuid, params));
 export const getEWBPending       = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/pending', companyGuid, params));
 export const getEWBList          = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills', companyGuid, params));
@@ -733,6 +793,10 @@ export const getMyEntries     = (companyGuid?: string, params?: any) =>
 
 export const getAIInsights = (companyGuid?: string, from?: string, to?: string) =>
   get<any>(withCompany('/ai/insights', companyGuid, from && to ? { from, to } : {}));
+
+/** Weekly sales forecast vs actual (last 8 weeks) for the Reports tab AI card. */
+export const getAIWeeklyForecast = (companyGuid: string) =>
+  get<any>(withCompany('/ai/ai-insights', companyGuid));
 
 export const getAIInsightsHistory = (companyGuid: string, financialYear: string) =>
   get<any>(withCompany(`/ai/insights/history/${financialYear}`, companyGuid));

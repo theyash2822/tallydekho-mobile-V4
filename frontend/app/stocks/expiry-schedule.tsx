@@ -27,6 +27,7 @@ import FilterBottomSheet, {
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { useTranslation } from 'react-i18next';
 import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
+import i18n from '../../src/i18n';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type DayTab = '0-30' | '31-60' | '>60' | 'expired';
@@ -37,11 +38,11 @@ interface ExpiryItem {
   daysLeft: number | null; warehouse: string; groupName: string; tab: DayTab;
 }
 
-const DAY_TABS: { key: DayTab; label: string }[] = [
-  { key: '0-30',    label: '0-30 Day'  },
-  { key: '31-60',   label: '31-60 Day' },
-  { key: '>60',     label: '>60 Day'   },
-  { key: 'expired', label: 'Expired'   },
+const DAY_TABS: { key: DayTab; labelKey: string }[] = [
+  { key: '0-30',    labelKey: 'screens.stocksExpirySchedule.tab0to30' },
+  { key: '31-60',   labelKey: 'screens.stocksExpirySchedule.tab31to60' },
+  { key: '>60',     labelKey: 'screens.stocksExpirySchedule.tabOver60' },
+  { key: 'expired', labelKey: 'screens.stocksExpirySchedule.expired' },
 ];
 
 // ── Filter modal (Warehouse | Item Group — Ledger-style R2 multi-select) ─────
@@ -53,6 +54,7 @@ function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptio
   whOptions: { id: string; label: string }[];
   grpOptions: { id: string; label: string }[];
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'Warehouse' | 'Group'>('Warehouse');
   const [selWh, setSelWh] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
@@ -65,13 +67,15 @@ function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptio
   useMultiFilterHydration(visible, initWh, whIds, setSelWh);
   useMultiFilterHydration(visible, initGrp, grpIds, setSelGrp);
 
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(false);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) {
       setWhSearch('');
       setGrpSearch('');
       setTab('Warehouse');
     }
-  }, [visible]);
+  }
 
   const isAllWh = isFilterAllSelected(selWh, whIds);
   const isAllGrp = isFilterAllSelected(selGrp, grpIds);
@@ -102,18 +106,18 @@ function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptio
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Expiry"
+      title={t('screens.stocksExpirySchedule.filterTitle')}
       activeCount={activeCount}
       onClear={() => { setSelWh([...whIds]); setSelGrp([...grpIds]); }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.stocksExpirySchedule.applyFilters')}
       applyDisabled={!canApply}
       heightFraction={0.68}
     >
       <View style={fm.tabs}>
         {(['Warehouse', 'Group'] as const).map(cat => (
           <TouchableOpacity key={cat} style={[fm.tab, tab === cat && fm.tabActive]} onPress={() => setTab(cat)} activeOpacity={0.7}>
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Group' ? 'Item Group' : cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Group' ? t('screens.stocksExpirySchedule.itemGroup') : t('screens.stocksExpirySchedule.warehouse')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -121,11 +125,11 @@ function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptio
         <View style={fm.panel}>
           <View style={fm.searchBox}>
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-            <TextInput style={fm.searchInput} placeholder="Search warehouse..." placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
+            <TextInput style={fm.searchInput} placeholder={t('screens.stocksExpirySchedule.searchWarehouse')} placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
           </View>
-          <FilterCheckRow label="All warehouses" selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
+          <FilterCheckRow label={t('screens.stocksExpirySchedule.allWarehouses')} selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
           {filteredWh.length === 0 ? (
-            <Text style={fm.hint}>No warehouses match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksExpirySchedule.noWarehouses')}</Text>
           ) : filteredWh.map(w => (
             <FilterCheckRow key={w.id} label={w.label} selected={isFilterOptionChecked(selWh, w.id)} onPress={() => setSelWh(prev => toggleFilterFromAll(prev, w.id, whIds))} />
           ))}
@@ -134,11 +138,11 @@ function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptio
         <View style={fm.panel}>
           <View style={fm.searchBox}>
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-            <TextInput style={fm.searchInput} placeholder="Search group..." placeholderTextColor={COLORS.textTertiary} value={grpSearch} onChangeText={setGrpSearch} />
+            <TextInput style={fm.searchInput} placeholder={t('screens.stocksExpirySchedule.searchGroup')} placeholderTextColor={COLORS.textTertiary} value={grpSearch} onChangeText={setGrpSearch} />
           </View>
-          <FilterCheckRow label="All groups" selected={isAllGrp} onPress={() => setSelGrp(prev => toggleFilterAll(prev, grpIds))} />
+          <FilterCheckRow label={t('screens.stocksExpirySchedule.allGroups')} selected={isAllGrp} onPress={() => setSelGrp(prev => toggleFilterAll(prev, grpIds))} />
           {filteredGrp.length === 0 ? (
-            <Text style={fm.hint}>No groups match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksExpirySchedule.noGroups')}</Text>
           ) : filteredGrp.map(g => (
             <FilterCheckRow key={g.id} label={g.label} selected={isFilterOptionChecked(selGrp, g.id)} onPress={() => setSelGrp(prev => toggleFilterFromAll(prev, g.id, grpIds))} />
           ))}
@@ -164,17 +168,24 @@ export default function ExpiryScheduleScreen() {
   const [isLoading,  setIsLoading]  = useState(false);
   const [apiError,   setApiError]   = useState<string | null>(null);
 
+  const [loadKey, setLoadKey] = useState<{ companyGuid?: string; selectedFY: typeof selectedFY } | null>(null);
+  if (!loadKey || loadKey.companyGuid !== companyGuid || loadKey.selectedFY !== selectedFY) {
+    setLoadKey({ companyGuid, selectedFY });
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
   const load = useCallback(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     getExpirySchedule(companyGuid, fyParam ? { fy: fyParam } : {})
       .then((res: any) => {
         setItems(res?.data?.items ?? []);
         setWarehouses(res?.data?.warehouses ?? []);
         setGroups(res?.data?.groups ?? []);
       })
-      .catch((e: any) => setApiError(e?.message ?? 'Failed to load expiry data'))
+      .catch((e: any) => setApiError(e?.message ?? i18n.t('screens.stocksExpirySchedule.loadFailed')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY]);
 
@@ -236,7 +247,7 @@ export default function ExpiryScheduleScreen() {
     try {
       await shareStockRegisterPdf({
         company: companyFromAuth(company),
-        title: 'Expiry Schedule',
+        title: t('stocks.expirySchedule'),
         rows: selected.map(item => ({
           date: item.expiryDate,
           particulars: item.item,
@@ -248,7 +259,7 @@ export default function ExpiryScheduleScreen() {
       }, { onBeforeShare: () => setIsSharing(false) });
       cancelSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksExpirySchedule.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -270,9 +281,9 @@ export default function ExpiryScheduleScreen() {
   };
 
   const daysLeftText = (item: ExpiryItem) => {
-    if (item.tab === 'expired') return 'Expired';
-    if (item.daysLeft === null) return 'No Expiry';
-    return `${item.daysLeft} Day`;
+    if (item.tab === 'expired') return t('screens.stocksExpirySchedule.expired');
+    if (item.daysLeft === null) return t('screens.stocksExpirySchedule.noExpiry');
+    return t('screens.stocksExpirySchedule.daysLeft', { days: item.daysLeft });
   };
 
   // ── Tab counts ────────────────────────────────────────────────────────────
@@ -320,11 +331,11 @@ export default function ExpiryScheduleScreen() {
         <View style={s.selBanner}>
           <TouchableOpacity onPress={cancelSelection} activeOpacity={0.7} style={s.selBannerBtn}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selBannerCancel}>Cancel</Text>
+            <Text style={s.selBannerCancel}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
-            <Text style={s.selBannerAll}>All</Text>
+            <Text style={s.selBannerAll}>{t('common.all')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -338,7 +349,7 @@ export default function ExpiryScheduleScreen() {
             onPress={() => { setActiveTab(tab.key); cancelSelection(); }}
             activeOpacity={0.7}
           >
-            <Text style={[s.tabTxt, activeTab === tab.key && s.tabTxtActive]}>{tab.label}</Text>
+            <Text style={[s.tabTxt, activeTab === tab.key && s.tabTxtActive]}>{t(tab.labelKey)}</Text>
             {tabCounts[tab.key] > 0 && (
               <View style={[s.tabBadge, activeTab === tab.key && s.tabBadgeActive]}>
                 <Text style={[s.tabBadgeTxt, activeTab === tab.key && s.tabBadgeTxtActive]}>
@@ -354,7 +365,7 @@ export default function ExpiryScheduleScreen() {
       {!isSelectionMode && visibleItems.length > 0 && (
         <View style={s.hintRow}>
           <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
-          <Text style={s.hintTxt}>Long press to select items</Text>
+          <Text style={s.hintTxt}>{t('screens.stocksExpirySchedule.longPressHint')}</Text>
         </View>
       )}
 
@@ -373,7 +384,7 @@ export default function ExpiryScheduleScreen() {
             <View style={s.empty}>
               <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.borderDefault} />
               <Text style={s.emptyTxt}>
-                {items.length === 0 ? 'No batch data available' : 'No items in this range'}
+                {items.length === 0 ? t('screens.stocksExpirySchedule.noBatchData') : t('screens.stocksExpirySchedule.noItemsInRange')}
               </Text>
             </View>
           ) : (
@@ -408,19 +419,19 @@ export default function ExpiryScheduleScreen() {
                         <View style={s.divider} />
                         <View style={s.gridRow}>
                           <View style={s.gridItem}>
-                            <Text style={s.gridLbl}>Batch/Lot</Text>
+                            <Text style={s.gridLbl}>{t('screens.stocksExpirySchedule.batchLot')}</Text>
                             <Text style={s.gridVal}>{item.batch}</Text>
                           </View>
                           <View style={s.gridItem}>
-                            <Text style={s.gridLbl}>Expiry Date</Text>
+                            <Text style={s.gridLbl}>{t('screens.stocksExpirySchedule.expiryDate')}</Text>
                             <Text style={s.gridVal}>{item.expiryDate}</Text>
                           </View>
                           <View style={s.gridItem}>
-                            <Text style={s.gridLbl}>QTY</Text>
+                            <Text style={s.gridLbl}>{t('screens.stocksExpirySchedule.qty')}</Text>
                             <Text style={s.gridVal}>{item.qty}</Text>
                           </View>
                           <View style={s.gridItem}>
-                            <Text style={s.gridLbl}>Value</Text>
+                            <Text style={s.gridLbl}>{t('screens.stocksExpirySchedule.value')}</Text>
                             <Text style={s.gridVal}>{item.value}</Text>
                           </View>
                         </View>
@@ -440,9 +451,9 @@ export default function ExpiryScheduleScreen() {
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+            <Text style={s.cancelSelFooterTxt}>{t('screens.stocksExpirySchedule.deselect')}</Text>
           </TouchableOpacity>
-          <Text style={s.shareBarCount}>{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}</Text>
+          <Text style={s.shareBarCount}>{selectedIds.size !== 1 ? t('screens.stocksExpirySchedule.itemsCountOther', { n: selectedIds.size }) : t('screens.stocksExpirySchedule.itemsCountOne', { n: selectedIds.size })}</Text>
           <TouchableOpacity
             style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
             activeOpacity={0.8}
@@ -453,7 +464,7 @@ export default function ExpiryScheduleScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareTxt}>{isSharing ? t('screens.stocksExpirySchedule.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +14,12 @@ import {
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import { toastRbasError } from '../../src/utils/rbasErrors';
+import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
 
-const PROVIDERS: DropdownOption[] = [
-  { label: 'NIC (Government)', value: 'nic' },
+const PROVIDERS: (DropdownOption & { labelKey?: string })[] = [
+  { label: 'NIC (Government)', labelKey: 'screens.settingsEinvoice.providerNic', value: 'nic' },
   { label: 'Cygnet', value: 'cygnet' },
-  { label: 'Clear (formerly ClearTax)', value: 'clear' },
+  { label: 'Clear (formerly ClearTax)', labelKey: 'screens.settingsEinvoice.providerClear', value: 'clear' },
   { label: 'EY Tax Tech', value: 'ey' },
   { label: 'IRIS Business', value: 'iris' },
   { label: 'Masterindia', value: 'masterindia' },
@@ -25,6 +27,7 @@ const PROVIDERS: DropdownOption[] = [
 
 export default function EInvoiceScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { workspaceId, isOwnerOrAdmin } = useWorkspace();
   const [provider, setProvider] = useState('nic');
   const [isDirty, setIsDirty] = useState(false);
@@ -36,12 +39,16 @@ export default function EInvoiceScreen() {
   const [clientId, setClientId] = useState('');
   const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [reloadKey, setReloadKey] = useState(0);
   const markDirty = () => setIsDirty(true);
 
   React.useEffect(() => {
     if (!workspaceId) return;
+    let cancelled = false;
     getWorkspaceIntegration(workspaceId, 'einvoice')
       .then((res: any) => {
+        if (cancelled) return;
         const d = res?.data ?? res;
         setStatus(d?.status || 'NOT_CONFIGURED');
         const cfg = d?.config_json || d?.config || {};
@@ -49,9 +56,11 @@ export default function EInvoiceScreen() {
         if (cfg.username) setUsername(cfg.username);
         if (cfg.provider) setProvider(cfg.provider);
         if (cfg.client_id) setClientId(cfg.client_id);
+        setLoadState('ready');
       })
-      .catch(() => {});
-  }, [workspaceId]);
+      .catch(() => { if (!cancelled) setLoadState('error'); });
+    return () => { cancelled = true; };
+  }, [workspaceId, reloadKey]);
 
   if (!isOwnerOrAdmin) {
     return (
@@ -60,12 +69,12 @@ export default function EInvoiceScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.back}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.title}>E-Invoice (IRN)</Text>
+          <Text style={s.title}>{t('settings.eInvoice')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={{ padding: 24 }}>
           <Text style={{ color: COLORS.textSecondary, lineHeight: 22 }}>
-            Only the Workspace Owner or Admin can configure E-Invoice integration.
+            {t('screens.settingsEinvoice.onlyOwnerAdmin')}
           </Text>
         </View>
       </SafeAreaView>
@@ -81,9 +90,9 @@ export default function EInvoiceScreen() {
       });
       setStatus('CONFIGURED');
       setIsDirty(false);
-      Alert.alert('Saved', 'E-Invoice settings saved for this Workspace.');
+      Alert.alert(t('common.saved'), t('screens.settingsEinvoice.savedMsg'));
     } catch (e) {
-      toastRbasError(e) || Alert.alert('Error', 'Could not save.');
+      toastRbasError(e) || Alert.alert(t('common.error'), t('screens.settingsEinvoice.couldNotSave'));
     } finally {
       setBusy(false);
     }
@@ -95,15 +104,15 @@ export default function EInvoiceScreen() {
     try {
       await activateWorkspaceIntegration(workspaceId, 'einvoice');
       setStatus('ACTIVE');
-      Alert.alert('Activated', 'E-Invoice is active for this Workspace.');
+      Alert.alert(t('screens.settingsEinvoice.activated'), t('screens.settingsEinvoice.activatedMsg'));
     } catch (e) {
       if (e instanceof ApiError && (e.code === 'BILLING_INSUFFICIENT_CREDITS' || e.code === 'INSUFFICIENT_CREDITS')) {
         Alert.alert(
-          'Insufficient credits',
-          'This Workspace does not have enough credits. Please ask the Workspace Owner to recharge from the Web Portal.'
+          t('screens.settingsEinvoice.insufficientCredits'),
+          t('screens.settingsEinvoice.insufficientCreditsMsg')
         );
       } else {
-        toastRbasError(e) || Alert.alert('Error', (e as any)?.message || 'Activation failed');
+        toastRbasError(e) || Alert.alert(t('common.error'), (e as any)?.message || t('screens.settingsEinvoice.activationFailed'));
       }
     } finally {
       setBusy(false);
@@ -116,44 +125,53 @@ export default function EInvoiceScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.back}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.title}>E-Invoice (IRN)</Text>
+        <Text style={s.title}>{t('settings.eInvoice')}</Text>
         <View style={{ width: 40 }} />
       </View>
+      {loadState === 'loading' ? (
+        <LoadingState message={t('screens.settingsEinvoice.loadingSettings')} />
+      ) : loadState === 'error' ? (
+        <ErrorState
+          title={t('screens.settingsEinvoice.loadSettingsFailed')}
+          message={t('screens.settingsEinvoice.checkConnection')}
+          onRetry={() => { setLoadState('loading'); setReloadKey(k => k + 1); }}
+        />
+      ) : (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <View style={[s.statusBanner, { backgroundColor: status === 'ACTIVE' ? COLORS.positiveBg : COLORS.warningBg }]}>
             <Text style={{ color: status === 'ACTIVE' ? COLORS.positive : COLORS.warning, fontWeight: '700' }}>
-              Status: {status}
+              {t('screens.settingsEinvoice.statusLabel', { status })}
             </Text>
           </View>
           <View style={s.card}>
             <View style={s.cardHdr}>
               <Ionicons name="server-outline" size={18} color={COLORS.info} />
-              <Text style={s.cardTitle}>IRP Provider</Text>
+              <Text style={s.cardTitle}>{t('screens.settingsEinvoice.irpProvider')}</Text>
             </View>
             <FormDropdown
-              label="Provider"
+              label={t('screens.settingsEinvoice.provider')}
               value={provider}
-              options={PROVIDERS}
+              options={PROVIDERS.map(p => (p.labelKey ? { label: t(p.labelKey), value: p.value } : p))}
               onSelect={(o) => { setProvider(o.value); markDirty(); }}
-              placeholder="Select IRP"
+              placeholder={t('screens.settingsEinvoice.selectIrp')}
               containerStyle={{ marginBottom: 0 }}
             />
           </View>
           <View style={s.card}>
             <View style={s.cardHdr}>
               <Ionicons name="key-outline" size={18} color={'#7C3AED'} />
-              <Text style={s.cardTitle}>Credentials</Text>
+              <Text style={s.cardTitle}>{t('screens.settingsEinvoice.credentials')}</Text>
             </View>
             {[
-              { l: 'GSTIN', v: gstin, set: (v: string) => setGstin(v.toUpperCase()), ph: '15-digit GSTIN', sec: false },
-              { l: 'Username', v: username, set: setUsername, ph: 'Portal username', sec: false },
-              { l: 'Password', v: password, set: setPassword, ph: 'Portal password', sec: true },
-              { l: 'Client ID', v: clientId, set: setClientId, ph: 'API Client ID', sec: false },
-              { l: 'Client Secret', v: secret, set: setSecret, ph: 'API Client Secret', sec: false },
+              { l: 'GSTIN', label: t('company.gstin'), v: gstin, set: (v: string) => setGstin(v.toUpperCase()), ph: t('screens.settingsEinvoice.gstinPh'), sec: false },
+              { l: 'Username', label: t('screens.settingsEinvoice.username'), v: username, set: setUsername, ph: t('screens.settingsEinvoice.usernamePh'), sec: false },
+              { l: 'Password', label: t('screens.settingsEinvoice.password'), v: password, set: setPassword, ph: t('screens.settingsEinvoice.passwordPh'), sec: true },
+              { l: 'Client ID', label: t('screens.settingsEinvoice.clientId'), v: clientId, set: setClientId, ph: t('screens.settingsEinvoice.clientIdPh'), sec: false },
+              { l: 'Client Secret', label: t('screens.settingsEinvoice.clientSecret'), v: secret, set: setSecret, ph: t('screens.settingsEinvoice.clientSecretPh'), sec: false },
             ].map((f) => (
               <View key={f.l} style={s.field}>
-                <Text style={s.fLabel}>{f.l}</Text>
+                <Text style={s.fLabel}>{f.label}</Text>
                 <View style={s.fRow}>
                   <TextInput
                     style={s.fInput}
@@ -175,22 +193,23 @@ export default function EInvoiceScreen() {
           </View>
           <View style={s.btnRow}>
             {isDirty && (
-              <TouchableOpacity style={s.primaryBtn} onPress={save} disabled={busy} activeOpacity={0.8}>
-                <Text style={s.primaryTxt}>Save</Text>
+              <TouchableOpacity style={s.primaryBtn} onPress={save} disabled={busy || loadState !== 'ready'} activeOpacity={0.8}>
+                <Text style={s.primaryTxt}>{t('common.save')}</Text>
               </TouchableOpacity>
             )}
             {status !== 'ACTIVE' && (
               <TouchableOpacity style={s.outBtn} onPress={activate} disabled={busy} activeOpacity={0.7}>
-                <Text style={[s.outTxt, { color: COLORS.info }]}>Activate</Text>
+                <Text style={[s.outTxt, { color: COLORS.info }]}>{t('screens.settingsEinvoice.activate')}</Text>
               </TouchableOpacity>
             )}
           </View>
           <TouchableOpacity style={s.portalBtn} onPress={() => Linking.openURL('https://einvoice1.gst.gov.in')} activeOpacity={0.7}>
             <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={s.portalTxt}>Open IRP Portal</Text>
+            <Text style={s.portalTxt}>{t('screens.settingsEinvoice.openIrpPortal')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }

@@ -74,9 +74,11 @@ export default function CreateContraVoucher() {
 
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  useEffect(() => {
+  const [prevEntryType, setPrevEntryType] = useState(entryType);
+  if (prevEntryType !== entryType) {
+    setPrevEntryType(entryType);
     if (entryType === 'regular') setDate(todayStr());
-  }, [entryType]);
+  }
 
   const [cashLedgers, setCashLedgers] = useState<BSSOption[]>([]);
   const [bankLedgers, setBankLedgers] = useState<BSSOption[]>([]);
@@ -106,30 +108,32 @@ export default function CreateContraVoucher() {
     return 'bank';
   }, []);
 
-  const loadLedgers = useCallback(async () => {
-    if (!company?.guid) return;
-    try {
-      const [cashRes, bankRes]: any[] = await Promise.all([
-        getBankLedgers(company.guid, 'cash'),
-        getBankLedgers(company.guid, 'bank'),
-      ]);
-      const mapList = (rows: any[], kind: 'cash' | 'bank'): BSSOption[] =>
-        (rows || []).map((l: any) => ({
-          label: l.name,
-          value: l.name,
-          subtitle: l.parent || kind,
-          sub: kind,
-          data: l,
-        })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
-      setCashLedgers(mapList(scopeParties(cashRes?.data || []), 'cash'));
-      setBankLedgers(mapList(scopeParties(bankRes?.data || []), 'bank'));
-    } catch {
-      setCashLedgers([]);
-      setBankLedgers([]);
+  useEffect(() => {
+    async function loadLedgers() {
+      const guid = company?.guid;
+      if (!guid) return;
+      try {
+        const [cashRes, bankRes]: any[] = await Promise.all([
+          getBankLedgers(guid, 'cash'),
+          getBankLedgers(guid, 'bank'),
+        ]);
+        const mapList = (rows: any[], kind: 'cash' | 'bank'): BSSOption[] =>
+          (rows || []).map((l: any) => ({
+            label: l.name,
+            value: l.name,
+            subtitle: l.parent || kind,
+            sub: kind,
+            data: l,
+          })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
+        setCashLedgers(mapList(scopeParties(cashRes?.data || []), 'cash'));
+        setBankLedgers(mapList(scopeParties(bankRes?.data || []), 'bank'));
+      } catch {
+        setCashLedgers([]);
+        setBankLedgers([]);
+      }
     }
+    loadLedgers();
   }, [company?.guid, scopeParties]);
-
-  useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
   const allPickers = useMemo(
     () => [...cashLedgers, ...bankLedgers],
@@ -140,14 +144,17 @@ export default function CreateContraVoucher() {
   const bankInvolved = fromKind === 'bank' || toKind === 'bank';
   const amtNum = parseFloat(amount) || 0;
 
-  useEffect(() => {
-    if (!cashCount?.used) return;
-    const counted = sumDenomCounts(cashCount.denominations);
-    const matched = Math.abs(counted - amtNum) < 0.005 && amtNum > 0;
-    if (cashCount.matched !== matched || cashCount.target !== amtNum) {
-      setCashCount({ ...cashCount, matched, counted, target: amtNum });
+  const [prevAmount, setPrevAmount] = useState(amount);
+  if (prevAmount !== amount) {
+    setPrevAmount(amount);
+    if (cashCount?.used) {
+      const counted = sumDenomCounts(cashCount.denominations);
+      const matched = Math.abs(counted - amtNum) < 0.005 && amtNum > 0;
+      if (cashCount.matched !== matched || cashCount.target !== amtNum) {
+        setCashCount({ ...cashCount, matched, counted, target: amtNum });
+      }
     }
-  }, [amount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const cashCardState: 'none' | 'matched' | 'mismatch' = !cashCount?.used
     ? 'none'
@@ -156,13 +163,13 @@ export default function CreateContraVoucher() {
       : 'mismatch';
 
   const canSubmit = useMemo(() => {
-    if (!fromLedger) return 'Select From Ledger';
-    if (!toLedger) return 'Select To Ledger';
-    if (fromLedger === toLedger) return 'From and To must differ';
-    if (!(amtNum > 0)) return 'Enter amount';
-    if (cashCount?.used && !cashCount.matched) return 'Fix Cash Count to match amount (or clear it)';
+    if (!fromLedger) return t('screens.voucherCreateContra.selectFromLedger');
+    if (!toLedger) return t('screens.voucherCreateContra.selectToLedger');
+    if (fromLedger === toLedger) return t('screens.voucherCreateContra.fromToMustDiffer');
+    if (!(amtNum > 0)) return t('voucher.enterAmount');
+    if (cashCount?.used && !cashCount.matched) return t('screens.voucherCreateContra.fixCashCount');
     return null;
-  }, [fromLedger, toLedger, amtNum, cashCount]);
+  }, [fromLedger, toLedger, amtNum, cashCount, t]);
 
   const selectFrom = (opt: BSSOption) => {
     setFromLedger(opt.value);
@@ -221,7 +228,7 @@ export default function CreateContraVoucher() {
       });
       setShowSuccess(true);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.voucherCreateContra.submitFailed'), text2: e?.message || t('screens.voucherCreateContra.checkTally') });
     } finally {
       setSubmitting(false);
     }
@@ -259,12 +266,12 @@ export default function CreateContraVoucher() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.fLabel}>{t('voucher.contraNo')}</Text>
                   <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
+                    <Text style={s.autoTxt}>{t('screens.voucherCreateContra.auto')}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.req}>*</Text></Text>
                   {entryType === 'regular' ? (
                     <View style={[s.autoBox, { opacity: 0.55 }]}>
                       <Text style={s.autoTxt}>{date}</Text>
@@ -273,7 +280,7 @@ export default function CreateContraVoucher() {
                   ) : (
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                       <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
+                        {date || t('screens.voucherCreateContra.selectDate')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -286,8 +293,8 @@ export default function CreateContraVoucher() {
           <View style={s.transferRow}>
             <View style={s.transferBox}>
               <Ionicons name="arrow-up-circle" size={24} color={COLORS.negative} />
-              <Text style={s.transferLabel}>From</Text>
-              <Text style={s.transferName} numberOfLines={2}>{fromLedger || 'Source Account'}</Text>
+              <Text style={s.transferLabel}>{t('pdf.from')}</Text>
+              <Text style={s.transferName} numberOfLines={2}>{fromLedger || t('screens.voucherCreateContra.sourceAccount')}</Text>
             </View>
             <View style={s.transferMid}>
               <View style={s.transferArrow}>
@@ -297,41 +304,41 @@ export default function CreateContraVoucher() {
             </View>
             <View style={s.transferBox}>
               <Ionicons name="arrow-down-circle" size={24} color={COLORS.positive} />
-              <Text style={s.transferLabel}>To</Text>
-              <Text style={s.transferName} numberOfLines={2}>{toLedger || 'Destination Account'}</Text>
+              <Text style={s.transferLabel}>{t('pdf.to')}</Text>
+              <Text style={s.transferName} numberOfLines={2}>{toLedger || t('screens.voucherCreateContra.destinationAccount')}</Text>
             </View>
           </View>
 
           {/* Transfer Accounts — original section look, ledger pickers */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Transfer Accounts</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreateContra.transferAccounts')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
                 <BottomSheetSearch
-                  label="From Ledger"
+                  label={t('screens.voucherCreateContra.fromLedger')}
                   required
-                  placeholder="e.g. Cash in Hand"
+                  placeholder={t('screens.voucherCreateContra.fromPlaceholder')}
                   value={fromLedger}
                   options={allPickers}
                   onSelect={selectFrom}
                   onClear={() => { setFromLedger(''); setFromKind(null); }}
-                  sheetTitle="Select From Ledger"
-                  searchPlaceholder="Search cash / bank..."
+                  sheetTitle={t('screens.voucherCreateContra.selectFromLedger')}
+                  searchPlaceholder={t('screens.voucherCreateContra.searchCashBank')}
                   icon="log-out-outline"
                 />
               </View>
               <View style={s.div} />
               <View style={s.field}>
                 <BottomSheetSearch
-                  label="To Ledger"
+                  label={t('screens.voucherCreateContra.toLedger')}
                   required
-                  placeholder="e.g. HDFC Bank Account"
+                  placeholder={t('screens.voucherCreateContra.toPlaceholder')}
                   value={toLedger}
                   options={allPickers}
                   onSelect={selectTo}
                   onClear={() => { setToLedger(''); setToKind(null); }}
-                  sheetTitle="Select To Ledger"
-                  searchPlaceholder="Search cash / bank..."
+                  sheetTitle={t('screens.voucherCreateContra.selectToLedger')}
+                  searchPlaceholder={t('screens.voucherCreateContra.searchCashBank')}
                   icon="log-in-outline"
                 />
               </View>
@@ -340,15 +347,15 @@ export default function CreateContraVoucher() {
 
           {/* Amount + optional instrument */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Transaction Details</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreateContra.transactionDetails')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
-                <Text style={s.label}>Amount <Text style={s.req}>*</Text></Text>
+                <Text style={s.label}>{t('voucher.amount')} <Text style={s.req}>*</Text></Text>
                 <View style={s.inputWrap}>
                   <Text style={s.rupee}>{currencySymbol}</Text>
                   <TextInput
                     style={s.input}
-                    placeholder="Enter amount"
+                    placeholder={t('voucher.enterAmount')}
                     placeholderTextColor={COLORS.textTertiary}
                     value={amount}
                     onChangeText={setAmount}
@@ -360,12 +367,12 @@ export default function CreateContraVoucher() {
                 <>
                   <View style={s.div} />
                   <View style={s.field}>
-                    <Text style={s.label}>Reference No.</Text>
+                    <Text style={s.label}>{t('screens.voucherCreateContra.referenceNo')}</Text>
                     <View style={s.inputWrap}>
                       <Ionicons name="keypad-outline" size={16} color={COLORS.textTertiary} />
                       <TextInput
                         style={s.input}
-                        placeholder="Cheque / reference (optional)"
+                        placeholder={t('screens.voucherCreateContra.referencePlaceholder')}
                         placeholderTextColor={COLORS.textTertiary}
                         value={instrumentNo}
                         onChangeText={setInstrumentNo}
@@ -380,7 +387,7 @@ export default function CreateContraVoucher() {
           {/* Cash Count — always after amount (>0). Was hidden earlier when cash kind not detected. */}
           {amtNum > 0 && (
             <View style={s.section}>
-              <Text style={s.sectionTitle}>Cash Count</Text>
+              <Text style={s.sectionTitle}>{t('screens.voucherCreateContra.cashCount')}</Text>
               <TouchableOpacity
                 style={[
                   s.cashCard,
@@ -416,19 +423,19 @@ export default function CreateContraVoucher() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.cashTitle}>
-                      {cashCardState === 'none' && 'Not added'}
-                      {cashCardState === 'matched' && 'Matched'}
-                      {cashCardState === 'mismatch' && 'Mismatch'}
+                      {cashCardState === 'none' && t('screens.voucherCreateContra.notAdded')}
+                      {cashCardState === 'matched' && t('screens.voucherCreateContra.matched')}
+                      {cashCardState === 'mismatch' && t('screens.voucherCreateContra.mismatch')}
                     </Text>
                     <Text style={s.cashSub}>
-                      {cashCardState === 'none' && 'Optional — tap to add denomination'}
-                      {cashCardState === 'matched' && `${formatAmount(cashCount!.counted)} counted`}
-                      {cashCardState === 'mismatch' && `Counted ≠ ${formatAmount(amtNum)} — tap Fix`}
+                      {cashCardState === 'none' && t('screens.voucherCreateContra.cashOptionalHint')}
+                      {cashCardState === 'matched' && t('screens.voucherCreateContra.counted', { amount: formatAmount(cashCount!.counted) })}
+                      {cashCardState === 'mismatch' && t('screens.voucherCreateContra.countedMismatch', { amount: formatAmount(amtNum) })}
                     </Text>
                   </View>
                 </View>
                 <Text style={s.cashAction}>
-                  {cashCardState === 'mismatch' ? 'Fix' : cashCardState === 'matched' ? 'Edit' : 'Add'}
+                  {cashCardState === 'mismatch' ? t('screens.voucherCreateContra.fix') : cashCardState === 'matched' ? t('common.edit') : t('common.add')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -438,13 +445,13 @@ export default function CreateContraVoucher() {
             style={s.section}
             onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
           >
-            <Text style={s.sectionTitle}>Narration</Text>
+            <Text style={s.sectionTitle}>{t('voucher.narration')}</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
-                <Text style={s.label}>Notes</Text>
+                <Text style={s.label}>{t('screens.voucherCreateContra.notes')}</Text>
                 <TextInput
                   style={s.textarea}
-                  placeholder="Enter Notes"
+                  placeholder={t('screens.voucherCreateContra.enterNotes')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={narration}
                   onChangeText={setNarration}
@@ -507,7 +514,7 @@ export default function CreateContraVoucher() {
             <Ionicons name="checkmark-circle" size={48} color={COLORS.positive} />
             <Text style={s.successTitle}>{t('voucher.contraSaved')}</Text>
             <Text style={s.successSub}>
-              {submitResult?.isQueued ? 'Queued for Tally sync' : 'Posted to Tally'}
+              {submitResult?.isQueued ? t('screens.voucherCreateContra.queuedForSync') : t('screens.voucherCreateContra.postedToTally')}
             </Text>
             {!!submitResult?.tdkRef && <Text style={s.successRef}>{submitResult.tdkRef}</Text>}
             <TouchableOpacity
@@ -522,7 +529,7 @@ export default function CreateContraVoucher() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={s.btnPriTxt}>View Preview</Text>
+              <Text style={s.btnPriTxt}>{t('screens.voucherCreateContra.viewPreview')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
@@ -536,11 +543,11 @@ export default function CreateContraVoucher() {
                     documentType: 'contra_voucher',
                     onBeforeShare: () => setSharePdfLoading(false),
                     fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                      Toast.show({ type: 'info', text1: t('screens.voucherCreateContra.sharingNotAvailable') });
                     },
                   });
                 } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                  Toast.show({ type: 'error', text1: t('screens.voucherCreateContra.pdfError'), text2: err?.message || t('screens.voucherCreateContra.couldNotGeneratePdf') });
                 } finally {
                   setSharePdfLoading(false);
                 }
@@ -549,10 +556,10 @@ export default function CreateContraVoucher() {
               {sharePdfLoading
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={s.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+              <Text style={s.pdfBtnTxt}>{sharePdfLoading ? t('screens.voucherCreateContra.pdfCreating') : t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { setShowSuccess(false); router.back(); }} style={{ paddingVertical: 10 }}>
-              <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Done</Text>
+              <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

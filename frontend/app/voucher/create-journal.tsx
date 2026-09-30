@@ -60,9 +60,11 @@ export default function CreateJournalVoucher() {
 
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  useEffect(() => {
+  const [dateSyncedFor, setDateSyncedFor] = useState<{ entryType: typeof entryType } | null>(null);
+  if (!dateSyncedFor || dateSyncedFor.entryType !== entryType) {
+    setDateSyncedFor({ entryType });
     if (entryType === 'regular') setDate(todayStr());
-  }, [entryType]);
+  }
 
   const [ledgers, setLedgers] = useState<BSSOption[]>([]);
   const [drLedger, setDrLedger] = useState('');
@@ -86,47 +88,62 @@ export default function CreateJournalVoucher() {
   const [showRatePicker, setShowRatePicker] = useState(false);
   const [rateSearch, setRateSearch] = useState('');
 
-  const loadLedgers = useCallback(async () => {
-    if (!company?.guid) return;
-    try {
-      // Full company list for both By and To (Option A). High limit so picker isn't truncated.
-      const fyParams = selectedFY?.startDate && selectedFY?.endDate
-        ? { from: selectedFY.startDate, to: selectedFY.endDate }
-        : {};
-      const res: any = await getLedgers(company.guid, { limit: '2000', page: '1', ...fyParams });
-      const raw = res?.data ?? res?.rows ?? (Array.isArray(res) ? res : []);
-      const list = scopeParties(Array.isArray(raw) ? raw : []).map((l: any) => {
-        const close = parseFloat(l.closing_balance);
-        const hasClose = Number.isFinite(close);
-        const balHint = hasClose
-          ? `${fmtINR(Math.abs(close))} ${l.balance_type || ''}`.trim()
-          : null;
-        const parent = l.parent || l.group || '';
-        return {
-          label: l.name,
-          value: l.name,
-          subtitle: [parent, balHint].filter(Boolean).join(' · ') || undefined,
-          data: l,
-        };
-      }).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
-      setLedgers(list);
-    } catch {
-      setLedgers([]);
-    }
-  }, [company?.guid, selectedFY?.startDate, selectedFY?.endDate, scopeParties]);
+  const companyGuid = company?.guid;
+  const fyStartDate = selectedFY?.startDate;
+  const fyEndDate = selectedFY?.endDate;
+  const loadLedgers = useCallback(() => {
+    if (!companyGuid) return;
+    // Full company list for both By and To (Option A). High limit so picker isn't truncated.
+    const fyParams = fyStartDate && fyEndDate
+      ? { from: fyStartDate, to: fyEndDate }
+      : {};
+    getLedgers(companyGuid, { limit: '2000', page: '1', ...fyParams })
+      .then((res: any) => {
+        const raw = res?.data ?? res?.rows ?? (Array.isArray(res) ? res : []);
+        const list = scopeParties(Array.isArray(raw) ? raw : []).map((l: any) => {
+          const close = parseFloat(l.closing_balance);
+          const hasClose = Number.isFinite(close);
+          const balHint = hasClose
+            ? `${fmtINR(Math.abs(close))} ${l.balance_type || ''}`.trim()
+            : null;
+          const parent = l.parent || l.group || '';
+          return {
+            label: l.name,
+            value: l.name,
+            subtitle: [parent, balHint].filter(Boolean).join(' · ') || undefined,
+            data: l,
+          };
+        }).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
+        setLedgers(list);
+      })
+      .catch(() => {
+        setLedgers([]);
+      });
+  }, [companyGuid, fyStartDate, fyEndDate, scopeParties]);
 
   useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
   // Recalc amount from WDV × rate when not manually overridden
-  useEffect(() => {
-    if (!deprOn || amountManual) return;
-    const base = parseFloat(wdvBase) || 0;
-    const rate = parseFloat(ratePercent) || 0;
-    if (base > 0 && rate > 0) {
-      const calc = Math.round((base * rate) / 100 * 100) / 100;
-      setAmount(String(calc));
+  const [amountCalcFor, setAmountCalcFor] = useState<{
+    deprOn: boolean; wdvBase: string; ratePercent: string; amountManual: boolean;
+  } | null>(null);
+  if (
+    !amountCalcFor ||
+    amountCalcFor.deprOn !== deprOn ||
+    amountCalcFor.wdvBase !== wdvBase ||
+    amountCalcFor.ratePercent !== ratePercent ||
+    amountCalcFor.amountManual !== amountManual
+  ) {
+    setAmountCalcFor({ deprOn, wdvBase, ratePercent, amountManual });
+    if (deprOn && !amountManual) {
+      const base = parseFloat(wdvBase) || 0;
+      const rate = parseFloat(ratePercent) || 0;
+      if (base > 0 && rate > 0) {
+        const calc = Math.round((base * rate) / 100 * 100) / 100;
+        setAmount(String(calc));
+      }
     }
-  }, [deprOn, wdvBase, ratePercent, amountManual]);
+  }
 
   /** Credit picker in depr mode = Asset → fill editable Base from FY closing. */
   const selectCrLedger = (opt: BSSOption) => {
@@ -144,8 +161,8 @@ export default function CreateJournalVoucher() {
       setWdvBase('');
       Toast.show({
         type: 'info',
-        text1: 'No closing balance',
-        text2: 'Enter WDV / base amount manually.',
+        text1: t('screens.voucherCreateJournal.noClosingBalance'),
+        text2: t('screens.voucherCreateJournal.enterWdvManually'),
       });
     }
   };
@@ -171,18 +188,18 @@ export default function CreateJournalVoucher() {
 
   const canSubmit = useMemo(() => {
     if (deprOn) {
-      if (!crLedger) return 'Select Asset (Credit) ledger';
-      if (!drLedger) return 'Select Depreciation expense (Debit) ledger';
-      if (!(parseFloat(wdvBase) > 0)) return 'Enter WDV / base amount';
-      if (!(parseFloat(ratePercent) > 0)) return 'Select or enter depreciation %';
-      if (!(parseFloat(amount) > 0)) return 'Enter amount';
+      if (!crLedger) return t('screens.voucherCreateJournal.selectAssetLedger');
+      if (!drLedger) return t('screens.voucherCreateJournal.selectDeprLedger');
+      if (!(parseFloat(wdvBase) > 0)) return t('screens.voucherCreateJournal.enterWdv');
+      if (!(parseFloat(ratePercent) > 0)) return t('screens.voucherCreateJournal.selectDeprRate');
+      if (!(parseFloat(amount) > 0)) return t('voucher.enterAmount');
       return null;
     }
-    if (!drLedger) return 'Select Debit (By) ledger';
-    if (!crLedger) return 'Select Credit (To) ledger';
-    if (!(parseFloat(amount) > 0)) return 'Enter amount';
+    if (!drLedger) return t('screens.voucherCreateJournal.selectDebitLedger');
+    if (!crLedger) return t('screens.voucherCreateJournal.selectCreditLedger');
+    if (!(parseFloat(amount) > 0)) return t('voucher.enterAmount');
     return null;
-  }, [drLedger, crLedger, amount, deprOn, wdvBase, ratePercent]);
+  }, [drLedger, crLedger, amount, deprOn, wdvBase, ratePercent, t]);
 
   const handleSubmit = async () => {
     if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
@@ -222,7 +239,7 @@ export default function CreateJournalVoucher() {
       });
       setShowSuccess(true);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
+      Toast.show({ type: 'error', text1: t('screens.voucherCreateJournal.submitFailed'), text2: e?.message || t('screens.voucherCreateJournal.checkTallyConnection') });
     } finally {
       setSubmitting(false);
     }
@@ -275,12 +292,12 @@ export default function CreateJournalVoucher() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.fLabel}>{t('voucher.journalNo')}</Text>
                   <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
+                    <Text style={s.autoTxt}>{t('screens.voucherCreateJournal.auto')}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.req}>*</Text></Text>
                   {entryType === 'regular' ? (
                     <View style={[s.autoBox, { opacity: 0.55 }]}>
                       <Text style={s.autoTxt}>{date}</Text>
@@ -289,7 +306,7 @@ export default function CreateJournalVoucher() {
                   ) : (
                     <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                       <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
+                        {date || t('screens.voucherCreateJournal.selectDate')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -315,8 +332,8 @@ export default function CreateJournalVoucher() {
                   <Ionicons name="trending-down-outline" size={18} color={deprOn ? COLORS.positive : COLORS.textSecondary} />
                 </View>
                 <View style={{ flex: 1, flexShrink: 1 }}>
-                  <Text style={s.payNowTitle}>Depreciation on Asset</Text>
-                  <Text style={s.payNowSub}>Dr expense · Cr Asset · % of asset closing (WDV)</Text>
+                  <Text style={s.payNowTitle}>{t('screens.voucherCreateJournal.deprOnAsset')}</Text>
+                  <Text style={s.payNowSub}>{t('screens.voucherCreateJournal.deprOnAssetSub')}</Text>
                 </View>
               </View>
               <BrandSwitch
@@ -333,9 +350,9 @@ export default function CreateJournalVoucher() {
           {/* Dr / Cr summary */}
           <View style={s.drCrRow}>
             <View style={[s.drCrBox, { borderColor: COLORS.negative + '60', backgroundColor: COLORS.negativeBg }]}>
-              <Text style={[s.drCrLabel, { color: COLORS.negative }]}>Dr (By)</Text>
+              <Text style={[s.drCrLabel, { color: COLORS.negative }]}>{t('screens.voucherCreateJournal.drBy')}</Text>
               <Text style={[s.drCrValue, { color: COLORS.negative }]}>{amount ? fmtINR(parseFloat(amount) || 0) : '—'}</Text>
-              <Text style={s.drCrLedger} numberOfLines={2}>{drLedger || (deprOn ? 'Depreciation expense' : 'Debit ledger')}</Text>
+              <Text style={s.drCrLedger} numberOfLines={2}>{drLedger || (deprOn ? t('screens.voucherCreateJournal.deprExpense') : t('screens.voucherCreateJournal.debitLedger'))}</Text>
             </View>
             <View style={s.arrowBox}>
               <TouchableOpacity
@@ -344,74 +361,74 @@ export default function CreateJournalVoucher() {
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ opacity: (deprOn || (!drLedger && !crLedger)) ? 0.35 : 1 }}
-                accessibilityLabel="Swap debit and credit ledgers"
+                accessibilityLabel={t('screens.voucherCreateJournal.swapLedgers')}
               >
                 <Ionicons name="swap-horizontal" size={20} color={COLORS.brandPrimary} />
               </TouchableOpacity>
             </View>
             <View style={[s.drCrBox, { borderColor: COLORS.positive + '60', backgroundColor: COLORS.positiveBg }]}>
-              <Text style={[s.drCrLabel, { color: COLORS.positive }]}>Cr (To)</Text>
+              <Text style={[s.drCrLabel, { color: COLORS.positive }]}>{t('screens.voucherCreateJournal.crTo')}</Text>
               <Text style={[s.drCrValue, { color: COLORS.positive }]}>{amount ? fmtINR(parseFloat(amount) || 0) : '—'}</Text>
-              <Text style={s.drCrLedger} numberOfLines={2}>{crLedger || (deprOn ? 'Asset ledger' : 'Credit ledger')}</Text>
+              <Text style={s.drCrLedger} numberOfLines={2}>{crLedger || (deprOn ? t('screens.voucherCreateJournal.assetLedger') : t('screens.voucherCreateJournal.creditLedger'))}</Text>
             </View>
           </View>
 
           {/* Ledger entries FIRST — then depreciation calc (when on) */}
           <View style={s.card}>
-            <Text style={s.sectionTitle}>Ledger entries</Text>
+            <Text style={s.sectionTitle}>{t('screens.voucherCreateJournal.ledgerEntries')}</Text>
             {deprOn ? (
               <>
                 <BottomSheetSearch
-                  label="Credit — Asset (write-down)"
+                  label={t('screens.voucherCreateJournal.creditAssetLabel')}
                   required
-                  placeholder="e.g. Rolls Royal / Plant & Machinery"
+                  placeholder={t('screens.voucherCreateJournal.creditAssetPlaceholder')}
                   value={crLedger}
                   options={ledgers}
                   onSelect={selectCrLedger}
                   onClear={() => { setCrLedger(''); setWdvBase(''); setAssetClosingFetched(null); }}
-                  sheetTitle="Select Asset Ledger"
-                  searchPlaceholder="Search asset ledger…"
+                  sheetTitle={t('screens.voucherCreateJournal.selectAssetLedgerTitle')}
+                  searchPlaceholder={t('screens.voucherCreateJournal.searchAssetLedger')}
                   icon="add-circle-outline"
                 />
                 <View style={{ height: 10 }} />
                 <BottomSheetSearch
-                  label="Debit — Depreciation expense"
+                  label={t('screens.voucherCreateJournal.debitDeprLabel')}
                   required
-                  placeholder="e.g. Depreciation"
+                  placeholder={t('screens.voucherCreateJournal.debitDeprPlaceholder')}
                   value={drLedger}
                   options={ledgers}
                   onSelect={(opt) => setDrLedger(opt.value)}
                   onClear={() => setDrLedger('')}
-                  sheetTitle="Select Depreciation Expense"
-                  searchPlaceholder="Search expense ledger…"
+                  sheetTitle={t('screens.voucherCreateJournal.selectDeprExpenseTitle')}
+                  searchPlaceholder={t('screens.voucherCreateJournal.searchExpenseLedger')}
                   icon="remove-circle-outline"
                 />
               </>
             ) : (
               <>
                 <BottomSheetSearch
-                  label="Debit ledger (By)"
+                  label={t('screens.voucherCreateJournal.debitLedgerBy')}
                   required
-                  placeholder="Search ledger"
+                  placeholder={t('screens.voucherCreateJournal.searchLedger')}
                   value={drLedger}
                   options={ledgers}
                   onSelect={(opt) => setDrLedger(opt.value)}
                   onClear={() => setDrLedger('')}
-                  sheetTitle="Select Debit Ledger"
-                  searchPlaceholder="Search ledger…"
+                  sheetTitle={t('screens.voucherCreateJournal.selectDebitLedgerTitle')}
+                  searchPlaceholder={t('screens.voucherCreateJournal.searchLedgerEllipsis')}
                   icon="remove-circle-outline"
                 />
                 <View style={{ height: 10 }} />
                 <BottomSheetSearch
-                  label="Credit ledger (To)"
+                  label={t('screens.voucherCreateJournal.creditLedgerTo')}
                   required
-                  placeholder="Search ledger"
+                  placeholder={t('screens.voucherCreateJournal.searchLedger')}
                   value={crLedger}
                   options={ledgers}
                   onSelect={(opt) => setCrLedger(opt.value)}
                   onClear={() => setCrLedger('')}
-                  sheetTitle="Select Credit Ledger"
-                  searchPlaceholder="Search ledger…"
+                  sheetTitle={t('screens.voucherCreateJournal.selectCreditLedgerTitle')}
+                  searchPlaceholder={t('screens.voucherCreateJournal.searchLedgerEllipsis')}
                   icon="add-circle-outline"
                 />
               </>
@@ -420,15 +437,15 @@ export default function CreateJournalVoucher() {
 
           {deprOn && (
             <View style={s.card}>
-              <Text style={s.sectionTitle}>Depreciation calc</Text>
-              <Text style={s.hint}>Base fills from the Asset closing above — you can still edit it.</Text>
+              <Text style={s.sectionTitle}>{t('screens.voucherCreateJournal.deprCalc')}</Text>
+              <Text style={s.hint}>{t('screens.voucherCreateJournal.deprCalcHint')}</Text>
 
-              <Text style={[s.fieldLbl, { marginTop: 8 }]}>Base (WDV) <Text style={s.req}>*</Text></Text>
+              <Text style={[s.fieldLbl, { marginTop: 8 }]}>{t('screens.voucherCreateJournal.baseWdv')} <Text style={s.req}>*</Text></Text>
               <View style={s.inputWrap}>
                 <Text style={s.rupee}>₹</Text>
                 <TextInput
                   style={s.input}
-                  placeholder="From asset closing / enter manually"
+                  placeholder={t('screens.voucherCreateJournal.basePlaceholder')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={wdvBase}
                   onChangeText={(t) => { setWdvBase(t); setAmountManual(false); }}
@@ -437,24 +454,24 @@ export default function CreateJournalVoucher() {
               </View>
               {assetClosingFetched != null && (
                 <Text style={s.calcHint}>
-                  From ledger closing: {fmtINR(assetClosingFetched)} (editable)
+                  {t('screens.voucherCreateJournal.fromLedgerClosing', { amount: fmtINR(assetClosingFetched) })}
                 </Text>
               )}
 
-              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Asset block / rate <Text style={s.req}>*</Text></Text>
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>{t('screens.voucherCreateJournal.assetBlockRate')} <Text style={s.req}>*</Text></Text>
               <TouchableOpacity style={s.pickerBtn} onPress={() => setShowRatePicker(true)} activeOpacity={0.7}>
                 <Ionicons name="list-outline" size={16} color={COLORS.brandPrimary} />
                 <Text style={[s.pickerTxt, !rateBlock && { color: COLORS.textTertiary }]} numberOfLines={2}>
-                  {rateBlock ? `${rateBlock.displayName} (${rateBlock.ratePercent}%)` : 'Select Income-tax block'}
+                  {rateBlock ? `${rateBlock.displayName} (${rateBlock.ratePercent}%)` : t('screens.voucherCreateJournal.selectItBlock')}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={COLORS.textTertiary} />
               </TouchableOpacity>
 
-              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Rate % <Text style={s.req}>*</Text></Text>
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>{t('screens.voucherCreateJournal.ratePercent')} <Text style={s.req}>*</Text></Text>
               <View style={s.inputWrap}>
                 <TextInput
                   style={s.input}
-                  placeholder="e.g. 15"
+                  placeholder={t('screens.voucherCreateJournal.ratePlaceholder')}
                   placeholderTextColor={COLORS.textTertiary}
                   value={ratePercent}
                   onChangeText={(t) => { setRatePercent(t); setAmountManual(false); }}
@@ -472,12 +489,12 @@ export default function CreateJournalVoucher() {
 
           {/* Amount */}
           <View style={s.card}>
-            <Text style={s.sectionTitle}>Amount</Text>
+            <Text style={s.sectionTitle}>{t('voucher.amount')}</Text>
             <View style={s.inputWrap}>
               <Text style={s.rupee}>₹</Text>
               <TextInput
                 style={s.input}
-                placeholder="Enter amount"
+                placeholder={t('voucher.enterAmount')}
                 placeholderTextColor={COLORS.textTertiary}
                 value={amount}
                 onChangeText={(t) => { setAmount(t); if (deprOn) setAmountManual(true); }}
@@ -486,7 +503,7 @@ export default function CreateJournalVoucher() {
             </View>
             {deprOn && amountManual && (
               <TouchableOpacity onPress={() => setAmountManual(false)} style={{ marginTop: 8 }}>
-                <Text style={s.linkTxt}>Recalculate from WDV × %</Text>
+                <Text style={s.linkTxt}>{t('screens.voucherCreateJournal.recalculate')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -496,10 +513,10 @@ export default function CreateJournalVoucher() {
             style={s.card}
             onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
           >
-            <Text style={s.sectionTitle}>Narration</Text>
+            <Text style={s.sectionTitle}>{t('voucher.narration')}</Text>
             <TextInput
               style={s.textarea}
-              placeholder="Notes (optional)"
+              placeholder={t('screens.voucherCreateJournal.notesOptional')}
               placeholderTextColor={COLORS.textTertiary}
               value={narration}
               onChangeText={setNarration}
@@ -543,14 +560,14 @@ export default function CreateJournalVoucher() {
             <TouchableOpacity onPress={() => setShowRatePicker(false)} style={s.back}>
               <Ionicons name="close" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            <Text style={s.hdrTitle}>Depreciation rates</Text>
+            <Text style={s.hdrTitle}>{t('screens.voucherCreateJournal.deprRates')}</Text>
             <View style={{ width: 36 }} />
           </View>
           <View style={s.search}>
             <Ionicons name="search" size={16} color={COLORS.textTertiary} />
             <TextInput
               style={s.searchIn}
-              placeholder="Search block or %"
+              placeholder={t('screens.voucherCreateJournal.searchBlock')}
               placeholderTextColor={COLORS.textTertiary}
               value={rateSearch}
               onChangeText={setRateSearch}
@@ -586,75 +603,77 @@ export default function CreateJournalVoucher() {
         onRequestClose={() => { setShowSuccess(false); router.back(); }}
       >
         <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
+          {submitResult && (
+            <View style={ss.card}>
+              <View style={ss.iconWrap}>
+                <Ionicons
+                  name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                  size={56}
+                  color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                />
+              </View>
+              <Text style={ss.title}>{submitResult.isQueued ? t('voucher.journalQueued') : t('voucher.journalSubmitted')}</Text>
+              <Text style={ss.sub}>
+                {submitResult.isQueued
+                  ? t('screens.voucherCreateJournal.entryQueued')
+                  : t('voucher.journalPushed')}
+              </Text>
+              {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+                <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreateJournal.voucherNo')}</Text>
+                  <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                </View>
+              )}
+              {!!submitResult.tdkRef && (
+                <View style={ss.refBadge}>
+                  <Text style={ss.refLabel}>{t('screens.voucherCreateJournal.referenceNo')}</Text>
+                  <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={ss.previewBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (!submitResult?.tdkRef) return;
+                  setShowSuccess(false);
+                  router.replace(`/voucher/journal-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                }}
+              >
+                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={ss.previewBtnTxt}>{t('screens.voucherCreateJournal.preview')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+                activeOpacity={0.85}
+                disabled={sharePdfLoading}
+                onPress={async () => {
+                  if (!submitResult.tdkRef || !company?.guid) return;
+                  setSharePdfLoading(true);
+                  try {
+                    await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                      documentType: 'journal_voucher',
+                      onBeforeShare: () => setSharePdfLoading(false),
+                      fallback: async () => {
+                        Toast.show({ type: 'info', text1: t('screens.voucherCreateJournal.sharingUnavailable') });
+                      },
+                    });
+                  } catch (err: any) {
+                    Toast.show({ type: 'error', text1: t('screens.voucherCreateJournal.pdfError'), text2: err?.message || t('screens.voucherCreateJournal.couldNotGeneratePdf') });
+                  } finally {
+                    setSharePdfLoading(false);
+                  }
+                }}
+              >
+                {sharePdfLoading
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+                <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? t('screens.voucherCreateJournal.pdfCreating') : t('pdf.sharePdf')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+                <Text style={ss.closeBtnTxt}>{t('common.close')}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? t('voucher.journalQueued') : t('voucher.journalSubmitted')}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : t('voucher.journalPushed')}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Voucher No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult?.tdkRef) return;
-                setShowSuccess(false);
-                router.replace(`/voucher/journal-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
-                setSharePdfLoading(true);
-                try {
-                  await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
-                    documentType: 'journal_voucher',
-                    onBeforeShare: () => setSharePdfLoading(false),
-                    fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                    },
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
-              <Text style={ss.closeBtnTxt}>Close</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
       </Modal>
     </SafeAreaView>

@@ -15,19 +15,19 @@ import { useTranslation } from 'react-i18next';
 const SW = Dimensions.get('window').width;
 const ACCENT = '#A89060';
 
-interface ReportItem { id: string; label: string; desc: string; icon: string; route: string; }
+interface ReportItem { id: string; labelKey: string; descKey: string; icon: string; route: string; }
 const REPORTS: ReportItem[] = [
-  { id: 'stock-ledger', label: 'Stock Ledger',              desc: 'Item-wise inward & outward log',   icon: 'book-outline',            route: '/stocks/stock-ledger' },
-  { id: 'valuation',    label: 'Valuation Summary',         desc: 'Total stock value by category',    icon: 'document-text-outline',   route: '/stocks/valuation-summary' },
-  { id: 'expiry',       label: 'Expiry Schedule',           desc: 'Items expiring by date',           icon: 'timer-outline',           route: '/stocks/expiry-schedule' },
-  { id: 'fast-slow',    label: 'Fast vs Slow Moving',       desc: 'Velocity analysis of all SKUs',    icon: 'swap-horizontal-outline', route: '/stocks/fast-slow' },
-  { id: 'hsn-validation', label: 'HSN Validation',         desc: 'Items with missing or unknown HSN', icon: 'shield-checkmark-outline', route: '/stocks/hsn-validation' },
-  { id: 'transfer',     label: 'Transfer History',          desc: 'Inter-warehouse stock transfers',  icon: 'repeat-outline',          route: '/stocks/transfer-history' },
-  { id: 'snapshot',     label: 'Stock Snapshot',            desc: 'Point-in-time stock position',     icon: 'camera-outline',          route: '/stocks/stock-snapshot' },
-  { id: 'negative',     label: 'Negative Stock Exceptions', desc: 'Items with below-zero quantities', icon: 'alert-circle-outline',    route: '/stocks/negative-stock' },
+  { id: 'stock-ledger', labelKey: 'stocks.stockLedger',          descKey: 'screens.stocksReports.stockLedgerDesc',   icon: 'book-outline',            route: '/stocks/stock-ledger' },
+  { id: 'valuation',    labelKey: 'stocks.valuation',            descKey: 'screens.stocksReports.valuationDesc',     icon: 'document-text-outline',   route: '/stocks/valuation-summary' },
+  { id: 'expiry',       labelKey: 'stocks.expirySchedule',       descKey: 'screens.stocksReports.expiryDesc',        icon: 'timer-outline',           route: '/stocks/expiry-schedule' },
+  { id: 'fast-slow',    labelKey: 'screens.stocksReports.fastVsSlow',           descKey: 'screens.stocksReports.fastVsSlowDesc',    icon: 'swap-horizontal-outline', route: '/stocks/fast-slow' },
+  { id: 'hsn-validation', labelKey: 'screens.stocksReports.hsnValidation',      descKey: 'screens.stocksReports.hsnValidationDesc', icon: 'shield-checkmark-outline', route: '/stocks/hsn-validation' },
+  { id: 'transfer',     labelKey: 'stocks.transferHistory',      descKey: 'screens.stocksReports.transferDesc',      icon: 'repeat-outline',          route: '/stocks/transfer-history' },
+  { id: 'snapshot',     labelKey: 'screens.stocksReports.stockSnapshot',        descKey: 'screens.stocksReports.stockSnapshotDesc', icon: 'camera-outline',          route: '/stocks/stock-snapshot' },
+  { id: 'negative',     labelKey: 'screens.stocksReports.negativeExceptions',   descKey: 'screens.stocksReports.negativeDesc',      icon: 'alert-circle-outline',    route: '/stocks/negative-stock' },
 ];
 
-function TrendAreaChart({ data }: { data: { label: string; value: number }[] }) {
+function TrendAreaChart({ data, emptyText }: { data: { label: string; value: number }[]; emptyText: string }) {
   const [sel, setSel] = useState(Math.max(0, data.length - 1));
   const W = SW - SPACING.md * 2 - SPACING.md * 2;
   const H = 120;
@@ -35,7 +35,7 @@ function TrendAreaChart({ data }: { data: { label: string; value: number }[] }) 
   if (!data.length) {
     return (
       <View style={{ height: H + 22, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.xs }}>No trend data yet</Text>
+        <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.xs }}>{emptyText}</Text>
       </View>
     );
   }
@@ -119,15 +119,17 @@ function Donut({ data, selected, onSelect, size = 128, stroke = 20 }: {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;
-  let offset = 0;
+  const lens = data.map((d) => (d.value / total) * C);
+  const offsets = lens.map((_, i) => lens.slice(0, i).reduce((sum, len) => sum + len, 0));
   return (
     <Svg width={size} height={size}>
       <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={COLORS.borderDefault} strokeWidth={stroke} fill="none" />
         {data.map((d, i) => {
-          const len = (d.value / total) * C;
+          const len = lens[i];
+          const offset = offsets[i];
           const active = selected === null || selected === i;
-          const el = (
+          return (
             <Circle
               key={i}
               cx={size / 2}
@@ -143,8 +145,6 @@ function Donut({ data, selected, onSelect, size = 128, stroke = 20 }: {
               onPress={() => onSelect(i)}
             />
           );
-          offset += len;
-          return el;
         })}
       </G>
     </Svg>
@@ -163,21 +163,37 @@ export default function StockReportsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selCat, setSelCat] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  const fetchDashboard = useCallback(() => {
+    if (!companyGuid) return;
+    getStockDashboard(companyGuid)
+      .then((res) => {
+        setData(res?.data ?? res);
+      })
+      .catch((err: any) => {
+        setApiError(err?.message || t('screens.stocksReports.loadFailed'));
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [companyGuid, t]);
+
+  const load = useCallback(() => {
     if (!companyGuid) return;
     setApiError(null);
     setIsLoading(true);
-    try {
-      const res = await getStockDashboard(companyGuid);
-      setData(res?.data ?? res);
-    } catch (err: any) {
-      setApiError(err?.message || 'Failed to load stock reports');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [companyGuid]);
+    fetchDashboard();
+  }, [companyGuid, fetchDashboard]);
 
-  useEffect(() => { load(); }, [load]);
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== companyGuid) {
+    setLoadDeps([companyGuid]);
+    if (companyGuid) {
+      setApiError(null);
+      setIsLoading(true);
+    }
+  }
+
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
   const composition = Array.isArray(data?.composition) ? data.composition : [];
   const trend = Array.isArray(data?.trend) ? data.trend : [];
@@ -186,7 +202,7 @@ export default function StockReportsScreen() {
   const fmtL = (v: number) => formatAmountCompact(Math.round(v));
 
   const centerVal = selCat === null ? fmtL(compTotal) : fmtL(composition[selCat]?.value || 0);
-  const centerLbl = selCat === null ? 'Total' : composition[selCat]?.label;
+  const centerLbl = selCat === null ? t('sales.total') : composition[selCat]?.label;
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -209,27 +225,27 @@ export default function StockReportsScreen() {
             <View style={s.sumCell}>
               <View style={[s.sumDot, { backgroundColor: ACCENT }]} />
               <Text style={s.sumValue}>{formatAmountCompact(Math.round(Number(data?.totalValue) || 0))}</Text>
-              <Text style={s.sumLabel}>Total Value</Text>
+              <Text style={s.sumLabel}>{t('screens.stocksReports.totalValue')}</Text>
             </View>
             <View style={s.sumSep} />
             <View style={s.sumCell}>
               <View style={[s.sumDot, { backgroundColor: COLORS.warning }]} />
               <Text style={s.sumValue}>{Number(data?.totalItems ?? 0).toLocaleString('en-IN')}</Text>
-              <Text style={s.sumLabel}>SKUs</Text>
+              <Text style={s.sumLabel}>{t('screens.stocksReports.skus')}</Text>
             </View>
             <View style={s.sumSep} />
             <View style={s.sumCell}>
               <View style={[s.sumDot, { backgroundColor: COLORS.positive }]} />
               <Text style={s.sumValue}>{data?.turnover ?? '0x'}</Text>
-              <Text style={s.sumLabel}>Turnover</Text>
+              <Text style={s.sumLabel}>{t('screens.stocksReports.turnover')}</Text>
             </View>
           </View>
 
           <View style={s.card}>
             <View style={s.cardHead}>
               <View>
-                <Text style={s.cardTitle}>Stock Value Trend</Text>
-                <Text style={s.cardSub}>Tap a point to see its value</Text>
+                <Text style={s.cardTitle}>{t('screens.stocksReports.stockValueTrend')}</Text>
+                <Text style={s.cardSub}>{t('screens.stocksReports.tapPoint')}</Text>
               </View>
               <View style={[s.trendPill, { backgroundColor: data?.valueTrendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
                 <Ionicons
@@ -242,12 +258,12 @@ export default function StockReportsScreen() {
                 </Text>
               </View>
             </View>
-            <TrendAreaChart data={trend} />
+            <TrendAreaChart data={trend} emptyText={t('screens.stocksReports.noTrendData')} />
           </View>
 
           {composition.length > 0 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>Value by Category</Text>
+              <Text style={s.cardTitle}>{t('screens.stocksReports.valueByCategory')}</Text>
               <View style={s.donutRow}>
                 <View style={s.donutWrap}>
                   <Donut data={composition} selected={selCat} onSelect={toggleCat} />
@@ -278,7 +294,7 @@ export default function StockReportsScreen() {
             </View>
           )}
 
-          <Text style={s.sectionLabel}>All Reports</Text>
+          <Text style={s.sectionLabel}>{t('screens.stocksReports.allReports')}</Text>
           <View style={s.listCard}>
             {REPORTS.map((item, idx) => (
               <View key={item.id}>
@@ -287,8 +303,8 @@ export default function StockReportsScreen() {
                     <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
                   </View>
                   <View style={s.rowInfo}>
-                    <Text style={s.rowLabel}>{item.label}</Text>
-                    <Text style={s.rowDesc}>{item.desc}</Text>
+                    <Text style={s.rowLabel}>{t(item.labelKey)}</Text>
+                    <Text style={s.rowDesc}>{t(item.descKey)}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
                 </TouchableOpacity>

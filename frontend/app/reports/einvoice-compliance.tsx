@@ -8,11 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Path, Circle, Rect, Line, Text as SvgText, G } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getEInvoiceStatus } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 
 const { width: W } = Dimensions.get('window');
@@ -31,6 +33,7 @@ const Y_LEVELS  = [0, 25, 50, 75, 100];
 function EInvDonut({ generated, pending, errors, cancelled }: {
   generated: number; pending: number; errors: number; cancelled: number;
 }) {
+  const { t } = useTranslation();
   const total = generated + pending + errors + cancelled;
   const r = DONUT_W * 0.38; const ir = DONUT_W * 0.26;
   const cx = DONUT_W / 2;   const cy = DONUT_W / 2;
@@ -41,7 +44,7 @@ function EInvDonut({ generated, pending, errors, cancelled }: {
         <Circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.borderDefault} strokeWidth={r - ir} />
         <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
         <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textTertiary}>0</SvgText>
-        <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>Total</SvgText>
+        <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>{t('screens.reportsEinvoiceCompliance.total')}</SvgText>
       </Svg>
     );
   }
@@ -69,7 +72,7 @@ function EInvDonut({ generated, pending, errors, cancelled }: {
       })}
       <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
       <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textPrimary}>{total}</SvgText>
-      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>Total</SvgText>
+      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>{t('screens.reportsEinvoiceCompliance.total')}</SvgText>
     </Svg>
   );
 }
@@ -106,6 +109,7 @@ function EInvBarChart({ data }: { data: number[] }) {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EInvoiceComplianceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const { formatDate } = useSettings();
@@ -116,14 +120,19 @@ export default function EInvoiceComplianceScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [einvStatus,     setEinvStatus]     = useState<any>(null);
 
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState(`${fyFrom}|${fyTo}`);
+  if (prevFyRange !== `${fyFrom}|${fyTo}`) {
+    setPrevFyRange(`${fyFrom}|${fyTo}`);
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
+
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -135,10 +144,16 @@ export default function EInvoiceComplianceScreen() {
     } else if (fyParam) {
       params.fy = fyParam;
     }
+    let cancelled = false;
     getEInvoiceStatus(company.guid, params)
-      .then((res: any) => { if (res?.data) setEinvStatus(res.data); })
-      .catch(() => {});
-  }, [company?.guid, selectedFY, fromDate, toDate]);
+      .then((res: any) => {
+        if (cancelled) return;
+        if (res?.data) { setEinvStatus(res.data); setLoadError(null); }
+        else setLoadError(t('screens.reportsEinvoiceCompliance.loadFailed'));
+      })
+      .catch((err: any) => { if (!cancelled) setLoadError(err?.message || t('screens.reportsEinvoiceCompliance.loadFailed')); });
+    return () => { cancelled = true; };
+  }, [company?.guid, selectedFY, fromDate, toDate, reloadKey, t]);
 
   const generatedCount = einvStatus?.generated_count  ?? 0;
   const pendingCount   = einvStatus?.pending_count    ?? 0;
@@ -146,10 +161,10 @@ export default function EInvoiceComplianceScreen() {
   const errorCount     = einvStatus?.error_count      ?? 0;
 
   const donutSegs = [
-    { label: 'Generated', count: generatedCount, color: '#2D7D46' },
-    { label: 'Pending',   count: pendingCount,   color: '#D97706' },
-    { label: 'Errors',    count: errorCount,     color: '#DC2626' },
-    { label: 'Cancelled', count: cancelledCount, color: '#6B7280' },
+    { label: t('screens.reportsEinvoiceCompliance.generated'), count: generatedCount, color: '#2D7D46' },
+    { label: t('screens.reportsEinvoiceCompliance.pending'),   count: pendingCount,   color: '#D97706' },
+    { label: t('screens.reportsEinvoiceCompliance.errors'),    count: errorCount,     color: '#DC2626' },
+    { label: t('screens.reportsEinvoiceCompliance.cancelled'), count: cancelledCount, color: '#6B7280' },
   ];
 
   return (
@@ -160,7 +175,7 @@ export default function EInvoiceComplianceScreen() {
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>E-Invoicing</Text>
+        <Text style={s.headerTitle}>{t('screens.reportsEinvoiceCompliance.title')}</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20}
             color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
@@ -172,7 +187,7 @@ export default function EInvoiceComplianceScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : t('screens.reportsEinvoiceCompliance.allDates')}
         </Text>
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
@@ -183,29 +198,30 @@ export default function EInvoiceComplianceScreen() {
       </TouchableOpacity>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+        {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
 
         {/* ── KPI Stats 2×2 ──────────────────────────────────────────────── */}
         <View style={s.statsCard}>
           <View style={s.statsRow}>
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Pending IRN</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEinvoiceCompliance.pendingIrn')}</Text>
               <Text style={[s.statValue, { color: pendingCount > 0 ? '#D97706' : COLORS.textPrimary }]}>{pendingCount}</Text>
             </View>
             <View style={s.statDivV} />
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Errors</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEinvoiceCompliance.errors')}</Text>
               <Text style={[s.statValue, { color: errorCount > 0 ? '#DC2626' : COLORS.textPrimary }]}>{errorCount}</Text>
             </View>
           </View>
           <View style={s.statDivH} />
           <View style={s.statsRow}>
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Cancelled</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEinvoiceCompliance.cancelled')}</Text>
               <Text style={s.statValue}>{cancelledCount}</Text>
             </View>
             <View style={s.statDivV} />
             <View style={s.statCell}>
-              <Text style={s.statLabel}>Generated</Text>
+              <Text style={s.statLabel}>{t('screens.reportsEinvoiceCompliance.generated')}</Text>
               <Text style={[s.statValue, { color: generatedCount > 0 ? '#2D7D46' : COLORS.textPrimary }]}>{generatedCount}</Text>
             </View>
           </View>
@@ -217,7 +233,7 @@ export default function EInvoiceComplianceScreen() {
           onPress={() => safePush(router, '/reports/einvoice-list' as any)}
           activeOpacity={0.85}
         >
-          <Text style={s.generatedBtnTxt}>Generated  {generatedCount}</Text>
+          <Text style={s.generatedBtnTxt}>{t('screens.reportsEinvoiceCompliance.generatedCount', { count: generatedCount })}</Text>
           <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
         </TouchableOpacity>
 
@@ -246,10 +262,10 @@ export default function EInvoiceComplianceScreen() {
 
         {/* ── Bar Chart ──────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>IRNs Generated Per Day</Text>
+          <Text style={s.cardTitle}>{t('screens.reportsEinvoiceCompliance.irnsPerDay')}</Text>
           <EInvBarChart data={[]} />
           {generatedCount === 0 && (
-            <Text style={s.chartEmptyTxt}>No IRNs generated in this period</Text>
+            <Text style={s.chartEmptyTxt}>{t('screens.reportsEinvoiceCompliance.noIrns')}</Text>
           )}
         </View>
 
@@ -260,7 +276,7 @@ export default function EInvoiceComplianceScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="open-outline" size={16} color={COLORS.white} />
-          <Text style={s.viewDetailsTxt}>View on NIC Portal</Text>
+          <Text style={s.viewDetailsTxt}>{t('screens.reportsEinvoiceCompliance.viewOnNic')}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -272,7 +288,7 @@ export default function EInvoiceComplianceScreen() {
         toDate={toDate || fyTo}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}
-        onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
+        onApply={(f, to) => { if (f && to) { setFromDate(f); setToDate(to); } }}
         onClose={() => setShowDatePicker(false)}
       />
     </SafeAreaView>

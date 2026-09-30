@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BottomSheetSearch, { BSSOption } from './BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate, TaxLedgerOption } from '../../utils/taxLedgerHelpers';
@@ -77,6 +78,7 @@ export default function LogisticsSection({
   onRoundOffLedgerChange = () => {},
   onRoundOffAmountChange = () => {},
 }: Props) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const chargesTotal = entries.reduce((sum, e) => {
     const base = parseFloat(e.amount) || 0;
@@ -194,11 +196,11 @@ export default function LogisticsSection({
             <MaterialCommunityIcons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
           </View>
           <View>
-            <Text style={ls.headerTitle}>Logistics & Shipping</Text>
+            <Text style={ls.headerTitle}>{t('screens.componentsFormsLogisticsSection.title')}</Text>
             <Text style={ls.headerSub}>
               {entries.length > 0
-                ? `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ₹${chargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                : 'Freight, packing, other charges'}
+                ? t(entries.length === 1 ? 'screens.componentsFormsLogisticsSection.entrySummaryOne' : 'screens.componentsFormsLogisticsSection.entrySummaryMany', { count: entries.length, amount: chargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }) })
+                : t('screens.componentsFormsLogisticsSection.emptySub')}
             </Text>
           </View>
         </View>
@@ -222,8 +224,8 @@ export default function LogisticsSection({
                       value={entry.ledgerName}
                       onSelect={opt => updateEntry(entry.id, 'ledgerName', opt.value)}
                       onClear={() => updateEntry(entry.id, 'ledgerName', '')}
-                      placeholder="Select charge ledger..."
-                      sheetTitle="Charge Ledger"
+                      placeholder={t('screens.componentsFormsLogisticsSection.selectChargeLedger')}
+                      sheetTitle={t('screens.componentsFormsLogisticsSection.chargeLedger')}
                     />
                   </View>
                   <TextInput
@@ -231,7 +233,7 @@ export default function LogisticsSection({
                     value={entry.amount}
                     onChangeText={v => updateEntry(entry.id, 'amount', v)}
                     keyboardType="numeric"
-                    placeholder="₹ Amount"
+                    placeholder={t('screens.componentsFormsLogisticsSection.amountPlaceholder')}
                     placeholderTextColor={COLORS.textTertiary}
                   />
                   <TouchableOpacity onPress={() => removeEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -248,7 +250,7 @@ export default function LogisticsSection({
                   <View style={[ls.checkbox, entry.addTaxes && ls.checkboxActive]}>
                     {entry.addTaxes && <Ionicons name="checkmark" size={10} color={COLORS.white} />}
                   </View>
-                  <Text style={ls.checkboxLabel}>Add Taxes to this charge</Text>
+                  <Text style={ls.checkboxLabel}>{t('screens.componentsFormsLogisticsSection.addTaxes')}</Text>
                 </TouchableOpacity>
 
                 {/* Tax sub-rows */}
@@ -278,8 +280,8 @@ export default function LogisticsSection({
                                     : e
                                 ));
                               }}
-                              placeholder="Select tax ledger..."
-                              sheetTitle="Tax Ledger"
+                              placeholder={t('screens.componentsFormsLogisticsSection.selectTaxLedger')}
+                              sheetTitle={t('screens.componentsFormsLogisticsSection.taxLedger')}
                             />
                           </View>
                           <TouchableOpacity onPress={() => removeTaxEntry(entry.id, taxEntry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
@@ -289,7 +291,7 @@ export default function LogisticsSection({
                         {/* Row 2: Rate % → ₹ Amount */}
                         <View style={ls.taxEntryBottomRow}>
                           <View style={ls.taxFieldGroup}>
-                            <Text style={ls.taxMiniLbl}>Rate</Text>
+                            <Text style={ls.taxMiniLbl}>{t('pdf.rate')}</Text>
                             <View style={ls.taxFieldInputRow}>
                               <TextInput
                                 style={ls.taxRateInput}
@@ -309,7 +311,7 @@ export default function LogisticsSection({
                           </View>
                           <Ionicons name="arrow-forward-outline" size={12} color={COLORS.textTertiary} style={{ marginTop: 14 }} />
                           <View style={[ls.taxFieldGroup, { flex: 1 }]}>
-                            <Text style={ls.taxMiniLbl}>Amount</Text>
+                            <Text style={ls.taxMiniLbl}>{t('pdf.amount')}</Text>
                             <View style={ls.taxFieldInputRow}>
                               <Text style={ls.taxRateSign}>₹</Text>
                               <TextInput
@@ -327,7 +329,7 @@ export default function LogisticsSection({
                     ))}
                     <TouchableOpacity style={ls.addTaxBtn} onPress={() => addTaxEntry(entry.id)} activeOpacity={0.7}>
                       <Ionicons name="add-circle-outline" size={14} color={COLORS.info} />
-                      <Text style={ls.addTaxTxt}>+ Add Tax Row</Text>
+                      <Text style={ls.addTaxTxt}>{t('screens.componentsFormsLogisticsSection.addTaxRow')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -338,15 +340,15 @@ export default function LogisticsSection({
           {/* Add Logistics Row button */}
           <TouchableOpacity style={ls.addEntryBtn} onPress={addEntry} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={16} color={COLORS.warning} />
-            <Text style={ls.addEntryTxt}>+ Add Logistics Charge</Text>
+            <Text style={ls.addEntryTxt}>{t('screens.componentsFormsLogisticsSection.addCharge')}</Text>
           </TouchableOpacity>
 
           {/* ── Round Off (separate line item) ── */}
           <View style={ls.roundOffSection}>
             <View style={ls.roundOffHdr}>
               <Ionicons name="refresh-outline" size={13} color={COLORS.textSecondary} />
-              <Text style={ls.roundOffTitle}>Round Off</Text>
-              <Text style={ls.roundOffHint}>Separate ledger entry — not bundled with charges</Text>
+              <Text style={ls.roundOffTitle}>{t('pdf.roundOff')}</Text>
+              <Text style={ls.roundOffHint}>{t('screens.componentsFormsLogisticsSection.roundOffHint')}</Text>
             </View>
             <View style={ls.roundOffRow}>
               <View style={{ flex: 1 }}>
@@ -356,8 +358,8 @@ export default function LogisticsSection({
                   value={roundOffLedger}
                   onSelect={opt => onRoundOffLedgerChange(opt.value)}
                   onClear={() => { onRoundOffLedgerChange(''); onRoundOffAmountChange(''); }}
-                  placeholder="Select round-off ledger..."
-                  sheetTitle="Round Off Ledger"
+                  placeholder={t('screens.componentsFormsLogisticsSection.selectRoundOff')}
+                  sheetTitle={t('screens.componentsFormsLogisticsSection.roundOffLedger')}
                 />
               </View>
               <TextInput
@@ -365,7 +367,7 @@ export default function LogisticsSection({
                 value={roundOffAmount}
                 onChangeText={onRoundOffAmountChange}
                 keyboardType="numeric"
-                placeholder="±₹ Amount"
+                placeholder={t('screens.componentsFormsLogisticsSection.roundOffPlaceholder')}
                 placeholderTextColor={COLORS.textTertiary}
               />
             </View>
@@ -374,7 +376,7 @@ export default function LogisticsSection({
           {/* Total */}
           {total !== 0 && (
             <View style={ls.totalRow}>
-              <Text style={ls.totalLabel}>Total Charges + Round Off</Text>
+              <Text style={ls.totalLabel}>{t('screens.componentsFormsLogisticsSection.totalLabel')}</Text>
               <Text style={ls.totalVal}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
           )}

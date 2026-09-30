@@ -13,50 +13,79 @@ interface UseApiDataResult<T> {
   reload: () => void;
 }
 
+type ApiDataOptions<T> = {
+  enabled?: boolean;
+  transform?: (raw: any) => T;
+  emptyCheck?: (data: T) => boolean;
+};
+
+function sameDeps(a: any[], b: any[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!Object.is(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 export function useApiData<T>(
   fetcher: () => Promise<any>,
   deps: any[] = [],
-  options?: {
-    enabled?: boolean;
-    transform?: (raw: any) => T;
-    emptyCheck?: (data: T) => boolean;
-  }
+  options?: ApiDataOptions<T>
 ): UseApiDataResult<T> {
+  const enabled = options?.enabled !== false;
+
   const [data, setData] = useState<T | null>(null);
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<Status>(enabled ? 'loading' : 'idle');
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  const enabled = options?.enabled !== false;
+  // Snapshot of the inputs captured whenever `enabled` or any dep changes,
+  // so fetches keep the same closure semantics as `useCallback(fn, [enabled, ...deps])`.
+  const [snapshot, setSnapshot] = useState(() => ({ fetcher, options, enabled, deps }));
+  if (snapshot.enabled !== enabled || !sameDeps(snapshot.deps, deps)) {
+    setSnapshot({ fetcher, options, enabled, deps });
+    if (enabled) {
+      setStatus('loading');
+      setError(null);
+    } else {
+      setStatus('idle');
+    }
+  }
+
+  const runFetch = useCallback((): Promise<void> => {
+    const { fetcher: fetchFn, options: opts } = snapshot;
+    return new Promise<any>((resolve) => resolve(fetchFn()))
+      .then((raw) => {
+        if (!mountedRef.current) return;
+        const result = opts?.transform ? opts.transform(raw) : (raw?.data ?? raw);
+        const isEmpty = opts?.emptyCheck
+          ? opts.emptyCheck(result as T)
+          : (Array.isArray(result) ? result.length === 0 : result == null);
+        setData(result as T);
+        setStatus(isEmpty ? 'empty' : 'success');
+      })
+      .catch((err: any) => {
+        if (!mountedRef.current) return;
+        const msg = err?.message || 'Failed to load data';
+        setError(msg);
+        setStatus('error');
+        setData(null);
+        console.error('[useApiData]', msg);
+      });
+  }, [snapshot]);
 
   const load = useCallback(async () => {
-    if (!enabled) { setStatus('idle'); return; }
+    if (!snapshot.enabled) { setStatus('idle'); return; }
     setStatus('loading');
     setError(null);
-    try {
-      const raw = await fetcher();
-      if (!mountedRef.current) return;
-      const result = options?.transform ? options.transform(raw) : (raw?.data ?? raw);
-      const isEmpty = options?.emptyCheck
-        ? options.emptyCheck(result as T)
-        : (Array.isArray(result) ? result.length === 0 : result == null);
-      setData(result as T);
-      setStatus(isEmpty ? 'empty' : 'success');
-    } catch (err: any) {
-      if (!mountedRef.current) return;
-      const msg = err?.message || 'Failed to load data';
-      setError(msg);
-      setStatus('error');
-      setData(null);
-      console.error('[useApiData]', msg);
-    }
-  }, [enabled, ...deps]);
+    await runFetch();
+  }, [snapshot, runFetch]);
 
   useEffect(() => {
     mountedRef.current = true;
-    load();
+    if (snapshot.enabled) runFetch();
     return () => { mountedRef.current = false; };
-  }, [load]);
+  }, [snapshot, runFetch]);
 
   return {
     data,

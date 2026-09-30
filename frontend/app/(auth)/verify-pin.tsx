@@ -71,36 +71,12 @@ export default function VerifyPinScreen() {
 
   const biometricEnabled = biometric === '1';
 
-  // Check biometric hardware + load pre_auth_token
-  useEffect(() => {
-    getPreAuthToken().then(t => {
-      if (t) {
-        preAuthTokenRef.current = t;
-        setPreAuthTokenState(t);
-      }
-    });
-
-    // Check if device supports biometrics
-    LocalAuthentication.hasHardwareAsync().then(hasHW => {
-      if (!hasHW) return;
-      LocalAuthentication.isEnrolledAsync().then(enrolled => {
-        setBioAvail(enrolled);
-        // If biometric enabled + available, auto-prompt after short delay
-        if (enrolled && biometricEnabled) {
-          setTimeout(() => triggerBiometric(), 600);
-        } else {
-          setTimeout(() => inputRefs.current[0]?.focus(), 400);
-        }
-      });
-    });
-  }, []);
-
   const triggerBiometric = async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Verify your identity',
-        fallbackLabel: 'Use PIN instead',
-        cancelLabel: 'Cancel',
+        promptMessage: t('screens.authVerifyPin.bioPrompt'),
+        fallbackLabel: t('screens.authVerifyPin.bioFallback'),
+        cancelLabel: t('common.cancel'),
         disableDeviceFallback: false,
       });
 
@@ -116,7 +92,7 @@ export default function VerifyPinScreen() {
           setTimeout(() => inputRefs.current[0]?.focus(), 100);
         }
       } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
-        setError('Biometric failed. Enter PIN manually.');
+        setError(t('screens.authVerifyPin.bioFailed'));
         setTimeout(() => inputRefs.current[0]?.focus(), 100);
       }
     } catch {
@@ -145,9 +121,9 @@ export default function VerifyPinScreen() {
 
   const doVerify = async (code?: string) => {
     const enteredPin = code || pin.join('');
-    if (enteredPin.length < PIN_LENGTH) { setError('Enter your full PIN'); return; }
+    if (enteredPin.length < PIN_LENGTH) { setError(t('screens.authVerifyPin.enterFullPin')); return; }
     const token = preAuthTokenRef.current || preAuthToken;
-    if (!token) { setError('Session expired. Please log in again.'); return; }
+    if (!token) { setError(t('screens.authVerifyPin.sessionExpired')); return; }
     setLoading(true); setError('');
     try {
       const res = await verifyPin(enteredPin, token);
@@ -164,27 +140,51 @@ export default function VerifyPinScreen() {
       } else {
         setPin(Array(PIN_LENGTH).fill(''));
         setFocused(0);
-        setError(res?.error?.message || 'Incorrect PIN');
+        setError(res?.error?.message || t('screens.authVerifyPin.incorrectPin'));
         setTimeout(() => inputRefs.current[0]?.focus(), 100);
       }
     } catch (err: any) {
       setPin(Array(PIN_LENGTH).fill(''));
       setFocused(0);
-      setError(err?.message || 'Incorrect PIN. Try again.');
+      setError(err?.message || t('screens.authVerifyPin.incorrectPinRetry'));
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } finally {
       setLoading(false);
     }
   };
 
+  // Check biometric hardware + load pre_auth_token
+  useEffect(() => {
+    getPreAuthToken().then(t => {
+      if (t) {
+        preAuthTokenRef.current = t;
+        setPreAuthTokenState(t);
+      }
+    });
+
+    // Check if device supports biometrics
+    LocalAuthentication.hasHardwareAsync().then(hasHW => {
+      if (!hasHW) return;
+      LocalAuthentication.isEnrolledAsync().then(enrolled => {
+        setBioAvail(enrolled);
+        // If biometric enabled + available, auto-prompt after short delay
+        if (enrolled && biometricEnabled) {
+          setTimeout(() => triggerBiometric(), 600);
+        } else {
+          setTimeout(() => inputRefs.current[0]?.focus(), 400);
+        }
+      });
+    });
+  }, []);
+
   const handleForgotPin = async () => {
     Alert.alert(
-      'Reset PIN',
-      `We'll send a new OTP to your WhatsApp number (${phone}) to verify it's you.`,
+      t('screens.authVerifyPin.resetPin'),
+      t('screens.authVerifyPin.resetPinMsg', { phone }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Send OTP',
+          text: t('auth.sendOtpBtn'),
           onPress: async () => {
             try {
               await sendOTP(phone || '');
@@ -213,8 +213,8 @@ export default function VerifyPinScreen() {
           <Text style={s.appName}>TallyDekho</Text>
 
           <View style={s.card}>
-            <Text style={s.heading}>Enter your Passkey</Text>
-            <Text style={s.sub}>Your 4-digit security PIN</Text>
+            <Text style={s.heading}>{t('screens.authVerifyPin.heading')}</Text>
+            <Text style={s.sub}>{t('screens.authVerifyPin.sub')}</Text>
 
             {/* PIN Boxes */}
             <View style={s.pinRow}>
@@ -244,7 +244,7 @@ export default function VerifyPinScreen() {
             >
               {loading
                 ? <ActivityIndicator color={COLORS.white} size="small" />
-                : <Text style={s.btnText}>Verify</Text>
+                : <Text style={s.btnText}>{t('screens.authVerifyPin.verify')}</Text>
               }
             </TouchableOpacity>
 
@@ -257,14 +257,14 @@ export default function VerifyPinScreen() {
                   color={COLORS.brandPrimary}
                 />
                 <Text style={s.bioTxt}>
-                  {Platform.OS === 'ios' ? 'Use Face ID / Touch ID' : 'Use Fingerprint'}
+                  {Platform.OS === 'ios' ? t('screens.authVerifyPin.useFaceId') : t('screens.authVerifyPin.useFingerprint')}
                 </Text>
               </TouchableOpacity>
             )}
 
             {/* Forgot PIN */}
             <TouchableOpacity style={s.forgotRow} onPress={handleForgotPin} activeOpacity={0.7}>
-              <Text style={s.forgotText}>Forgot PIN?</Text>
+              <Text style={s.forgotText}>{t('screens.authVerifyPin.forgotPin')}</Text>
             </TouchableOpacity>
           </View>
         </View>

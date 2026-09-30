@@ -19,6 +19,7 @@ import {
   StyleSheet, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BrandSwitch from './BrandSwitch';
 import FormDropdown from './FormDropdown';
@@ -89,22 +90,23 @@ const PartyInput = memo(function PartyInput({ label, required: req, IC, ...props
 });
 
 const GST_TYPES = [
-  { label: 'Regular',                value: 'Regular' },
-  { label: 'Composition',            value: 'Composition' },
-  { label: 'Unregistered / Consumer', value: 'Unregistered/Consumer' },
-  { label: 'SEZ',                    value: 'SEZ' },
+  { labelKey: 'screens.componentsFormsPartyForm.regular',                value: 'Regular' },
+  { labelKey: 'screens.componentsFormsPartyForm.composition',            value: 'Composition' },
+  { labelKey: 'screens.componentsFormsPartyForm.unregisteredConsumer', value: 'Unregistered/Consumer' },
+  { labelKey: 'screens.componentsFormsPartyForm.sez',                    value: 'SEZ' },
 ];
 
 const VAT_DEALER_TYPES = [
-  { label: 'Regular',       value: 'Regular' },
-  { label: 'Composition',   value: 'Composition' },
-  { label: 'Unregistered',  value: 'Unregistered' },
+  { labelKey: 'screens.componentsFormsPartyForm.regular',       value: 'Regular' },
+  { labelKey: 'screens.componentsFormsPartyForm.composition',   value: 'Composition' },
+  { labelKey: 'screens.componentsFormsPartyForm.unregistered',  value: 'Unregistered' },
 ];
 
 const PartyForm = forwardRef<PartyFormRef, {
   InputComponent?: ElementType<TextInputProps>;
   initialData?: Partial<PartyFormData>;
 }>(function PartyForm({ InputComponent = TextInput, initialData }, ref) {
+  const { t } = useTranslation();
 
   const d = { ...defaultPartyFormData, ...initialData };
 
@@ -242,34 +244,34 @@ const PartyForm = forwardRef<PartyFormRef, {
 
   return (
     <View>
-      <Text style={f.sectionTitle}>Contact</Text>
+      <Text style={f.sectionTitle}>{t('screens.componentsFormsPartyForm.contact')}</Text>
 
-      <PartyInput IC={IC} label="Mobile Number" placeholder="Enter mobile number"
+      <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.mobileNumber')} placeholder={t('screens.componentsFormsPartyForm.mobilePlaceholder')}
         value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
 
-      <PartyInput IC={IC} label="Email" placeholder="Enter email address"
+      <PartyInput IC={IC} label={t('profile.email')} placeholder={t('screens.componentsFormsPartyForm.emailPlaceholder')}
         value={email} onChangeText={setEmail}
         keyboardType="email-address" autoCapitalize="none" />
 
-      <PartyInput IC={IC} label="Website" placeholder="Website (optional)"
+      <PartyInput IC={IC} label={t('company.website')} placeholder={t('screens.componentsFormsPartyForm.websitePlaceholder')}
         value={website} onChangeText={setWebsite}
         autoCapitalize="none" keyboardType="url" />
 
       <View style={f.divider} />
-      <Text style={f.sectionTitle}>Mailing Address</Text>
+      <Text style={f.sectionTitle}>{t('screens.componentsFormsPartyForm.mailingAddress')}</Text>
 
-      <PartyInput IC={IC} label="Address Line 1" placeholder="Street, Building, Shop No."
+      <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.addressLine1')} placeholder={t('screens.componentsFormsPartyForm.addressLine1Placeholder')}
         value={addressLine1} onChangeText={setAddressLine1} />
 
-      <PartyInput IC={IC} label="Address Line 2" placeholder="Area, Landmark (optional)"
+      <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.addressLine2')} placeholder={t('screens.componentsFormsPartyForm.addressLine2Placeholder')}
         value={addressLine2} onChangeText={setAddressLine2} />
 
       <FormDropdown
-        label="Country"
+        label={t('languageRegion.country')}
         value={country}
         options={countryOptions}
         onSelect={onSelectCountry}
-        placeholder="Select country"
+        placeholder={t('screens.componentsFormsPartyForm.selectCountry')}
       />
 
       <FormDropdown
@@ -280,18 +282,18 @@ const PartyForm = forwardRef<PartyFormRef, {
         onSelect={o => setState(o.value)}
         placeholder={
           geoLoading
-            ? `Loading ${divisionLabel.toLowerCase()}…`
+            ? t('screens.componentsFormsPartyForm.loadingDivision', { division: divisionLabel.toLowerCase() })
             : stateOptions.length === 0
-              ? `No ${divisionLabel.toLowerCase()} list for this country`
-              : `Select ${divisionLabel.toLowerCase()}`
+              ? t('screens.componentsFormsPartyForm.noDivisionList', { division: divisionLabel.toLowerCase() })
+              : t('screens.componentsFormsPartyForm.selectDivision', { division: divisionLabel.toLowerCase() })
         }
       />
 
       <PartyInput
         IC={IC}
-        label="Pincode"
+        label={t('screens.componentsFormsPartyForm.pincode')}
         required={isIndia}
-        placeholder={isIndia ? '6-digit pincode' : 'Postal / ZIP code'}
+        placeholder={isIndia ? t('screens.componentsFormsPartyForm.pincodePlaceholder') : t('screens.componentsFormsPartyForm.postalPlaceholder')}
         value={pincode}
         onChangeText={setPincode}
         keyboardType="numeric"
@@ -302,58 +304,58 @@ const PartyForm = forwardRef<PartyFormRef, {
         <>
           <View style={f.divider} />
           <View style={f.sectionHeaderRow}>
-            <Text style={f.sectionTitle}>GST Details</Text>
-            {!gstUnlocked && <Text style={f.lockHint}>Fill {divisionLabel} &amp; Pincode first</Text>}
+            <Text style={f.sectionTitle}>{t('screens.componentsFormsPartyForm.gstDetails')}</Text>
+            {!gstUnlocked && <Text style={f.lockHint}>{t('screens.componentsFormsPartyForm.fillFirst', { division: divisionLabel })}</Text>}
           </View>
 
           {gstUnlocked ? (
             <>
-              <PartyInput IC={IC} label="PAN / IT No." placeholder="ABCDE1234F"
+              <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.pan')} placeholder="ABCDE1234F"
                 value={pan} onChangeText={v => setPan(v.toUpperCase())}
                 autoCapitalize="characters" maxLength={10} />
 
               <FormDropdown
-                label="GST Registration Type"
+                label={t('screens.componentsFormsPartyForm.gstRegType')}
                 required
                 value={gstRegType}
-                options={GST_TYPES}
+                options={GST_TYPES.map(o => ({ label: t(o.labelKey), value: o.value }))}
                 onSelect={o => {
                   setGstRegType(o.value);
                   if (o.value === 'Unregistered/Consumer') setGstin('');
                 }}
-                placeholder="Select GST type"
+                placeholder={t('screens.componentsFormsPartyForm.selectGstType')}
               />
 
               {showGstinField && (
-                <PartyInput IC={IC} label="GSTIN / UIN" placeholder="24ABCDE1234F1Z5"
+                <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.gstin')} placeholder="24ABCDE1234F1Z5"
                   value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
                   autoCapitalize="characters" maxLength={15} />
               )}
 
               <View style={f.divider} />
               <View style={f.toggleRow}>
-                <Text style={f.toggleLabel}>VAT Details</Text>
+                <Text style={f.toggleLabel}>{t('screens.componentsFormsPartyForm.vatDetails')}</Text>
                 <BrandSwitch value={vatEnabled} onValueChange={setVatEnabled} />
               </View>
 
               {vatEnabled && (
                 <View style={f.expandSection}>
                   <FormDropdown
-                    label="Type of Dealer"
+                    label={t('screens.componentsFormsPartyForm.dealerType')}
                     value={vatDealerType}
-                    options={VAT_DEALER_TYPES}
+                    options={VAT_DEALER_TYPES.map(o => ({ label: t(o.labelKey), value: o.value }))}
                     onSelect={o => setVatDealerType(o.value)}
-                    placeholder="Select dealer type"
+                    placeholder={t('screens.componentsFormsPartyForm.selectDealerType')}
                   />
 
-                  <PartyInput IC={IC} label="VAT TIN No." placeholder="Enter VAT TIN number"
+                  <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.vatTin')} placeholder={t('screens.componentsFormsPartyForm.vatTinPlaceholder')}
                     value={vatTin} onChangeText={setVatTin} />
 
-                  <PartyInput IC={IC} label="CST No." placeholder="Enter CST number"
+                  <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.cstNo')} placeholder={t('screens.componentsFormsPartyForm.cstNoPlaceholder')}
                     value={cstNo} onChangeText={setCstNo} />
 
                   <View style={[f.toggleRow, { marginTop: 12 }]}>
-                    <Text style={f.toggleLabel}>Sales / Purchase against Form C</Text>
+                    <Text style={f.toggleLabel}>{t('screens.componentsFormsPartyForm.formC')}</Text>
                     <BrandSwitch value={formCApplicable} onValueChange={setFormCApplicable} />
                   </View>
                 </View>
@@ -363,7 +365,7 @@ const PartyForm = forwardRef<PartyFormRef, {
             <View style={f.lockedBox}>
               <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} />
               <Text style={f.lockedText}>
-                Enter {divisionLabel.toLowerCase()} and pincode above to unlock GST details
+                {t('screens.componentsFormsPartyForm.unlockHint', { division: divisionLabel.toLowerCase() })}
               </Text>
             </View>
           )}

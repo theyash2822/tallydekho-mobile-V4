@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -19,6 +19,7 @@ import {
 } from '../../src/components/KPICarouselCard';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import {
   resolvePeriodDates,
   type DashboardPeriod,
@@ -85,10 +86,10 @@ function accountLabelFromTally(b: {
   if (masked) return masked;
   const p = String(b.parent || '').trim();
   const name = String(b.name || '');
-  if (/OD|Overdraft/i.test(p) || /OD|Overdraft/i.test(name)) return 'OD / Overdraft';
-  if (/Bank Account/i.test(p)) return 'Bank A/c';
+  if (/OD|Overdraft/i.test(p) || /OD|Overdraft/i.test(name)) return i18n.t('screens.kpiBankBalance.acctOverdraft');
+  if (/Bank Account/i.test(p)) return i18n.t('screens.kpiBankBalance.acctBank');
   if (p) return p.length > 18 ? `${p.slice(0, 16)}…` : p;
-  return 'Ledger';
+  return i18n.t('screens.kpiBankBalance.acctLedger');
 }
 
 export default function BankBalanceScreen() {
@@ -135,15 +136,15 @@ export default function BankBalanceScreen() {
       if (hasDataRef.current) {
         const ts = dataAsOfRef.current
           ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-          : 'earlier';
-        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+          : t('screens.kpiBankBalance.earlier');
+        setApiError(t('screens.kpiBankBalance.refreshFailed', { ts }));
       } else {
-        setApiError(err?.message || 'Failed to load bank balance');
+        setApiError(err?.message || t('screens.kpiBankBalance.loadFailed'));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
+  }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt, t]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -163,7 +164,7 @@ export default function BankBalanceScreen() {
       const latest = txs[0]?.date;
       return {
         id: b.name || `bank-${i}`,
-        name: b.name || 'Bank',
+        name: b.name || t('screens.kpiBankBalance.bankFallback'),
         accountLabel: accountLabelFromTally(b),
         ifsc: String(b.ifsc || '').trim(),
         balance: Math.abs(Number(b.balance) || 0),
@@ -173,11 +174,9 @@ export default function BankBalanceScreen() {
         transactions: txs,
       };
     });
-  }, [apiData]);
+  }, [apiData, t]);
 
-  useEffect(() => {
-    if (bankIdx >= banks.length) setBankIdx(0);
-  }, [banks.length, bankIdx]);
+  if (bankIdx !== 0 && bankIdx >= banks.length) setBankIdx(0);
 
   const activeBank = banks[bankIdx] || banks[0];
   const txs = activeBank?.transactions || [];
@@ -212,12 +211,12 @@ export default function BankBalanceScreen() {
     const inflow = Number(apiData?.today_inflow) || 0;
     const outflow = Number(apiData?.today_outflow) || 0;
     return [
-      { id: 'total', icon: 'wallet-outline', label: 'Book Balance (Tally)', amount: fmtBank(total), trend: null, positive: true },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: fmtBank(inflow), trend: null, positive: true },
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: fmtBank(outflow), trend: null, positive: true },
-      { id: 'count', icon: 'business-outline', label: 'Bank Accounts', amount: String(banks.length), trend: null, positive: true },
+      { id: 'total', icon: 'wallet-outline', label: t('screens.kpiBankBalance.kpiBookBalance'), amount: fmtBank(total), trend: null, positive: true },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: t('screens.kpiBankBalance.kpiInflowToday'), amount: fmtBank(inflow), trend: null, positive: true },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: t('screens.kpiBankBalance.kpiOutflowToday'), amount: fmtBank(outflow), trend: null, positive: true },
+      { id: 'count', icon: 'business-outline', label: t('screens.kpiBankBalance.kpiBankAccounts'), amount: String(banks.length), trend: null, positive: true },
     ];
-  }, [apiData, banks, fmtBank]);
+  }, [apiData, banks, fmtBank, t]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -265,7 +264,7 @@ export default function BankBalanceScreen() {
             {/* ── Bank Cards Carousel (live Tally balances) ── */}
             {banks.length === 0 ? (
               <View style={s.emptyCard}>
-                <Text style={s.emptyTxt}>No bank ledgers found in Tally</Text>
+                <Text style={s.emptyTxt}>{t('screens.kpiBankBalance.noBanksInTally')}</Text>
               </View>
             ) : (
               <View style={s.bankSection}>
@@ -296,7 +295,7 @@ export default function BankBalanceScreen() {
 
                         <View style={s.bankBottomRow}>
                           <View>
-                            <Text style={s.bankBalLabel}>Balance</Text>
+                            <Text style={s.bankBalLabel}>{t('screens.kpiBankBalance.balance')}</Text>
                             <Text style={s.bankBal} numberOfLines={1} adjustsFontSizeToFit>
                               {fmtBankFull(bank.balance)}
                             </Text>
@@ -306,7 +305,7 @@ export default function BankBalanceScreen() {
                               <Text style={s.bankIfsc} numberOfLines={1}>{bank.ifsc}</Text>
                             )}
                             <Text style={s.bankFeed}>
-                              {bank.lastFeed ? `Last txn ${bank.lastFeed}` : 'No txns in period'}
+                              {bank.lastFeed ? t('screens.kpiBankBalance.lastTxn', { date: bank.lastFeed }) : t('screens.kpiBankBalance.noTxnsInPeriod')}
                             </Text>
                           </View>
                         </View>
@@ -322,7 +321,7 @@ export default function BankBalanceScreen() {
             <View style={s.txSection}>
               <View style={s.txHeader}>
                 <Text style={s.txHeading} numberOfLines={1}>
-                  {activeBank ? activeBank.name : 'Recent Transactions'}
+                  {activeBank ? activeBank.name : t('screens.kpiBankBalance.recentTransactions')}
                 </Text>
                 <View style={s.periodRow}>
                   {PERIOD_TABS.map(p => (
@@ -340,35 +339,35 @@ export default function BankBalanceScreen() {
 
               {banks.length === 0 ? (
                 <View style={s.empty}>
-                  <Text style={s.emptyTxt}>No bank ledgers found</Text>
+                  <Text style={s.emptyTxt}>{t('screens.kpiBankBalance.noBanks')}</Text>
                 </View>
               ) : txs.length === 0 ? (
                 <View style={s.empty}>
-                  <Text style={s.emptyTxt}>No transactions in this period</Text>
+                  <Text style={s.emptyTxt}>{t('screens.kpiBankBalance.noTransactions')}</Text>
                 </View>
-              ) : txs.map((t, idx) => {
+              ) : txs.map((tx, idx) => {
                 // Bank ledger: Dr = inflow (money in), Cr = outflow (money out) — matches API today_in/out.
-                const isInflow = t.type === 'Dr';
+                const isInflow = tx.type === 'Dr';
                 return (
                   <TouchableOpacity
-                    key={t.guid || `${t.voucher_number}-${idx}`}
+                    key={tx.guid || `${tx.voucher_number}-${idx}`}
                     style={[s.txRow, idx < txs.length - 1 && s.txBorder]}
                     activeOpacity={0.7}
-                    onPress={() => t.guid && safePush(router, `/document/${t.guid}` as any)}
+                    onPress={() => openVoucherPreview(router, { guid: tx.guid })}
                   >
                     <View style={s.txIconBox}>
                       <Ionicons name="card-outline" size={18} color={COLORS.textSecondary} />
                     </View>
                     <View style={s.txInfo}>
                       <Text style={s.txId} numberOfLines={1}>
-                        {t.voucher_number || t.party_name || 'Voucher'}
+                        {tx.voucher_number || tx.party_name || t('screens.kpiBankBalance.voucherFallback')}
                       </Text>
                       <Text style={s.txDate}>
-                        {[t.party_name, fmtDate(t.date)].filter(Boolean).join(' · ')}
+                        {[tx.party_name, fmtDate(tx.date)].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
                     <Text style={[s.txAmt, { color: isInflow ? COLORS.positive : COLORS.negative }]}>
-                      {fmtBankFull(t.amount)} {t.type}
+                      {fmtBankFull(tx.amount)} {tx.type}
                     </Text>
                   </TouchableOpacity>
                 );

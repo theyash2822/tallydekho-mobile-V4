@@ -32,6 +32,8 @@ import FilterBottomSheet, {
 } from '../../src/components/FilterBottomSheet';
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
@@ -118,6 +120,7 @@ function BarcodeFilterModal({
   groupOptions: { id: string; label: string }[];
   statusOptions: { id: string; label: string }[];
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'Period' | 'Group' | 'Status'>('Period');
   const [selPeriod, setSelPeriod] = useState('All');
   const [selGroup, setSelGroup] = useState<string[]>([]);
@@ -128,14 +131,16 @@ function BarcodeFilterModal({
   const grpIds = useMemo(() => groupOptions.map(g => g.id), [groupOptions]);
   const statusIds = useMemo(() => statusOptions.map(st => st.id), [statusOptions]);
 
-  useEffect(() => {
+  const [prevSync, setPrevSync] = useState<unknown[] | null>(null);
+  if (!prevSync || prevSync[0] !== visible || prevSync[1] !== initPeriod) {
+    setPrevSync([visible, initPeriod]);
     if (visible) {
       setSelPeriod(initPeriod);
       setGrpSearch('');
       setStatusSearch('');
       setTab('Period');
     }
-  }, [visible, initPeriod]);
+  }
 
   useMultiFilterHydration(visible, initGroup, grpIds, setSelGroup);
   useMultiFilterHydration(visible, initStatus, statusIds, setSelStatus);
@@ -170,14 +175,14 @@ function BarcodeFilterModal({
     onApply(selPeriod, nextGroup, nextStatus);
     onClose();
     const toastParts = [
-      ...(selPeriod !== 'All' ? [selPeriod] : []),
-      ...(nextGroup.length ? [`${nextGroup.length} group${nextGroup.length !== 1 ? 's' : ''}`] : []),
-      ...(nextStatus.length ? [`${nextStatus.length} status${nextStatus.length !== 1 ? 'es' : ''}`] : []),
+      ...(selPeriod !== 'All' ? [t(PERIOD_LABEL_KEYS[selPeriod] ?? selPeriod)] : []),
+      ...(nextGroup.length ? [nextGroup.length !== 1 ? t('screens.stocksBarcodes.groupsCountOther', { count: nextGroup.length }) : t('screens.stocksBarcodes.groupsCountOne', { count: nextGroup.length })] : []),
+      ...(nextStatus.length ? [nextStatus.length !== 1 ? t('screens.stocksBarcodes.statusesCountOther', { count: nextStatus.length }) : t('screens.stocksBarcodes.statusesCountOne', { count: nextStatus.length })] : []),
     ];
     Toast.show({
       type: 'success',
-      text1: toastParts.length ? 'Filters applied' : 'Filters cleared',
-      text2: toastParts.length ? toastParts.join(' · ') : 'Showing all items',
+      text1: toastParts.length ? t('screens.stocksBarcodes.filtersApplied') : t('screens.stocksBarcodes.filtersCleared'),
+      text2: toastParts.length ? toastParts.join(' · ') : t('screens.stocksBarcodes.showingAllItems'),
       visibilityTime: 2000,
     });
   };
@@ -186,7 +191,7 @@ function BarcodeFilterModal({
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Barcodes"
+      title={t('screens.stocksBarcodes.filterTitle')}
       activeCount={activeCount}
       onClear={() => {
         setSelPeriod('All');
@@ -194,7 +199,7 @@ function BarcodeFilterModal({
         setSelStatus([...statusIds]);
       }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.stocksBarcodes.applyFilters')}
       applyDisabled={!canApply}
       heightFraction={0.72}
     >
@@ -206,7 +211,7 @@ function BarcodeFilterModal({
             onPress={() => setTab(cat)}
             activeOpacity={0.7}
           >
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{t(FILTER_TAB_LABEL_KEYS[cat])}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -216,7 +221,7 @@ function BarcodeFilterModal({
           {PERIODS.map(opt => (
             <FilterRadioRow
               key={opt}
-              label={opt === 'All' ? 'All periods' : opt}
+              label={opt === 'All' ? t('screens.stocksBarcodes.allPeriods') : t(PERIOD_LABEL_KEYS[opt] ?? opt)}
               selected={selPeriod === opt}
               onPress={() => setSelPeriod(opt)}
             />
@@ -228,21 +233,21 @@ function BarcodeFilterModal({
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search group..."
+              placeholder={t('screens.stocksBarcodes.searchGroup')}
               placeholderTextColor={COLORS.textTertiary}
               value={grpSearch}
               onChangeText={setGrpSearch}
             />
           </View>
           <FilterCheckRow
-            label="All groups"
+            label={t('screens.stocksBarcodes.allGroups')}
             selected={isAllGrp}
             onPress={() => setSelGroup(prev => toggleFilterAll(prev, grpIds))}
           />
           {groupOptions.length === 0 ? (
-            <Text style={fm.hint}>No groups available. Sync Tally first.</Text>
+            <Text style={fm.hint}>{t('screens.stocksBarcodes.noGroups')}</Text>
           ) : filteredGrp.length === 0 ? (
-            <Text style={fm.hint}>No groups match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksBarcodes.noGroupsMatch')}</Text>
           ) : (
             filteredGrp.map(g => (
               <FilterCheckRow
@@ -260,19 +265,19 @@ function BarcodeFilterModal({
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search status..."
+              placeholder={t('screens.stocksBarcodes.searchStatus')}
               placeholderTextColor={COLORS.textTertiary}
               value={statusSearch}
               onChangeText={setStatusSearch}
             />
           </View>
           <FilterCheckRow
-            label="All statuses"
+            label={t('screens.stocksBarcodes.allStatuses')}
             selected={isAllStatus}
             onPress={() => setSelStatus(prev => toggleFilterAll(prev, statusIds))}
           />
           {filteredStatus.length === 0 ? (
-            <Text style={fm.hint}>No statuses match your search</Text>
+            <Text style={fm.hint}>{t('screens.stocksBarcodes.noStatusesMatch')}</Text>
           ) : (
             filteredStatus.map(st => (
               <FilterCheckRow
@@ -321,21 +326,32 @@ function BarcodeSVG({ code, width, height = 90 }: { code: string; width: number;
 }
 
 const PERIODS  = ['All', 'Today', '7 Days', '30 Days'];
-const STORAGE_MODE_LABELS: Record<string, string> = {
-  app_only:          'App Only',
-  tally_alias:       'Sync to Tally Alias',
-  tally_part_number: 'Sync to Tally Part Number',
-  tally_udf:         'Sync to Tally UDF',
+const PERIOD_LABEL_KEYS: Record<string, string> = {
+  Today:     'screens.stocksBarcodes.periodToday',
+  '7 Days':  'screens.stocksBarcodes.period7Days',
+  '30 Days': 'screens.stocksBarcodes.period30Days',
 };
-const BARCODE_TYPE_LABELS: Record<string, string> = {
-  CODE128: 'CODE128 (default)',
-  EAN13:   'EAN-13',
-  EAN8:    'EAN-8',
-  QR:      'QR Code',
-  INTERNAL:'Internal',
+const FILTER_TAB_LABEL_KEYS = {
+  Period: 'screens.stocksBarcodes.tabPeriod',
+  Group:  'screens.stocksBarcodes.tabGroup',
+  Status: 'screens.stocksBarcodes.tabStatus',
+} as const;
+const STORAGE_MODE_LABEL_KEYS: Record<string, string> = {
+  app_only:          'screens.stocksBarcodes.modeAppOnly',
+  tally_alias:       'screens.stocksBarcodes.modeTallyAlias',
+  tally_part_number: 'screens.stocksBarcodes.modeTallyPartNumber',
+  tally_udf:         'screens.stocksBarcodes.modeTallyUdf',
+};
+const BARCODE_TYPE_LABEL_KEYS: Record<string, string> = {
+  CODE128: 'screens.stocksBarcodes.typeCode128',
+  EAN13:   'screens.stocksBarcodes.typeEan13',
+  EAN8:    'screens.stocksBarcodes.typeEan8',
+  QR:      'screens.stocksBarcodes.typeQr',
+  INTERNAL:'screens.stocksBarcodes.typeInternal',
 };
 
 export default function BarcodesScreen() {
+  const { t } = useTranslation();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -412,33 +428,49 @@ export default function BarcodesScreen() {
   }, [selPeriod, selGroup, selStatus, groupIds, statusIds]);
 
   // ── Load data ───────────────────────────────────────────────────────────────
+  const requestItems = useCallback(async (p = 1, reset = true) => {
+    if (!companyGuid) return;
+    return getBarcodeList(companyGuid, {
+      period: selPeriod,
+      group: selGroup.length ? selGroup.join(',') : 'All',
+      status: selStatus.length ? selStatus.join(',') : 'All',
+      search, page: p, pageSize: 50,
+    })
+      .then((res) => {
+        const d = res?.data || res;
+        if (reset) setItems(d.items || []);
+        else setItems(prev => [...prev, ...(d.items || [])]);
+        setGroups(d.filters?.groups || ['All']);
+        setStatuses(d.filters?.statuses || ['All']);
+        setSummary(d.summary || { totalItems: 0, linked: 0, unlinked: 0, unlinkedInFilter: 0 });
+        const { page: pg, pageSize, total } = d.pagination || {};
+        setHasMore((pg || 1) * (pageSize || 50) < (total || 0));
+        setPage(p);
+      })
+      .catch(() => {
+        if (p === 1) setItems([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [companyGuid, selPeriod, selGroup, selStatus, search]);
+
   const loadItems = useCallback(async (p = 1, reset = true) => {
     if (!companyGuid) return;
     setLoading(true);
-    try {
-      const res = await getBarcodeList(companyGuid, {
-        period: selPeriod,
-        group: selGroup.length ? selGroup.join(',') : 'All',
-        status: selStatus.length ? selStatus.join(',') : 'All',
-        search, page: p, pageSize: 50,
-      });
-      const d = res?.data || res;
-      if (reset) setItems(d.items || []);
-      else setItems(prev => [...prev, ...(d.items || [])]);
-      setGroups(d.filters?.groups || ['All']);
-      setStatuses(d.filters?.statuses || ['All']);
-      setSummary(d.summary || { totalItems: 0, linked: 0, unlinked: 0, unlinkedInFilter: 0 });
-      const { page: pg, pageSize, total } = d.pagination || {};
-      setHasMore((pg || 1) * (pageSize || 50) < (total || 0));
-      setPage(p);
-    } catch (err: any) {
-      if (p === 1) setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [companyGuid, selPeriod, selGroup, selStatus, search]);
+    return requestItems(p, reset);
+  }, [companyGuid, requestItems]);
 
-  useEffect(() => { loadItems(1, true); }, [companyGuid, selPeriod, selGroup, selStatus]);
+  const [itemsDeps, setItemsDeps] = useState<unknown[] | null>(null);
+  if (
+    !itemsDeps || itemsDeps[0] !== companyGuid || itemsDeps[1] !== selPeriod ||
+    itemsDeps[2] !== selGroup || itemsDeps[3] !== selStatus
+  ) {
+    setItemsDeps([companyGuid, selPeriod, selGroup, selStatus]);
+    if (companyGuid) setLoading(true);
+  }
+
+  useEffect(() => { requestItems(1, true); }, [companyGuid, selPeriod, selGroup, selStatus]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -447,16 +479,23 @@ export default function BarcodesScreen() {
   }, [search]);
 
   // ── Load barcode settings ──────────────────────────────────────────────────
-  const loadSettings = useCallback(async () => {
+  const loadSettings = useCallback(() => {
     if (!companyGuid) return;
-    setSettingsLoading(true);
-    try {
-      const res = await getBarcodeSettings(companyGuid);
-      const d = res?.data || res;
-      setSettings(d);
-      setDraftSettings(d);
-    } catch { /* use defaults */ } finally { setSettingsLoading(false); }
+    getBarcodeSettings(companyGuid)
+      .then((res) => {
+        const d = res?.data || res;
+        setSettings(d);
+        setDraftSettings(d);
+      })
+      .catch(() => { /* use defaults */ })
+      .finally(() => { setSettingsLoading(false); });
   }, [companyGuid]);
+
+  const [settingsDeps, setSettingsDeps] = useState<unknown[] | null>(null);
+  if (!settingsDeps || settingsDeps[0] !== companyGuid) {
+    setSettingsDeps([companyGuid]);
+    if (companyGuid) setSettingsLoading(true);
+  }
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
@@ -475,12 +514,12 @@ export default function BarcodesScreen() {
     if (job.status === 'completed') {
       Toast.show({
         type: 'success',
-        text1: 'Barcodes generated',
-        text2: `${job.generated} created${job.errors ? `, ${job.errors} failed` : ''}`,
+        text1: i18n.t('screens.stocksBarcodes.barcodesGenerated'),
+        text2: job.errors ? i18n.t('screens.stocksBarcodes.createdWithFailed', { created: job.generated, failed: job.errors }) : i18n.t('screens.stocksBarcodes.createdCount', { created: job.generated }),
         visibilityTime: 3000,
       });
     } else if (job.status === 'failed') {
-      Alert.alert('Generation failed', job.errorMessage || 'Something went wrong. Try again.');
+      Alert.alert(i18n.t('screens.stocksBarcodes.generationFailed'), job.errorMessage || i18n.t('screens.stocksBarcodes.somethingWrongTryAgain'));
     }
   }, [loadItems, stopBulkPoll]);
 
@@ -523,15 +562,18 @@ export default function BarcodesScreen() {
   useEffect(() => () => stopBulkPoll(), [stopBulkPoll]);
 
   // ── Link search (search stock items in already-loaded items) ─────────────
-  useEffect(() => {
-    if (!linkSearch.trim()) return;
-    const q = linkSearch.toLowerCase();
-    setLinkResults(items.filter(i =>
-      i.displayName.toLowerCase().includes(q) ||
-      (i.sku || '').toLowerCase().includes(q) ||
-      i.name.toLowerCase().includes(q)
-    ).slice(0, 20));
-  }, [linkSearch, items]);
+  const [linkSearchDeps, setLinkSearchDeps] = useState<unknown[] | null>(null);
+  if (!linkSearchDeps || linkSearchDeps[0] !== linkSearch || linkSearchDeps[1] !== items) {
+    setLinkSearchDeps([linkSearch, items]);
+    if (linkSearch.trim()) {
+      const q = linkSearch.toLowerCase();
+      setLinkResults(items.filter(i =>
+        i.displayName.toLowerCase().includes(q) ||
+        (i.sku || '').toLowerCase().includes(q) ||
+        i.name.toLowerCase().includes(q)
+      ).slice(0, 20));
+    }
+  }
 
   const openLinkBarcodeSheet = useCallback((opts: {
     barcode?: string;
@@ -570,12 +612,12 @@ export default function BarcodesScreen() {
   // ── Scanner open — full-screen Jun 11 UI (Modal CameraView = black on iOS)
   const openScanner = () => {
     if (!companyGuid) {
-      Alert.alert('No company', 'Select a company before scanning.');
+      Alert.alert(t('screens.stocksBarcodes.noCompany'), t('screens.stocksBarcodes.selectCompanyBeforeScan'));
       return;
     }
     stocksBarcodeScan.set((result) => {
       if (result.found && result.item?.stockGuid) {
-        safePush(router, `/stocks/item-detail?id=${result.item.stockGuid}` as any);
+        safePush(router, `/stocks/item-detail?id=${encodeURIComponent(String(result.item.stockGuid))}` as any);
         return;
       }
       openLinkBarcodeSheet({
@@ -601,7 +643,7 @@ export default function BarcodesScreen() {
           : i
       ));
     } catch (err: any) {
-      Alert.alert('Could not generate', err?.message || 'Try again.');
+      Alert.alert(t('screens.stocksBarcodes.couldNotGenerate'), err?.message || t('screens.stocksBarcodes.tryAgain'));
     } finally {
       setGeneratingIds(prev => { const n = new Set(prev); n.delete(item.stockGuid); return n; });
     }
@@ -613,18 +655,20 @@ export default function BarcodesScreen() {
   const handleGenerateAll = () => {
     const unlinkedCount = summary.unlinkedInFilter ?? summary.unlinked ?? 0;
     if (!unlinkedCount) {
-      Alert.alert('All linked', filtersActive
-        ? 'Every item matching your filters already has a barcode.'
-        : 'Every item already has a barcode.');
+      Alert.alert(t('screens.stocksBarcodes.allLinked'), filtersActive
+        ? t('screens.stocksBarcodes.everyFilteredHasBarcode')
+        : t('screens.stocksBarcodes.everyHasBarcode'));
       return;
     }
-    const scopeLabel = filtersActive ? ' matching current filters' : ' in your company';
+    const scopeLabel = filtersActive ? t('screens.stocksBarcodes.scopeFiltered') : t('screens.stocksBarcodes.scopeCompany');
     Alert.alert(
-      'Generate All Barcodes',
-      `Generate barcodes for ${unlinkedCount} unlinked item${unlinkedCount !== 1 ? 's' : ''}${scopeLabel}?`,
+      t('screens.stocksBarcodes.generateAllTitle'),
+      unlinkedCount !== 1
+        ? t('screens.stocksBarcodes.generateAllMsgOther', { count: unlinkedCount, scope: scopeLabel })
+        : t('screens.stocksBarcodes.generateAllMsgOne', { count: unlinkedCount, scope: scopeLabel }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: `Generate ${unlinkedCount}`, onPress: async () => {
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('screens.stocksBarcodes.generateN', { count: unlinkedCount }), onPress: async () => {
           setGeneratingAll(true);
           try {
             const res = await startBulkBarcodeJob(companyGuid, {
@@ -640,7 +684,7 @@ export default function BarcodesScreen() {
             if (!d?.jobId) {
               setGeneratingAll(false);
               if ((d?.generated ?? 0) === 0 && unlinkedCount === 0) {
-                Alert.alert('All linked', 'Every item matching your filters already has a barcode.');
+                Alert.alert(t('screens.stocksBarcodes.allLinked'), t('screens.stocksBarcodes.everyFilteredHasBarcode'));
               } else {
                 await loadItems(1, true);
               }
@@ -659,7 +703,7 @@ export default function BarcodesScreen() {
             beginBulkJobPolling(d.jobId);
           } catch (err: any) {
             setGeneratingAll(false);
-            Alert.alert('Error', err?.message || 'Could not start bulk generation');
+            Alert.alert(t('common.error'), err?.message || t('screens.stocksBarcodes.couldNotStartBulk'));
           }
         }},
       ]
@@ -681,7 +725,7 @@ export default function BarcodesScreen() {
       } catch { /* non-fatal — print continues */ }
       finally { setGeneratingAll(false); }
     }
-    safePush(router, `/stocks/print-settings?ids=${Array.from(selectedIds).join(',')}` as any);
+    safePush(router, `/stocks/print-settings?ids=${encodeURIComponent(Array.from(selectedIds).join(','))}` as any);
   };
 
   // ── Link barcode (scan or manual field) to stock item ──────────────────────
@@ -696,10 +740,10 @@ export default function BarcodesScreen() {
       setScannedCode('');
       setManualBarcode('');
       setLinkSearch('');
-      Alert.alert('Linked!', `"${code}" linked to ${targetItem.displayName}`);
+      Alert.alert(t('screens.stocksBarcodes.linked'), t('screens.stocksBarcodes.linkedMsg', { code, name: targetItem.displayName }));
       loadItems(1, true);
     } catch (err: any) {
-      Alert.alert('Link Failed', err?.message || 'Could not link barcode');
+      Alert.alert(t('screens.stocksBarcodes.linkFailed'), err?.message || t('screens.stocksBarcodes.couldNotLink'));
     } finally { setLinking(false); }
   };
 
@@ -732,12 +776,12 @@ export default function BarcodesScreen() {
       const response = await fetch(file.uri);
       const text = await response.text();
       setPasteText(text);
-    } catch { Alert.alert('Error', 'Could not read file'); }
+    } catch { Alert.alert(t('common.error'), t('screens.stocksBarcodes.couldNotReadFile')); }
   };
 
   const handleImportSubmit = async () => {
     if (!companyGuid || (!pasteText.trim())) {
-      Alert.alert('No data', 'Paste barcodes or upload a CSV file first.');
+      Alert.alert(t('screens.stocksBarcodes.noData'), t('screens.stocksBarcodes.pasteOrUploadFirst'));
       return;
     }
     setImporting(true);
@@ -748,12 +792,12 @@ export default function BarcodesScreen() {
       setImportVisible(false);
       setPasteText('');
       Alert.alert(
-        'Import Complete',
-        `Imported: ${s.imported}\nDuplicates: ${s.duplicates}\nNeeds Review: ${s.needsReview}\nInvalid: ${s.invalid}`,
-        [{ text: 'OK', onPress: () => loadItems(1, true) }],
+        t('screens.stocksBarcodes.importComplete'),
+        t('screens.stocksBarcodes.importSummary', { imported: s.imported, duplicates: s.duplicates, needsReview: s.needsReview, invalid: s.invalid }),
+        [{ text: t('common.ok'), onPress: () => loadItems(1, true) }],
       );
     } catch (err: any) {
-      Alert.alert('Import Failed', err?.message || 'Could not import barcodes');
+      Alert.alert(t('screens.stocksBarcodes.importFailed'), err?.message || t('screens.stocksBarcodes.couldNotImport'));
     } finally { setImporting(false); }
   };
 
@@ -767,7 +811,7 @@ export default function BarcodesScreen() {
       setSettingsVisible(false);
       // Backend auto-triggers push for existing pending barcodes when autoSyncToTally=true
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not save settings');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksBarcodes.couldNotSaveSettings'));
     } finally { setSettingsSaving(false); }
   };
 
@@ -784,14 +828,14 @@ export default function BarcodesScreen() {
       if (canShare) {
         await Sharing.shareAsync(path, {
           mimeType: 'text/csv',
-          dialogTitle: 'Barcode Import Template',
+          dialogTitle: t('screens.stocksBarcodes.templateDialogTitle'),
           UTI: 'public.comma-separated-values-text',
         });
       } else {
-        Alert.alert('Saved', 'Template saved. Open Files app to find barcode_template.csv');
+        Alert.alert(t('common.saved'), t('screens.stocksBarcodes.templateSaved'));
       }
     } catch (err: any) {
-      Alert.alert('Download Failed', err?.message || 'Could not download template. Check your connection.');
+      Alert.alert(t('screens.stocksBarcodes.downloadFailed'), err?.message || t('screens.stocksBarcodes.couldNotDownloadTemplate'));
     } finally { setDownloadingTemplate(false); }
   };
 
@@ -803,10 +847,10 @@ export default function BarcodesScreen() {
     try {
       const res = await pushPendingBarcodes(companyGuid);
       const d = res?.data || res;
-      Alert.alert('Tally Sync', d?.message || `Synced ${d?.synced ?? 0} barcode(s)`, [{ text: 'OK' }]);
+      Alert.alert(t('screens.stocksBarcodes.tallySync'), d?.message || t('screens.stocksBarcodes.syncedCount', { count: d?.synced ?? 0 }), [{ text: t('common.ok') }]);
       loadItems(1, true);
     } catch (err: any) {
-      Alert.alert('Sync failed', err?.message || 'Could not push to Tally');
+      Alert.alert(t('screens.stocksBarcodes.syncFailed'), err?.message || t('screens.stocksBarcodes.couldNotPushTally'));
     } finally { setSyncingNow(false); }
   };
 
@@ -816,8 +860,8 @@ export default function BarcodesScreen() {
     const isGenerating = generatingIds.has(item.stockGuid);
     const isLinked     = !!item.barcode;
     const subtitle     = isGenerating
-      ? 'Generating barcode…'
-      : item.barcode || item.sku || item.alias || 'Tap to generate barcode';
+      ? t('screens.stocksBarcodes.generatingBarcode')
+      : item.barcode || item.sku || item.alias || t('screens.stocksBarcodes.tapToGenerate');
     return (
       <TouchableOpacity
         style={[s.itemRow, isSelected && s.itemRowSelected, isGenerating && s.itemRowGenerating]}
@@ -850,7 +894,7 @@ export default function BarcodesScreen() {
       {/* ── Multi-select banner */}
       {isMultiSelect && (
         <View style={s.selBanner}>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={exitMultiSelect} activeOpacity={0.7} style={s.selBannerClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
@@ -863,7 +907,7 @@ export default function BarcodesScreen() {
           <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Barcode</Text>
+          <Text style={s.headerTitle}>{t('screens.stocksBarcodes.barcode')}</Text>
           <View style={s.headerActions}>
             <TouchableOpacity style={s.headerIcon} onPress={openScanner} activeOpacity={0.7}>
               <Ionicons name="scan-outline" size={20} color={COLORS.textPrimary} />
@@ -887,13 +931,13 @@ export default function BarcodesScreen() {
       <SearchBar
         value={search}
         onChangeText={setSearch}
-        placeholder="Search by name, SKU or barcode..."
+        placeholder={t('screens.stocksBarcodes.searchPlaceholder')}
         inputProps={{ returnKeyType: 'search' }}
       />
       <ActiveFilterChips
         variant="amber"
         chips={[
-          ...(selPeriod !== 'All' ? [{ id: 'period', label: selPeriod }] : []),
+          ...(selPeriod !== 'All' ? [{ id: 'period', label: t(PERIOD_LABEL_KEYS[selPeriod] ?? selPeriod) }] : []),
           ...selGroup.map(g => ({ id: `grp:${g}`, label: g })),
           ...selStatus.map(st => ({ id: `st:${st}`, label: st })),
         ]}
@@ -930,7 +974,7 @@ export default function BarcodesScreen() {
         ListEmptyComponent={!loading ? (
           <View style={s.emptyWrap}>
             <Ionicons name="barcode-outline" size={48} color={COLORS.textTertiary} />
-            <Text style={s.emptyText}>No items found</Text>
+            <Text style={s.emptyText}>{t('screens.stocksBarcodes.noItemsFound')}</Text>
           </View>
         ) : null}
         ListFooterComponent={loading && items.length > 0 ? (
@@ -945,8 +989,8 @@ export default function BarcodesScreen() {
         <View style={[s.printQueueBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity style={s.printQueueBtn} onPress={handleAddToPrintQueue} activeOpacity={0.85} disabled={generatingAll}>
             {generatingAll
-              ? <><ActivityIndicator size="small" color="#fff" /><Text style={s.printQueueBtnText}>Generating barcodes…</Text></>
-              : <><Ionicons name="print-outline" size={18} color="#fff" /><Text style={s.printQueueBtnText}>Generate & Print {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}</Text></>}
+              ? <><ActivityIndicator size="small" color="#fff" /><Text style={s.printQueueBtnText}>{t('screens.stocksBarcodes.generatingBarcodesEllipsis')}</Text></>
+              : <><Ionicons name="print-outline" size={18} color="#fff" /><Text style={s.printQueueBtnText}>{selectedIds.size > 1 ? t('screens.stocksBarcodes.generatePrintOther', { count: selectedIds.size }) : t('screens.stocksBarcodes.generatePrintOne', { count: selectedIds.size })}</Text></>}
           </TouchableOpacity>
         </View>
       )}
@@ -957,24 +1001,24 @@ export default function BarcodesScreen() {
       <BarcodeActionSheet
         visible={importVisible}
         onClose={() => setImportVisible(false)}
-        title="Import Bulk Barcodes"
+        title={t('screens.stocksBarcodes.importTitle')}
         footer={(
           <View style={s.importActions}>
             <TouchableOpacity style={s.importCancelBtn} onPress={() => setImportVisible(false)} activeOpacity={0.7}>
-              <Text style={s.importCancelText}>Cancel</Text>
+              <Text style={s.importCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.importSubmitBtn} onPress={handleImportSubmit} activeOpacity={0.8} disabled={importing}>
               {importing
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <><Ionicons name="cloud-upload-outline" size={16} color="#fff" /><Text style={s.importSubmitText}>Import</Text></>}
+                : <><Ionicons name="cloud-upload-outline" size={16} color="#fff" /><Text style={s.importSubmitText}>{t('screens.stocksBarcodes.import')}</Text></>}
             </TouchableOpacity>
           </View>
         )}
       >
         <TouchableOpacity style={s.dropZone} onPress={handlePickFile} activeOpacity={0.8}>
           <Ionicons name="cloud-upload-outline" size={36} color={COLORS.textTertiary} />
-          <Text style={s.dropZoneText}>Tap to choose CSV file</Text>
-          <Text style={s.dropZoneSub}>Supports .csv, .txt</Text>
+          <Text style={s.dropZoneText}>{t('screens.stocksBarcodes.tapChooseCsv')}</Text>
+          <Text style={s.dropZoneSub}>{t('screens.stocksBarcodes.supportsCsv')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={s.templateLink}
@@ -986,18 +1030,18 @@ export default function BarcodesScreen() {
             ? <ActivityIndicator size="small" color={AMBER} />
             : <Ionicons name="download-outline" size={14} color={AMBER} />}
           <Text style={s.templateLinkText}>
-            {downloadingTemplate ? 'Downloading…' : 'Download Template (pre-filled with your items)'}
+            {downloadingTemplate ? t('screens.stocksBarcodes.downloading') : t('screens.stocksBarcodes.downloadTemplate')}
           </Text>
         </TouchableOpacity>
         <Text style={s.templateHint}>
-          Opens in Excel/Sheets · Fill barcode column · Save as CSV · Upload above
+          {t('screens.stocksBarcodes.templateHint')}
         </Text>
         <View style={s.orDivider}>
           <View style={s.orLine} />
-          <Text style={s.orText}>OR</Text>
+          <Text style={s.orText}>{t('screens.stocksBarcodes.or')}</Text>
           <View style={s.orLine} />
         </View>
-        <Text style={s.importLabel}>Paste Barcodes (one per line, or item_name,barcode)</Text>
+        <Text style={s.importLabel}>{t('screens.stocksBarcodes.pasteLabel')}</Text>
         <TextInput
           style={s.pasteInput}
           value={pasteText}
@@ -1016,14 +1060,14 @@ export default function BarcodesScreen() {
       <BarcodeActionSheet
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
-        title="Barcode Settings"
+        title={t('screens.stocksBarcodes.settingsTitle')}
         footer={settingsLoading ? undefined : (
           <View style={s.importActions}>
             <TouchableOpacity style={s.importCancelBtn} onPress={() => setSettingsVisible(false)} activeOpacity={0.7}>
-              <Text style={s.importCancelText}>Cancel</Text>
+              <Text style={s.importCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.importSubmitBtn} onPress={handleSaveSettings} activeOpacity={0.8} disabled={settingsSaving}>
-              {settingsSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.importSubmitText}>Save Settings</Text>}
+              {settingsSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.importSubmitText}>{t('screens.stocksBarcodes.saveSettings')}</Text>}
             </TouchableOpacity>
           </View>
         )}
@@ -1032,34 +1076,34 @@ export default function BarcodesScreen() {
           <View style={{ padding: 32, alignItems: 'center' }}><ActivityIndicator size="large" color={COLORS.brandPrimary} /></View>
         ) : (
           <>
-            <Text style={s.settingsSectionTitle}>Barcode Storage Mode</Text>
-            {Object.entries(STORAGE_MODE_LABELS).map(([key, label]) => (
+            <Text style={s.settingsSectionTitle}>{t('screens.stocksBarcodes.storageMode')}</Text>
+            {Object.entries(STORAGE_MODE_LABEL_KEYS).map(([key, labelKey]) => (
               <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, barcodeStorageMode: key }))} activeOpacity={0.7}>
                 <View style={[s.settingsRadio, draftSettings.barcodeStorageMode === key && s.settingsRadioActive]}>
                   {draftSettings.barcodeStorageMode === key && <View style={s.settingsRadioDot} />}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.settingsRowLabel}>{label}</Text>
-                  {key === 'app_only' && <Text style={s.settingsRowSub}>Barcodes work only inside TallyDekho</Text>}
-                  {key === 'tally_alias' && <Text style={s.settingsRowSub}>Appends barcode to Tally stock item aliases</Text>}
+                  <Text style={s.settingsRowLabel}>{t(labelKey)}</Text>
+                  {key === 'app_only' && <Text style={s.settingsRowSub}>{t('screens.stocksBarcodes.appOnlySub')}</Text>}
+                  {key === 'tally_alias' && <Text style={s.settingsRowSub}>{t('screens.stocksBarcodes.tallyAliasSub')}</Text>}
                 </View>
               </TouchableOpacity>
             ))}
 
-            <Text style={[s.settingsSectionTitle, { marginTop: 20 }]}>Default Barcode Type</Text>
-            {Object.entries(BARCODE_TYPE_LABELS).map(([key, label]) => (
+            <Text style={[s.settingsSectionTitle, { marginTop: 20 }]}>{t('screens.stocksBarcodes.defaultType')}</Text>
+            {Object.entries(BARCODE_TYPE_LABEL_KEYS).map(([key, labelKey]) => (
               <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, defaultBarcodeType: key }))} activeOpacity={0.7}>
                 <View style={[s.settingsRadio, draftSettings.defaultBarcodeType === key && s.settingsRadioActive]}>
                   {draftSettings.defaultBarcodeType === key && <View style={s.settingsRadioDot} />}
                 </View>
-                <Text style={s.settingsRowLabel}>{label}</Text>
+                <Text style={s.settingsRowLabel}>{t(labelKey)}</Text>
               </TouchableOpacity>
             ))}
 
             <View style={[s.settingsRow, { marginTop: 20 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={s.settingsRowLabel}>Auto Sync to Tally</Text>
-                <Text style={s.settingsRowSub}>Automatically queue Tally sync when barcode is generated</Text>
+                <Text style={s.settingsRowLabel}>{t('screens.stocksBarcodes.autoSync')}</Text>
+                <Text style={s.settingsRowSub}>{t('screens.stocksBarcodes.autoSyncSub')}</Text>
               </View>
               <Switch
                 value={draftSettings.autoSyncToTally}
@@ -1080,7 +1124,7 @@ export default function BarcodesScreen() {
                   ? <ActivityIndicator size="small" color={AMBER} />
                   : <Ionicons name="cloud-upload-outline" size={16} color={AMBER} />}
                 <Text style={s.syncNowBtnText}>
-                  {syncingNow ? 'Syncing…' : 'Sync Pending to Tally Now'}
+                  {syncingNow ? t('screens.stocksBarcodes.syncing') : t('screens.stocksBarcodes.syncPendingNow')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1107,7 +1151,7 @@ export default function BarcodesScreen() {
       <BarcodeActionSheet
         visible={!!linkedActionItem}
         onClose={() => setLinkedActionItem(null)}
-        title={linkedActionItem?.displayName || 'Item actions'}
+        title={linkedActionItem?.displayName || t('screens.stocksBarcodes.itemActions')}
         heightFraction={0.36}
       >
         <TouchableOpacity
@@ -1121,7 +1165,7 @@ export default function BarcodesScreen() {
           <View style={s.itemActionIcon}>
             <Ionicons name="print-outline" size={18} color={COLORS.textPrimary} />
           </View>
-          <Text style={s.itemActionLabel}>Select for Print</Text>
+          <Text style={s.itemActionLabel}>{t('screens.stocksBarcodes.selectForPrint')}</Text>
           <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
         </TouchableOpacity>
         <TouchableOpacity
@@ -1141,7 +1185,7 @@ export default function BarcodesScreen() {
           <View style={s.itemActionIcon}>
             <Ionicons name="link-outline" size={18} color={COLORS.textPrimary} />
           </View>
-          <Text style={s.itemActionLabel}>Link Different Barcode</Text>
+          <Text style={s.itemActionLabel}>{t('screens.stocksBarcodes.linkDifferent')}</Text>
           <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
         </TouchableOpacity>
       </BarcodeActionSheet>
@@ -1149,32 +1193,32 @@ export default function BarcodesScreen() {
       <FilterBottomSheet
         visible={linkVisible}
         onClose={() => setLinkVisible(false)}
-        title="Link Barcode to Product"
+        title={t('screens.stocksBarcodes.linkTitle')}
         heightFraction={0.72}
         hideFooter
         onApply={() => setLinkVisible(false)}
       >
         <View style={fm.panel}>
-          <Text style={s.linkFieldLabel}>Barcode</Text>
+          <Text style={s.linkFieldLabel}>{t('screens.stocksBarcodes.barcode')}</Text>
           <View style={fm.searchBox}>
             <Ionicons name="barcode-outline" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
               value={manualBarcode}
               onChangeText={setManualBarcode}
-              placeholder="Enter or scan barcode..."
+              placeholder={t('screens.stocksBarcodes.enterOrScan')}
               placeholderTextColor={COLORS.textTertiary}
               returnKeyType="next"
               autoCorrect={false}
             />
           </View>
 
-          <Text style={s.linkFieldLabel}>Search Product</Text>
+          <Text style={s.linkFieldLabel}>{t('screens.stocksBarcodes.searchProduct')}</Text>
           <View style={fm.searchBox}>
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Product name or SKU..."
+              placeholder={t('screens.stocksBarcodes.productNameOrSku')}
               placeholderTextColor={COLORS.textTertiary}
               value={linkSearch}
               onChangeText={setLinkSearch}
@@ -1191,7 +1235,7 @@ export default function BarcodesScreen() {
 
           {linkResults.length === 0 ? (
             <Text style={fm.hint}>
-              {linkSearch.trim() ? 'No products match your search' : 'Type to search products'}
+              {linkSearch.trim() ? t('screens.stocksBarcodes.noProductsMatch') : t('screens.stocksBarcodes.typeToSearch')}
             </Text>
           ) : (
             linkResults.map(item => (
@@ -1222,20 +1266,20 @@ export default function BarcodesScreen() {
             <View style={s.progressIconWrap}>
               <Ionicons name="flash" size={28} color={COLORS.brandPrimary} />
             </View>
-            <Text style={s.progressTitle}>Generating barcodes</Text>
+            <Text style={s.progressTitle}>{t('screens.stocksBarcodes.generatingBarcodes')}</Text>
             <Text style={s.progressSub}>
-              {bulkJob?.processed ?? 0} / {bulkJob?.total ?? 0} items processed
+              {t('screens.stocksBarcodes.itemsProcessed', { processed: bulkJob?.processed ?? 0, total: bulkJob?.total ?? 0 })}
             </Text>
             <View style={s.progressTrack}>
               <View style={[s.progressFill, { width: `${bulkJob?.pct ?? 0}%` as any }]} />
             </View>
             <Text style={s.progressPct}>{bulkJob?.pct ?? 0}%</Text>
             <Text style={s.progressHint}>
-              Runs in the background — you can stay on this screen. List refreshes when done.
+              {t('screens.stocksBarcodes.progressHint')}
             </Text>
             {(bulkJob?.generated ?? 0) > 0 && (
               <Text style={s.progressStat}>
-                {bulkJob?.generated} generated{bulkJob?.errors ? ` · ${bulkJob.errors} failed` : ''}
+                {bulkJob?.errors ? t('screens.stocksBarcodes.generatedWithFailed', { generated: bulkJob?.generated, failed: bulkJob.errors }) : t('screens.stocksBarcodes.generatedCount', { generated: bulkJob?.generated })}
               </Text>
             )}
           </View>
@@ -1263,7 +1307,7 @@ export default function BarcodesScreen() {
             {viewBarcodeItem?.barcode ? (
               <View style={s.bcImageWrap}>
                 <Text style={s.bcScanLabel}>
-                  Point scanner at the full barcode below
+                  {t('screens.stocksBarcodes.pointScanner')}
                 </Text>
                 <BarcodeSVG
                   code={viewBarcodeItem.barcode}
@@ -1274,7 +1318,7 @@ export default function BarcodesScreen() {
               </View>
             ) : (
               <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, textAlign: 'center', paddingVertical: 24 }}>
-                No barcode linked
+                {t('screens.stocksBarcodes.noBarcodeLinked')}
               </Text>
             )}
 
@@ -1287,12 +1331,12 @@ export default function BarcodesScreen() {
                 </View>
               ) : null}
               <View style={s.bcInfoChip}>
-                <Text style={s.bcInfoLabel}>Qty</Text>
+                <Text style={s.bcInfoLabel}>{t('pdf.qty')}</Text>
                 <Text style={s.bcInfoVal}>{Math.round(viewBarcodeItem?.currentQty ?? 0).toLocaleString()}</Text>
               </View>
               {viewBarcodeItem?.groupName ? (
                 <View style={s.bcInfoChip}>
-                  <Text style={s.bcInfoLabel}>Group</Text>
+                  <Text style={s.bcInfoLabel}>{t('screens.stocksBarcodes.tabGroup')}</Text>
                   <Text style={s.bcInfoVal} numberOfLines={1}>{viewBarcodeItem.groupName}</Text>
                 </View>
               ) : null}
@@ -1304,19 +1348,19 @@ export default function BarcodesScreen() {
                 style={s.bcActionBtnPrimary}
                 onPress={() => {
                   setViewBarcodeItem(null);
-                  if (viewBarcodeItem) safePush(router, `/stocks/item-detail?id=${viewBarcodeItem.stockGuid}` as any);
+                  if (viewBarcodeItem) safePush(router, `/stocks/item-detail?id=${encodeURIComponent(String(viewBarcodeItem.stockGuid))}` as any);
                 }}
                 activeOpacity={0.85}
               >
                 <Ionicons name="open-outline" size={16} color="#fff" />
-                <Text style={s.bcActionBtnPrimaryText}>View Full Details</Text>
+                <Text style={s.bcActionBtnPrimaryText}>{t('screens.stocksBarcodes.viewFullDetails')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={s.bcActionBtnSecondary}
                 onPress={() => setViewBarcodeItem(null)}
                 activeOpacity={0.8}
               >
-                <Text style={s.bcActionBtnSecondaryText}>Close</Text>
+                <Text style={s.bcActionBtnSecondaryText}>{t('common.close')}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

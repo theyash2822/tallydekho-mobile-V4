@@ -3,15 +3,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/colors';
 import { friendlyUserMessage } from '../services/apiErrors';
 
 // ── Loading ────────────────────────────────────────────────────
-export function LoadingState({ message = 'Loading...' }: { message?: string }) {
+export function LoadingState({ message }: { message?: string }) {
+  const { t } = useTranslation();
   return (
     <View style={s.center}>
       <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-      <Text style={s.subText}>{message}</Text>
+      <Text style={s.subText}>{message ?? t('common.loading')}</Text>
     </View>
   );
 }
@@ -20,20 +22,21 @@ export function LoadingState({ message = 'Loading...' }: { message?: string }) {
 export function ErrorState({
   message,
   onRetry,
-  title = 'Something went wrong',
+  title,
 }: { message?: string; onRetry?: () => void; title?: string }) {
+  const { t } = useTranslation();
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.center}>
       <View style={s.iconCircle}>
         <Ionicons name="alert-circle-outline" size={32} color={COLORS.negative} />
       </View>
-      <Text style={s.title}>{title}</Text>
+      <Text style={s.title}>{title ?? t('common.somethingWentWrong')}</Text>
       <Text style={s.subText}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity style={s.retryBtn} onPress={onRetry} activeOpacity={0.8}>
           <Ionicons name="refresh-outline" size={16} color={COLORS.white} />
-          <Text style={s.retryText}>Retry</Text>
+          <Text style={s.retryText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -42,16 +45,17 @@ export function ErrorState({
 
 // ── Empty ──────────────────────────────────────────────────────
 export function EmptyState({
-  title = 'No data available',
+  title,
   subtitle,
   icon = 'document-outline',
 }: { title?: string; subtitle?: string; icon?: any }) {
+  const { t } = useTranslation();
   return (
     <View style={s.center}>
       <View style={[s.iconCircle, { backgroundColor: COLORS.activeBg }]}>
         <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
       </View>
-      <Text style={s.title}>{title}</Text>
+      <Text style={s.title}>{title ?? t('common.noData')}</Text>
       {subtitle && <Text style={s.subText}>{subtitle}</Text>}
     </View>
   );
@@ -62,6 +66,7 @@ export function ErrorBanner({
   message,
   onRetry,
 }: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation();
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.banner}>
@@ -69,7 +74,7 @@ export function ErrorBanner({
       <Text style={s.bannerText} numberOfLines={2}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity onPress={onRetry} style={s.bannerRetry}>
-          <Text style={s.bannerRetryText}>Retry</Text>
+          <Text style={s.bannerRetryText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -81,6 +86,7 @@ export function SectionError({
   message,
   onRetry,
 }: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation();
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.sectionErr}>
@@ -88,7 +94,7 @@ export function SectionError({
       <Text style={s.sectionErrText} numberOfLines={2}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity onPress={onRetry} style={s.bannerRetry}>
-          <Text style={s.bannerRetryText}>Retry</Text>
+          <Text style={s.bannerRetryText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       )}
     </View>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   ScrollView, useWindowDimensions, Platform,
@@ -139,9 +139,11 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
     }).filter((s) => s.items.length > 0);
   }, [t, hasCapability, entryMode]);
 
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     if (visible) setExpandedSection(null);
-  }, [visible]);
+  }
 
   const toggleSection = (sectionId: string) => {
     setExpandedSection(prev => (prev === sectionId ? null : sectionId));

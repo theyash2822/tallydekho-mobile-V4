@@ -26,6 +26,7 @@ import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api'
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { TX_TO_DOC_TYPE, resolveDocTypeFromParam } from '../../src/utils/documentHelpers';
 import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import {
@@ -51,15 +52,15 @@ type LifecycleFilter =
   | 'all' | 'pending_sync' | 'regular' | 'optional'
   | 'originally_optional' | 'failed' | 'irn_pending' | 'ewb_pending';
 
-const LIFECYCLE_FILTERS: { key: LifecycleFilter; label: string }[] = [
-  { key: 'all',               label: 'All' },
-  { key: 'pending_sync',      label: 'Pending Sync' },
-  { key: 'regular',           label: 'Regular' },
-  { key: 'optional',          label: 'Optional' },
-  { key: 'originally_optional', label: 'Orig. Optional' },
-  { key: 'failed',            label: 'Failed' },
-  { key: 'irn_pending',       label: 'IRN Pending' },
-  { key: 'ewb_pending',       label: 'EWB Pending' },
+const LIFECYCLE_FILTERS: { key: LifecycleFilter; labelKey: string }[] = [
+  { key: 'all',               labelKey: 'common.all' },
+  { key: 'pending_sync',      labelKey: 'screens.reportsAuditTrail.pendingSync' },
+  { key: 'regular',           labelKey: 'screens.reportsAuditTrail.regular' },
+  { key: 'optional',          labelKey: 'screens.reportsAuditTrail.optional' },
+  { key: 'originally_optional', labelKey: 'screens.reportsAuditTrail.origOptional' },
+  { key: 'failed',            labelKey: 'screens.reportsAuditTrail.failed' },
+  { key: 'irn_pending',       labelKey: 'screens.reportsAuditTrail.irnPending' },
+  { key: 'ewb_pending',       labelKey: 'screens.reportsAuditTrail.ewbPending' },
 ];
 
 interface VoucherEntry {
@@ -228,6 +229,7 @@ const ACTION_COLORS: Record<string, string> = {
 
 // ─── Type Breakdown Card (collapsible — shared My Entries + Day Book) ─────────
 function TypeBreakdownCard({ entries }: { entries: VoucherEntry[] }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const breakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -245,12 +247,12 @@ function TypeBreakdownCard({ entries }: { entries: VoucherEntry[] }) {
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`Voucher Breakdown, ${breakdown.length} types`}
+        accessibilityLabel={t('screens.reportsAuditTrail.breakdownA11y', { count: breakdown.length })}
       >
         <View style={tc.headerLeft}>
-          <Text style={tc.title}>Voucher Breakdown</Text>
+          <Text style={tc.title}>{t('screens.reportsAuditTrail.voucherBreakdown')}</Text>
           <View style={tc.countPill}>
-            <Text style={tc.countPillTxt}>{breakdown.length} types</Text>
+            <Text style={tc.countPillTxt}>{t('screens.reportsAuditTrail.typesCount', { count: breakdown.length })}</Text>
           </View>
         </View>
         <Ionicons
@@ -315,12 +317,15 @@ const LIST_MAX_H = Math.max(220, SHEET_MAX_H - 168);
 function VTypeDropdown({
   value, onSelect, visible, onClose,
 }: { value: VoucherType; onSelect: (v: VoucherType) => void; visible: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const [prevVisible, setPrevVisible] = useState<boolean | null>(null);
 
-  useEffect(() => {
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
     if (visible) setQuery('');
-  }, [visible]);
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -335,7 +340,7 @@ function VTypeDropdown({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={dd.overlay}>
-        <Pressable style={dd.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        <Pressable style={dd.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={dd.sheetWrap}
@@ -343,7 +348,7 @@ function VTypeDropdown({
           <View style={[dd.sheet, { maxHeight: SHEET_MAX_H, paddingBottom: Math.max(insets.bottom, 12) }]}>
             <View style={dd.sheetHandle} />
             <View style={dd.sheetHeader}>
-              <Text style={dd.sheetTitle}>Voucher Type</Text>
+              <Text style={dd.sheetTitle}>{t('screens.reportsAuditTrail.voucherType')}</Text>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={20} color={COLORS.textPrimary} />
               </TouchableOpacity>
@@ -355,7 +360,7 @@ function VTypeDropdown({
                 style={dd.searchInput}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search types…"
+                placeholder={t('screens.reportsAuditTrail.searchTypes')}
                 placeholderTextColor={COLORS.textTertiary}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -378,7 +383,7 @@ function VTypeDropdown({
             >
               {filtered.length === 0 ? (
                 <View style={dd.empty}>
-                  <Text style={dd.emptyTxt}>No types match “{query.trim()}”</Text>
+                  <Text style={dd.emptyTxt}>{t('screens.reportsAuditTrail.noTypesMatch', { query: query.trim() })}</Text>
                 </View>
               ) : (
                 filtered.map((vt) => (
@@ -389,7 +394,7 @@ function VTypeDropdown({
                     activeOpacity={0.7}
                   >
                     <Text style={[dd.optionTxt, value === vt && dd.optionTxtActive]}>
-                      {vt === 'ALL' ? 'All Types' : vt}
+                      {vt === 'ALL' ? t('screens.reportsAuditTrail.allTypes') : vt}
                     </Text>
                     {value === vt && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
                   </TouchableOpacity>
@@ -468,15 +473,19 @@ export default function AuditTrailScreen() {
   const [toDate,         setToDate]         = useState(defaultTo);
 
   // When FY changes, reset date range to full FY
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState({ start: selectedFY?.startDate, end: selectedFY?.endDate });
+  if (prevFyRange.start !== selectedFY?.startDate || prevFyRange.end !== selectedFY?.endDate) {
+    setPrevFyRange({ start: selectedFY?.startDate, end: selectedFY?.endDate });
     if (selectedFY?.startDate && selectedFY?.endDate) {
       setFromDate(selectedFY.startDate);
       setToDate(selectedFY.endDate);
     }
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
-  useEffect(() => {
+  }
+  const [prevTabParam, setPrevTabParam] = useState(tab);
+  if (prevTabParam !== tab) {
+    setPrevTabParam(tab);
     if (tab === 'daybook') setActiveTab('daybook');
-  }, [tab]);
+  }
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [voucherType,    setVoucherType]    = useState<VoucherType>('ALL');
   const [showVTypeModal, setShowVTypeModal] = useState(false);
@@ -527,10 +536,10 @@ export default function AuditTrailScreen() {
       const parts: string[] = [];
       if (changes.hsnCode)           parts.push(`HSN → ${changes.hsnCode}`);
       if (changes.taxRate != null)   parts.push(`GST → ${changes.taxRate}%`);
-      if (changes.groupName)         parts.push(`Group → ${changes.groupName}`);
-      if (changes.reorderLevel != null) parts.push(`Reorder → ${changes.reorderLevel}`);
-      if (changes.name)              parts.push(`Renamed → ${changes.name}`);
-      return parts.length > 0 ? parts.join(' · ') : 'No changes recorded';
+      if (changes.groupName)         parts.push(i18n.t('screens.reportsAuditTrail.groupChange', { value: changes.groupName }));
+      if (changes.reorderLevel != null) parts.push(i18n.t('screens.reportsAuditTrail.reorderChange', { value: changes.reorderLevel }));
+      if (changes.name)              parts.push(i18n.t('screens.reportsAuditTrail.renamedChange', { value: changes.name }));
+      return parts.length > 0 ? parts.join(' · ') : i18n.t('screens.reportsAuditTrail.noChangesRecorded');
     } catch { return ''; }
   };
 
@@ -574,16 +583,9 @@ export default function AuditTrailScreen() {
   }), [formatAmount]);
 
   /** hard = full-screen loader; soft = keep list visible (focus / socket / retry). */
-  const loadEntries = useCallback((mode: 'hard' | 'soft' = 'hard') => {
+  const fetchEntries = useCallback(() => {
     if (!companyGuid) return;
     const gen = ++fetchGenRef.current;
-    const showLoader = mode === 'hard' || entriesLenRef.current === 0;
-    if (showLoader) {
-      setIsLoading(true);
-      setPage(1);
-      setHasMore(false);
-    }
-    setApiError(null);
 
     if (activeTab === 'myentries') {
       getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1, lifecycleFilter })
@@ -614,7 +616,7 @@ export default function AuditTrailScreen() {
         })
         .catch((err: any) => {
           if (gen !== fetchGenRef.current) return;
-          setApiError(err?.message || 'Failed to load entries');
+          setApiError(err?.message || i18n.t('screens.reportsAuditTrail.failedLoadEntries'));
         })
         .finally(() => {
           if (gen !== fetchGenRef.current) return;
@@ -631,7 +633,7 @@ export default function AuditTrailScreen() {
         })
         .catch((err: any) => {
           if (gen !== fetchGenRef.current) return;
-          setApiError(err?.message || 'Failed to load vouchers');
+          setApiError(err?.message || i18n.t('screens.reportsAuditTrail.failedLoadVouchers'));
         })
         .finally(() => {
           if (gen !== fetchGenRef.current) return;
@@ -640,9 +642,33 @@ export default function AuditTrailScreen() {
     }
   }, [companyGuid, fromDate, toDate, activeTab, lifecycleFilter, formatAmount, mapQueueRow]);
 
+  const loadEntries = useCallback((mode: 'hard' | 'soft' = 'hard') => {
+    if (!companyGuid) return;
+    const showLoader = mode === 'hard' || entriesLenRef.current === 0;
+    if (showLoader) {
+      setIsLoading(true);
+      setPage(1);
+      setHasMore(false);
+    }
+    setApiError(null);
+    fetchEntries();
+  }, [companyGuid, fetchEntries]);
+
   // Hard reload when company / dates / tab change
+  const hardLoadKey = `${companyGuid}|${fromDate}|${toDate}|${activeTab}`;
+  const [hardLoadedKey, setHardLoadedKey] = useState<string | null>(null);
+  if (hardLoadedKey !== hardLoadKey) {
+    setHardLoadedKey(hardLoadKey);
+    if (companyGuid) {
+      setIsLoading(true);
+      setPage(1);
+      setHasMore(false);
+      setApiError(null);
+    }
+  }
+
   useEffect(() => {
-    loadEntries('hard');
+    fetchEntries();
   }, [companyGuid, fromDate, toDate, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: hard only on filter axes
 
   // Soft refresh on return from voucher detail (keep list + scroll; no full-screen loader)
@@ -698,12 +724,12 @@ export default function AuditTrailScreen() {
       : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}K`
       : `₹${n}`;
     return [
-      { label: 'Total Vouchers', value: String(total) },
-      { label: 'Dr Total',       value: fmt(drTotal) },
-      { label: 'Cr Total',       value: fmt(crTotal) },
-      { label: 'Net Amount',     value: fmt(Math.abs(drTotal - crTotal)) },
+      { label: t('screens.reportsAuditTrail.totalVouchers'), value: String(total) },
+      { label: t('screens.reportsAuditTrail.drTotal'),       value: fmt(drTotal) },
+      { label: t('screens.reportsAuditTrail.crTotal'),       value: fmt(crTotal) },
+      { label: t('screens.reportsAuditTrail.netAmount'),     value: fmt(Math.abs(drTotal - crTotal)) },
     ];
-  }, [allSource]);
+  }, [allSource, t]);
 
   // ── Filtered & Grouped ────────────────────────────────────
   const filtered = useMemo(() => {
@@ -770,12 +796,12 @@ export default function AuditTrailScreen() {
   /** Books impact — Posted / Not Posted / Cancelled chip (not an icon). */
   const getBooksChip = (entry: VoucherEntry): { label: string; tone: 'posted' | 'notPosted' | 'cancelled' } => {
     if (entry.isCancelled || entry.conversionStatus === 'cancelled') {
-      return { label: 'Cancelled', tone: 'cancelled' };
+      return { label: t('screens.reportsAuditTrail.cancelled'), tone: 'cancelled' };
     }
     if (entry.booksImpactStatus === 'posted') {
-      return { label: 'Posted', tone: 'posted' };
+      return { label: t('screens.reportsAuditTrail.posted'), tone: 'posted' };
     }
-    return { label: 'Not Posted', tone: 'notPosted' };
+    return { label: t('screens.reportsAuditTrail.notPosted'), tone: 'notPosted' };
   };
 
   const displayRef = (entry: VoucherEntry) => {
@@ -783,7 +809,7 @@ export default function AuditTrailScreen() {
     if (entry.tallyVoucherNo) return entry.tallyVoucherNo;
     if (entry.booksImpactStatus === 'posted' && entry.ref) return entry.ref;
     if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
-      return entry.tdkRef || entry.ref || 'Opt. Ref';
+      return entry.tdkRef || entry.ref || t('screens.reportsAuditTrail.optRef');
     }
     if (entry.tdkRef) return entry.tdkRef;
     return entry.ref || '—';
@@ -791,9 +817,9 @@ export default function AuditTrailScreen() {
 
   const entryKindChip = (entry: VoucherEntry): { label: string; tone: 'regular' | 'optional' } | null => {
     if (entry.isMaster) return null;
-    if (entry.currentEntryType === 'optional') return { label: 'Optional', tone: 'optional' };
+    if (entry.currentEntryType === 'optional') return { label: t('screens.reportsAuditTrail.optional'), tone: 'optional' };
     if (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) {
-      return { label: 'Regular', tone: 'regular' };
+      return { label: t('screens.reportsAuditTrail.regular'), tone: 'regular' };
     }
     return null;
   };
@@ -815,10 +841,10 @@ export default function AuditTrailScreen() {
     if (!canRetryEntry(entry)) {
       Toast.show({
         type: 'info',
-        text1: entry.syncStatus === 'processing' ? 'Already pushing' : 'Already synced',
+        text1: entry.syncStatus === 'processing' ? t('screens.reportsAuditTrail.alreadyPushing') : t('screens.reportsAuditTrail.alreadySynced'),
         text2: entry.syncStatus === 'processing'
-          ? 'Wait for the current push to finish.'
-          : 'This entry is already in Tally.',
+          ? t('screens.reportsAuditTrail.waitCurrentPush')
+          : t('screens.reportsAuditTrail.alreadyInTallyMsg'),
         visibilityTime: 2200,
       });
       return;
@@ -826,26 +852,26 @@ export default function AuditTrailScreen() {
     if (retryingRef.current.has(rawId)) return;
 
     markRetrying(rawId, true);
-    Toast.show({ type: 'info', text1: 'Retrying...', text2: `${entry.ref || entry.tdkRef || ''} — ${entry.party}`, visibilityTime: 1400 });
+    Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.retrying'), text2: `${entry.ref || entry.tdkRef || ''} — ${entry.party}`, visibilityTime: 1400 });
     try {
       const result: any = await retryMyEntry(rawId);
       if (result?.alreadySuccess) {
-        Toast.show({ type: 'success', text1: 'Already in Tally', text2: result?.message || 'No need to retry.', visibilityTime: 2500 });
+        Toast.show({ type: 'success', text1: t('screens.reportsAuditTrail.alreadyInTally'), text2: result?.message || t('screens.reportsAuditTrail.noNeedRetry'), visibilityTime: 2500 });
       } else if (result?.alreadyProcessing) {
-        Toast.show({ type: 'info', text1: 'Push in progress', text2: result?.message || 'Wait for it to finish.', visibilityTime: 2500 });
+        Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.pushInProgress'), text2: result?.message || t('screens.reportsAuditTrail.waitFinish'), visibilityTime: 2500 });
       } else if (result?.success === false) {
-        Toast.show({ type: 'error', text1: 'Retry failed', text2: result?.message || 'Please try again.', visibilityTime: 2500 });
+        Toast.show({ type: 'error', text1: t('screens.reportsAuditTrail.retryFailed'), text2: result?.message || t('screens.reportsAuditTrail.pleaseTryAgain'), visibilityTime: 2500 });
       } else {
         Toast.show({
           type: 'info',
-          text1: result?.queued ? 'Still queued' : 'Pushed',
-          text2: result?.message || (result?.queued ? 'Will push when desktop connects.' : 'Sent to Tally.'),
+          text1: result?.queued ? t('screens.reportsAuditTrail.stillQueued') : t('screens.reportsAuditTrail.pushed'),
+          text2: result?.message || (result?.queued ? t('screens.reportsAuditTrail.willPushWhenConnects') : t('screens.reportsAuditTrail.sentToTally')),
           visibilityTime: 2500,
         });
       }
       loadEntries('soft');
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Retry failed', text2: err?.message || 'Please try again.', visibilityTime: 2500 });
+      Toast.show({ type: 'error', text1: t('screens.reportsAuditTrail.retryFailed'), text2: err?.message || t('screens.reportsAuditTrail.pleaseTryAgain'), visibilityTime: 2500 });
     } finally {
       markRetrying(rawId, false);
     }
@@ -857,13 +883,13 @@ export default function AuditTrailScreen() {
       .map(id => apiEntries.find(e => e.id === id) || filtered.find(e => e.id === id))
       .filter((e): e is VoucherEntry => !!e && canRetryEntry(e));
     if (retryable.length === 0) {
-      Toast.show({ type: 'info', text1: 'Nothing to retry', text2: 'Select queued or failed entries only.', visibilityTime: 2500 });
+      Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.nothingToRetry'), text2: t('screens.reportsAuditTrail.selectQueuedOnly'), visibilityTime: 2500 });
       return;
     }
 
     bulkRetryingRef.current = true;
     const count = retryable.length;
-    Toast.show({ type: 'info', text1: `Retrying ${count} entr${count === 1 ? 'y' : 'ies'}...`, text2: 'Syncing to Tally Prime', visibilityTime: 1600 });
+    Toast.show({ type: 'info', text1: count === 1 ? t('screens.reportsAuditTrail.retryingEntriesOne', { count }) : t('screens.reportsAuditTrail.retryingEntriesOther', { count }), text2: t('screens.reportsAuditTrail.syncingToTally'), visibilityTime: 1600 });
     const ids = retryable.map(e => (e.id || '').replace('wq_', '')).filter(Boolean);
     ids.forEach(id => markRetrying(id, true));
     let failed = 0;
@@ -883,12 +909,12 @@ export default function AuditTrailScreen() {
     if (failed === 0) {
       Toast.show({
         type: 'info',
-        text1: `${count - skipped} entr${count - skipped === 1 ? 'y' : 'ies'} queued`,
-        text2: skipped ? `${skipped} already handled.` : 'Will push when desktop connects.',
+        text1: count - skipped === 1 ? t('screens.reportsAuditTrail.entriesQueuedOne', { count: count - skipped }) : t('screens.reportsAuditTrail.entriesQueuedOther', { count: count - skipped }),
+        text2: skipped ? t('screens.reportsAuditTrail.alreadyHandled', { count: skipped }) : t('screens.reportsAuditTrail.willPushWhenConnects'),
         visibilityTime: 3000,
       });
     } else {
-      Toast.show({ type: 'error', text1: `${failed} failed`, text2: `${count - failed} handled, ${failed} errored.`, visibilityTime: 3000 });
+      Toast.show({ type: 'error', text1: t('screens.reportsAuditTrail.failedCount', { count: failed }), text2: t('screens.reportsAuditTrail.handledErrored', { handled: count - failed, failed }), visibilityTime: 3000 });
     }
     loadEntries('soft');
     clearSelection();
@@ -905,11 +931,10 @@ export default function AuditTrailScreen() {
     }
     // Prefer vouchers.guid — voucher_number alone can collide across FYs and
     // unencoded path segments (spaces / slashes) crash Expo Router on open.
-    const docId = entry.guid || entry.tallyVoucherNo || entry.ref;
     openVoucherPreview(router, {
-      guid: docId,
+      guid: entry.guid,
       tdkRef: entry.tdkRef,
-      docType: docId ? (TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type)) : null,
+      docType: entry.guid ? (TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type)) : null,
       entryType: entry.type,
     });
   };
@@ -944,18 +969,18 @@ export default function AuditTrailScreen() {
             documentType: TX_TO_DOC_TYPE[e.type] || undefined,
             label: `${e.type}-${e.ref || e.tdkRef || e.id}.pdf`,
           }));
-        if (!refs.length) throw new Error('Selected entries have no voucher reference to share.');
+        if (!refs.length) throw new Error(t('screens.reportsAuditTrail.noVoucherRefToShare'));
         const { shared, failed } = await shareVouchersAsMultiPagePdf(companyGuid, refs, {
           fileName: `${title} (${refs.length}).pdf`,
           onBeforeShare: () => setIsSharing(false),
         });
         if (failed > 0) {
-          Toast.show({ type: 'info', text1: `Shared ${shared} of ${refs.length}`, text2: `${failed} could not be loaded` });
+          Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.sharedOf', { shared, total: refs.length }), text2: t('screens.reportsAuditTrail.couldNotLoad', { count: failed }) });
         }
       }
       clearSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.reportsAuditTrail.couldNotSharePdfs'));
     } finally {
       setIsSharing(false);
     }
@@ -1000,7 +1025,7 @@ export default function AuditTrailScreen() {
               color={activeTab === tab ? COLORS.white : COLORS.textSecondary}
             />
             <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>
-              {tab === 'myentries' ? 'My Entries' : 'Day Book'}
+              {tab === 'myentries' ? t('screens.reportsAuditTrail.myEntries') : t('screens.reportsAuditTrail.dayBook')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1027,7 +1052,7 @@ export default function AuditTrailScreen() {
         {isLoading ? (
           <View style={s.loadingBox}>
             <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-            <Text style={s.loadingTxt}>Loading vouchers...</Text>
+            <Text style={s.loadingTxt}>{t('screens.reportsAuditTrail.loadingVouchers')}</Text>
           </View>
         ) : (
           <>
@@ -1047,7 +1072,7 @@ export default function AuditTrailScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[lf.chipTxt, lifecycleFilter === f.key && lf.chipTxtActive]}>
-                      {f.label}
+                      {t(f.labelKey)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1090,7 +1115,7 @@ export default function AuditTrailScreen() {
                   color={voucherType !== 'ALL' ? COLORS.brandPrimary : COLORS.textSecondary}
                 />
                 <Text style={[s.vTypeTxt, voucherType !== 'ALL' && s.vTypeTxtActive]} numberOfLines={1}>
-                  {voucherType === 'ALL' ? 'Voucher Type' : voucherType}
+                  {voucherType === 'ALL' ? t('screens.reportsAuditTrail.voucherType') : voucherType}
                 </Text>
                 <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
               </TouchableOpacity>
@@ -1120,12 +1145,12 @@ export default function AuditTrailScreen() {
                 <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
                 <Text style={s.emptyTxt}>
                   {activeTab === 'myentries'
-                    ? 'No entries yet'
-                    : 'No entries found'}
+                    ? t('screens.reportsAuditTrail.noEntriesYet')
+                    : t('screens.reportsAuditTrail.noEntriesFound')}
                 </Text>
                 {activeTab === 'myentries' && (
                   <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24, marginTop: 4 }}>
-                    Create your first voucher from the sales or purchase screens.
+                    {t('screens.reportsAuditTrail.createFirstVoucher')}
                   </Text>
                 )}
               </View>
@@ -1165,9 +1190,9 @@ export default function AuditTrailScreen() {
                         activeTab === 'myentries' && entry.eInvoiceStatus === 'generated'
                           ? 'IRN ✓'
                           : activeTab === 'myentries' && entry.eInvoiceStatus === 'failed'
-                            ? 'IRN Failed'
+                            ? t('screens.reportsAuditTrail.irnFailed')
                             : activeTab === 'myentries' && entry.eInvoiceStatus === 'generating'
-                              ? 'IRN Pending'
+                              ? t('screens.reportsAuditTrail.irnPending')
                               : null;
                       const drCr = entry.isCredit ? 'Cr' : 'Dr';
                       const booksChipStyle =
@@ -1282,12 +1307,12 @@ export default function AuditTrailScreen() {
               <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
                 {isLoadingMore
                   ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                  : <Text style={s.loadMoreTxt}>Load More</Text>
+                  : <Text style={s.loadMoreTxt}>{t('screens.reportsAuditTrail.loadMore')}</Text>
                 }
               </TouchableOpacity>
             )}
             {!hasMore && apiEntries.length > 0 && (
-              <Text style={s.endTxt}>All {apiEntries.length} entries loaded</Text>
+              <Text style={s.endTxt}>{t('screens.reportsAuditTrail.allEntriesLoaded', { count: apiEntries.length })}</Text>
             )}
           </> }
           </>
@@ -1298,19 +1323,19 @@ export default function AuditTrailScreen() {
       {showBottomBar && (
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={s.actionBarLeft}>
-            <Text style={s.actionCount}>{selected.length} selected</Text>
+            <Text style={s.actionCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.footerLink}>Select All</Text>
+              <Text style={s.footerLink}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={clearSelection} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.footerLink}>Cancel</Text>
+              <Text style={s.footerLink}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <View style={s.bottomBtnPair}>
             {activeTab === 'myentries' && (
               <TouchableOpacity style={[s.bottomBtnFull, s.bottomBtnOutline]} onPress={handleBulkPush} activeOpacity={0.85}>
                 <Ionicons name="cloud-upload-outline" size={18} color={COLORS.textPrimary} />
-                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>Push</Text>
+                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>{t('screens.reportsAuditTrail.push')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1323,7 +1348,7 @@ export default function AuditTrailScreen() {
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="share-outline" size={18} color={COLORS.white} />
               }
-              <Text style={s.bottomBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+              <Text style={s.bottomBtnTxt}>{isSharing ? t('screens.reportsAuditTrail.preparing') : t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
           </View>
         </View>

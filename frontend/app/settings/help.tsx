@@ -11,6 +11,8 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { askHelpAI } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAT_TTL_MS    = 24 * 60 * 60 * 1000; // 24 hours
@@ -26,15 +28,15 @@ const openLink = async (url: string, fallbackMsg?: string) => {
     } else {
       Toast.show({
         type: 'info',
-        text1: fallbackMsg || 'Cannot open link',
-        text2: 'Try opening manually: ' + url.replace(/^mailto:|^https?:\/\//, ''),
+        text1: fallbackMsg || i18n.t('screens.settingsHelp.cannotOpen'),
+        text2: i18n.t('screens.settingsHelp.tryManually', { url: url.replace(/^mailto:|^https?:\/\//, '') }),
         visibilityTime: 4000,
       });
     }
   } catch {
     Toast.show({
       type: 'info',
-      text1: fallbackMsg || 'Cannot open link',
+      text1: fallbackMsg || i18n.t('screens.settingsHelp.cannotOpen'),
       text2: url.replace(/^mailto:/, '').replace(/^https:\/\/wa\.me\//, '+'),
       visibilityTime: 4000,
     });
@@ -47,42 +49,15 @@ interface Message { id: string; role: Role; text: string; time: string; }
 
 // ─── FAQs ─────────────────────────────────────────────────────────────────────
 const FAQS = [
-  {
-    q: 'How do I pair TallyDekho with Tally Prime?',
-    a: '1. Install TallyDekho mobile app on your phone.\n2. Download and install the TallyDekho Desktop App on the same Windows PC where Tally Prime is installed.\n3. Open Tally Prime and select your company.\n4. Open the Desktop App → select your company → enable Auto Sync → tap Start Sync.\n5. A 6-digit pairing code will appear on the Desktop App.\n6. In the mobile app, go to Settings → Tally Prime Sync → Enter Pairing Code → enter the code.\n7. Your Tally data will start appearing in the app within 1–5 minutes.',
-  },
-  {
-    q: 'Data is not showing after pairing — what to do?',
-    a: 'Wait 2–5 minutes after pairing for the first sync to complete. Make sure:\n• Tally Prime is open on the PC\n• TallyDekho Desktop App is running\n• Your phone and PC are on the same WiFi network\nIf still not showing, go to Settings → Tally Prime Sync → Sync Now.',
-  },
-  {
-    q: 'Pairing code not showing in Desktop App?',
-    a: 'Make sure you have clicked “Start Sync” in the TallyDekho Desktop App. The pairing code only appears after the sync process has started. Also ensure Tally Prime is open before starting.',
-  },
-  {
-    q: 'Where do I find a voucher by number?',
-    a: 'Go to the Sales or Purchase tab → tap the search icon → type the voucher number (e.g. 101). You can also search from Daybook under Reports.',
-  },
-  {
-    q: 'How do I set payment reminders?',
-    a: 'Go to Settings → Payment Reminders. Enable the toggle, set the number of days before due date, and choose WhatsApp as the notification channel.',
-  },
-  {
-    q: 'What are Optional entries (Draft entries)?',
-    a: 'Optional entries are saved in TallyDekho with a purple “Draft” badge but are NOT posted to Tally books yet. To post, open the voucher and tap “Post to Tally”. Useful for entries that need approval before going live.',
-  },
-  {
-    q: 'Desktop App not detecting Tally Prime?',
-    a: 'Make sure Tally Prime is already open before launching the Desktop App. Both must be installed on the same Windows PC. If still not detected, try restarting the Desktop App as Administrator.',
-  },
-  {
-    q: 'How to generate a PDF invoice?',
-    a: 'Open any voucher from the Sales or Purchase list → tap the Share icon → the PDF is generated automatically with your company logo and details. Configure the format from Settings → Voucher Config.',
-  },
-  {
-    q: 'Can I use the app without Tally / while offline?',
-    a: 'Yes — you can create vouchers and view cached data offline. Data syncs to Tally once your connection is restored and the Desktop App is running.',
-  },
+  { qKey: 'screens.settingsHelp.faq1Q', aKey: 'screens.settingsHelp.faq1A' },
+  { qKey: 'screens.settingsHelp.faq2Q', aKey: 'screens.settingsHelp.faq2A' },
+  { qKey: 'screens.settingsHelp.faq3Q', aKey: 'screens.settingsHelp.faq3A' },
+  { qKey: 'screens.settingsHelp.faq4Q', aKey: 'screens.settingsHelp.faq4A' },
+  { qKey: 'screens.settingsHelp.faq5Q', aKey: 'screens.settingsHelp.faq5A' },
+  { qKey: 'screens.settingsHelp.faq6Q', aKey: 'screens.settingsHelp.faq6A' },
+  { qKey: 'screens.settingsHelp.faq7Q', aKey: 'screens.settingsHelp.faq7A' },
+  { qKey: 'screens.settingsHelp.faq8Q', aKey: 'screens.settingsHelp.faq8A' },
+  { qKey: 'screens.settingsHelp.faq9Q', aKey: 'screens.settingsHelp.faq9A' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +75,7 @@ const WELCOME_MSG: Message = {
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 function MessageBubble({ msg }: { msg: Message }) {
+  const { t } = useTranslation();
   const isUser = msg.role === 'user';
   return (
     <View style={[mb.wrap, isUser ? mb.wrapUser : mb.wrapBot]}>
@@ -109,7 +85,7 @@ function MessageBubble({ msg }: { msg: Message }) {
         </View>
       )}
       <View style={[mb.bubble, isUser ? mb.bubbleUser : mb.bubbleBot]}>
-        <Text style={[mb.text, isUser ? mb.textUser : mb.textBot]}>{msg.text}</Text>
+        <Text style={[mb.text, isUser ? mb.textUser : mb.textBot]}>{msg.id === 'welcome' ? t('screens.settingsHelp.welcome') : msg.text}</Text>
         <Text style={[mb.time, isUser ? mb.timeUser : mb.timeBot]}>{msg.time}</Text>
       </View>
     </View>
@@ -156,6 +132,7 @@ function TypingIndicator() {
 
 // ─── FAQ Item ─────────────────────────────────────────────────────────────────
 function FaqItem({ q, a, isLast, onPress }: { q: string; a: string; isLast: boolean; onPress: (q: string) => void }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return (
     <View style={[fq.item, !isLast && fq.border]}>
@@ -168,7 +145,7 @@ function FaqItem({ q, a, isLast, onPress }: { q: string; a: string; isLast: bool
           <Text style={fq.answer}>{a}</Text>
           <TouchableOpacity style={fq.askBtn} onPress={() => onPress(q)} activeOpacity={0.75}>
             <Ionicons name="chatbubble-outline" size={13} color={COLORS.brandPrimary} />
-            <Text style={fq.askBtnTxt}>Ask follow-up</Text>
+            <Text style={fq.askBtnTxt}>{t('screens.settingsHelp.askFollowUp')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -205,6 +182,7 @@ const sd = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function HelpCenterScreen() {
   const router    = useRouter();
+  const { t }     = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
   const inputRef   = useRef<TextInputType>(null);
   const { user }  = useAuth();
@@ -271,14 +249,14 @@ export default function HelpCenterScreen() {
       .slice(-MAX_HISTORY);
 
     askHelpAI(trimmed, historyMsgs).then((res: any) => {
-      const reply = res?.data?.reply || "I'm having trouble right now. Please try again or contact support.";
+      const reply = res?.data?.reply || i18n.t('screens.settingsHelp.botTrouble');
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'bot', text: reply, time: timestamp() }]);
       setSending(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }).catch(() => {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(), role: 'bot',
-        text: "I'm offline right now. Try WhatsApp support or email us at support@tallydekho.com",
+        text: i18n.t('screens.settingsHelp.botOffline'),
         time: timestamp(),
       }]);
       setSending(false);
@@ -306,24 +284,24 @@ export default function HelpCenterScreen() {
           <View style={s.hdrBadgeRow}>
             <View style={s.aiBadge}>
               <Ionicons name="sparkles" size={10} color={COLORS.white} />
-              <Text style={s.aiBadgeTxt}>AI Support</Text>
+              <Text style={s.aiBadgeTxt}>{t('screens.settingsHelp.aiSupport')}</Text>
             </View>
           </View>
-          <Text style={s.hdrTitle}>Help Center</Text>
-          <Text style={s.hdrSub}>TallyDekho & Tally Prime support</Text>
+          <Text style={s.hdrTitle}>{t('settings.help')}</Text>
+          <Text style={s.hdrSub}>{t('screens.settingsHelp.hdrSub')}</Text>
         </View>
 
         <View style={s.hdrRight}>
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => openLink('mailto:support@tallydekho.com', 'Email: support@tallydekho.com')}
+            onPress={() => openLink('mailto:support@tallydekho.com', t('screens.settingsHelp.emailFallback'))}
             activeOpacity={0.75}
           >
             <Ionicons name="mail-outline" size={21} color={COLORS.brandPrimary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => openLink('https://wa.me/919024466791', 'WhatsApp: +91 90244 66791')}
+            onPress={() => openLink('https://wa.me/919024466791', t('screens.settingsHelp.whatsappFallback'))}
             activeOpacity={0.75}
           >
             <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
@@ -335,9 +313,9 @@ export default function HelpCenterScreen() {
       {chatRestored && (
         <View style={s.restoredBanner}>
           <Ionicons name="time-outline" size={13} color={COLORS.brandPrimary} />
-          <Text style={s.restoredTxt}>Chat restored from your last session</Text>
+          <Text style={s.restoredTxt}>{t('screens.settingsHelp.restored')}</Text>
           <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={s.restoredClear}>Clear</Text>
+            <Text style={s.restoredClear}>{t('common.clear')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -363,13 +341,13 @@ export default function HelpCenterScreen() {
           {/* ── FAQs (collapsible, shown when no real conversation yet) ───── */}
           {showFAQ && (
             <View style={s.faqSection}>
-              <SectionLabel label="FREQUENTLY ASKED" />
+              <SectionLabel label={t('screens.settingsHelp.faqLabel')} />
               <View style={s.faqCard}>
                 {FAQS.map((item, i) => (
                   <FaqItem
-                    key={item.q}
-                    q={item.q}
-                    a={item.a}
+                    key={item.qKey}
+                    q={t(item.qKey)}
+                    a={t(item.aKey)}
                     isLast={i === FAQS.length - 1}
                     onPress={handleFAQAsk}
                   />
@@ -384,7 +362,7 @@ export default function HelpCenterScreen() {
           {!showFAQ && (
             <TouchableOpacity style={s.faqToggle} onPress={() => setShowFAQ(true)} activeOpacity={0.7}>
               <Ionicons name="help-circle-outline" size={15} color={COLORS.brandPrimary} />
-              <Text style={s.faqToggleTxt}>Browse FAQ topics</Text>
+              <Text style={s.faqToggleTxt}>{t('screens.settingsHelp.browseFaq')}</Text>
             </TouchableOpacity>
           )}
 
@@ -399,7 +377,7 @@ export default function HelpCenterScreen() {
               style={s.inputBox}
               value={input}
               onChangeText={setInput}
-              placeholder="Ask anything about TallyDekho…"
+              placeholder={t('screens.settingsHelp.inputPh')}
               placeholderTextColor={COLORS.textTertiary}
               multiline
               maxLength={500}
@@ -418,7 +396,7 @@ export default function HelpCenterScreen() {
             </TouchableOpacity>
           </View>
           <Text style={s.inputDisclaimer}>
-            AI may make mistakes · Chat history saved for 24 hours
+            {t('screens.settingsHelp.disclaimer')}
           </Text>
         </View>
       </KeyboardAvoidingView>

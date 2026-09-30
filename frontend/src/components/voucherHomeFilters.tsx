@@ -6,12 +6,14 @@
  * Expenses: Type is radio All / Direct / Indirect (empty = All) + Category multi (ledger parents).
  *   Multi-check on Type was a UX trap: tapping Indirect after Direct selected BOTH → treated as All.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import FilterBottomSheet, {
   FilterCheckRow,
@@ -66,6 +68,21 @@ export const DOC_TYPE_LABEL: Record<string, string> = {
   journal: 'Journal',
   payment: 'Payment',
   contra: 'Contra',
+};
+
+const DOC_TYPE_LABEL_KEY: Record<string, string> = {
+  all: 'common.all',
+  invoice: 'sales.invoice',
+  order: 'sales.order',
+  credit_note: 'sales.creditNote',
+  delivery_note: 'sales.deliveryNote',
+  proforma: 'screens.componentsVoucherHomeFilters.proforma',
+  quotation: 'screens.componentsVoucherHomeFilters.quotation',
+  debit_note: 'purchase.debitNote',
+  receipt: 'voucher.receipt',
+  journal: 'voucher.journal',
+  payment: 'voucher.payment',
+  contra: 'voucher.contra',
 };
 
 /** Map API doc_type → document preview `type` query param. */
@@ -136,33 +153,33 @@ export function expenseRowToRouteType(voucherType?: string | null): string {
 }
 
 /** List-row badge colors — theme-aligned; no red / green / black-white; blues ≠ purples. */
-const VOUCHER_TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+const VOUCHER_TYPE_BADGE: Record<string, { label: string; labelKey: string; color: string; bg: string }> = {
   // Theme info blue — primary sales doc
-  sales_invoice:    { label: 'Sales Invoice',    color: '#2563EB', bg: '#EFF6FF' },
+  sales_invoice:    { label: 'Sales Invoice',    labelKey: 'screens.componentsVoucherHomeFilters.salesInvoice', color: '#2563EB', bg: '#EFF6FF' },
   // Warm brand amber (app accent) — not purple
-  purchase_invoice: { label: 'Purchase Invoice', color: '#A89060', bg: '#FDF9F4' },
+  purchase_invoice: { label: 'Purchase Invoice', labelKey: 'quickActions.purchaseInvoice', color: '#A89060', bg: '#FDF9F4' },
   // Cyan — clearly not blue/purple
-  sales_order:      { label: 'Sales Order',      color: '#0891B2', bg: '#ECFEFF' },
+  sales_order:      { label: 'Sales Order',      labelKey: 'screens.componentsVoucherHomeFilters.salesOrder', color: '#0891B2', bg: '#ECFEFF' },
   // Warm taupe — theme secondary family
-  purchase_order:   { label: 'Purchase Order',   color: '#8B7355', bg: '#F7F3EE' },
+  purchase_order:   { label: 'Purchase Order',   labelKey: 'quickActions.purchaseOrder', color: '#8B7355', bg: '#F7F3EE' },
   // Theme warning amber
-  credit_note:      { label: 'Credit Note',      color: '#D97706', bg: '#FFFBEB' },
+  credit_note:      { label: 'Credit Note',      labelKey: 'sales.creditNote', color: '#D97706', bg: '#FFFBEB' },
   // Soft rose (not traffic red)
-  debit_note:       { label: 'Debit Note',       color: '#DB2777', bg: '#FDF2F8' },
+  debit_note:       { label: 'Debit Note',       labelKey: 'purchase.debitNote', color: '#DB2777', bg: '#FDF2F8' },
   // Teal
-  delivery_note:    { label: 'Delivery Note',    color: '#0E7490', bg: '#F0FDFA' },
+  delivery_note:    { label: 'Delivery Note',    labelKey: 'sales.deliveryNote', color: '#0E7490', bg: '#F0FDFA' },
   // Soft lilac (lighter than before — not dark purple)
-  proforma_invoice: { label: 'Proforma',         color: '#A78BFA', bg: '#F5F3FF' },
+  proforma_invoice: { label: 'Proforma',         labelKey: 'screens.componentsVoucherHomeFilters.proforma', color: '#A78BFA', bg: '#F5F3FF' },
   // Soft peach — distinct from blue/purple/amber warning
-  quotation:        { label: 'Quotation',        color: '#C97B4A', bg: '#FBF0E8' },
+  quotation:        { label: 'Quotation',        labelKey: 'screens.componentsVoucherHomeFilters.quotation', color: '#C97B4A', bg: '#FBF0E8' },
   // Money vouchers in Sales / Purchase registers
-  receipt_voucher:  { label: 'Receipt',          color: '#2D7D46', bg: '#E8F5E9' },
-  journal_voucher:  { label: 'Journal',          color: '#6D4C41', bg: '#EFEBE9' },
-  payment_voucher:  { label: 'Payment',          color: '#E65100', bg: '#FFF3E0' },
-  contra_voucher:   { label: 'Contra',           color: '#546E7A', bg: '#ECEFF1' },
+  receipt_voucher:  { label: 'Receipt',          labelKey: 'voucher.receipt', color: '#2D7D46', bg: '#E8F5E9' },
+  journal_voucher:  { label: 'Journal',          labelKey: 'voucher.journal', color: '#6D4C41', bg: '#EFEBE9' },
+  payment_voucher:  { label: 'Payment',          labelKey: 'voucher.payment', color: '#E65100', bg: '#FFF3E0' },
+  contra_voucher:   { label: 'Contra',           labelKey: 'voucher.contra', color: '#546E7A', bg: '#ECEFF1' },
 };
 
-export type VoucherTypeBadgeInfo = { label: string; color: string; bg: string; docType: string };
+export type VoucherTypeBadgeInfo = { label: string; labelKey?: string; color: string; bg: string; docType: string };
 
 /** Resolve short voucher-kind badge from doc_type / voucher_type / is_optional. */
 export function resolveVoucherTypeBadge(
@@ -171,8 +188,9 @@ export function resolveVoucherTypeBadge(
 ): VoucherTypeBadgeInfo {
   const docType = row.docType || classifyVoucherDocType(module, row);
   const routeKey = docTypeToRouteType(docType, module);
-  const cfg = VOUCHER_TYPE_BADGE[routeKey] || {
+  const cfg: Omit<VoucherTypeBadgeInfo, 'docType'> = VOUCHER_TYPE_BADGE[routeKey] || {
     label: DOC_TYPE_LABEL[docType] || 'Voucher',
+    labelKey: DOC_TYPE_LABEL_KEY[docType] || 'quickActions.voucher',
     color: COLORS.textSecondary,
     bg: COLORS.pageBg,
   };
@@ -193,8 +211,9 @@ export function VoucherTypeBadge({
   is_optional?: boolean;
   label?: string;
 }) {
+  const { t } = useTranslation();
   const info = resolveVoucherTypeBadge(module, { docType, voucher_type, is_optional });
-  const label = labelOverride || info.label;
+  const label = labelOverride || (info.labelKey ? t(info.labelKey) : info.label);
   return (
     <View style={[vtBadge.badge, { backgroundColor: info.bg, borderColor: info.color + '66' }]}>
       <Text style={[vtBadge.txt, { color: info.color }]} numberOfLines={1}>{label}</Text>
@@ -222,8 +241,8 @@ const vtBadge = StyleSheet.create({
 export function notifyFiltersApplied(parts: string[]) {
   Toast.show({
     type: 'success',
-    text1: parts.length ? 'Filters applied' : 'Filters cleared',
-    text2: parts.length ? parts.join(' · ') : 'Showing all',
+    text1: parts.length ? i18n.t('screens.componentsVoucherHomeFilters.filtersApplied') : i18n.t('screens.componentsVoucherHomeFilters.filtersCleared'),
+    text2: parts.length ? parts.join(' · ') : i18n.t('screens.componentsVoucherHomeFilters.showingAll'),
     visibilityTime: 2000,
   });
 }
@@ -269,6 +288,7 @@ export function ActiveFilterChips({
   /** 'amber' matches Total Stock chip styling */
   variant?: 'default' | 'amber';
 }) {
+  const { t } = useTranslation();
   if (!chips.length) return null;
   const chipStyle = variant === 'amber' ? fi.chipAmber : fi.chip;
   const chipTxtStyle = variant === 'amber' ? fi.chipTxtAmber : fi.chipTxt;
@@ -297,7 +317,7 @@ export function ActiveFilterChips({
             onPress={onClearAll}
             activeOpacity={0.7}
           >
-            <Text style={variant === 'amber' ? fi.clearChipTxtAmber : fi.clearChipTxt}>Clear all</Text>
+            <Text style={variant === 'amber' ? fi.clearChipTxtAmber : fi.clearChipTxt}>{t('screens.componentsVoucherHomeFilters.clearAll')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -331,6 +351,8 @@ export function DocTypeFilterModal({
   partyGroups: { name: string; count: number }[];
   onApply: (ids: string[], groups: string[]) => void;
 }) {
+  const { t } = useTranslation();
+  const docLabel = (id: string, fallback: string) => (DOC_TYPE_LABEL_KEY[id] ? t(DOC_TYPE_LABEL_KEY[id]) : fallback);
   const [tab, setTab] = useState<'Type' | 'Group'>('Type');
   const [localIds, setLocalIds] = useState<string[]>([]);
   const [localGroups, setLocalGroups] = useState<string[]>([]);
@@ -342,12 +364,14 @@ export function DocTypeFilterModal({
   useMultiFilterHydration(visible, selectedIds, allOptionIds, setLocalIds);
   useMultiFilterHydration(visible, selectedGroups, allGroupNames, setLocalGroups);
 
-  useEffect(() => {
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (prevVisible !== visible) {
+    setPrevVisible(visible);
     if (visible) {
       setGroupSearch('');
       setTab('Type');
     }
-  }, [visible]);
+  }
 
   const isAllTypes = isFilterAllSelected(localIds, allOptionIds);
   const isAllGroups = isFilterAllSelected(localGroups, allGroupNames);
@@ -381,7 +405,7 @@ export function DocTypeFilterModal({
     const parts: string[] = [];
     if (nextIds.length) {
       parts.push(
-        nextIds.map((id) => options.find((o) => o.id === id)?.label || DOC_TYPE_LABEL[id] || id).join(', ')
+        nextIds.map((id) => docLabel(id, options.find((o) => o.id === id)?.label || DOC_TYPE_LABEL[id] || id)).join(', ')
       );
     }
     if (nextGroups.length) parts.push(...nextGroups);
@@ -396,7 +420,7 @@ export function DocTypeFilterModal({
       activeCount={activeCount}
       onClear={() => { setLocalIds([...allOptionIds]); setLocalGroups([...allGroupNames]); }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.componentsVoucherHomeFilters.applyFilters')}
       applyDisabled={!canApply}
       heightFraction={0.68}
     >
@@ -408,7 +432,7 @@ export function DocTypeFilterModal({
             onPress={() => setTab(cat)}
             activeOpacity={0.7}
           >
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{t(TAB_LABEL_KEY[cat])}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -416,7 +440,7 @@ export function DocTypeFilterModal({
       {tab === 'Type' ? (
         <View>
           <FilterCheckRow
-            label="All"
+            label={t('common.all')}
             count={allCount}
             selected={isAllTypes}
             onPress={() => setLocalIds((prev) => toggleFilterAll(prev, allOptionIds))}
@@ -424,7 +448,7 @@ export function DocTypeFilterModal({
           {options.map((opt) => (
             <FilterCheckRow
               key={opt.id}
-              label={opt.label}
+              label={docLabel(opt.id, opt.label)}
               count={counts[opt.id] ?? 0}
               selected={isFilterOptionChecked(localIds, opt.id)}
               onPress={() => toggleType(opt.id)}
@@ -437,19 +461,19 @@ export function DocTypeFilterModal({
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search party group..."
+              placeholder={t('screens.componentsVoucherHomeFilters.searchPartyGroup')}
               placeholderTextColor={COLORS.textTertiary}
               value={groupSearch}
               onChangeText={setGroupSearch}
             />
           </View>
           <FilterCheckRow
-            label="All groups"
+            label={t('screens.componentsVoucherHomeFilters.allGroups')}
             selected={isAllGroups}
             onPress={() => setLocalGroups((prev) => toggleFilterAll(prev, allGroupNames))}
           />
           {filteredGroups.length === 0 ? (
-            <Text style={fm.groupHint}>No party groups in this date range</Text>
+            <Text style={fm.groupHint}>{t('screens.componentsVoucherHomeFilters.noPartyGroups')}</Text>
           ) : (
             filteredGroups.map((g) => (
               <FilterCheckRow
@@ -470,6 +494,17 @@ export function DocTypeFilterModal({
 // ── Expense register filter (Type + Category tabs, both multi) ────────────────
 
 export type ExpenseTypeId = 'Direct' | 'Indirect';
+
+const EXPENSE_TYPE_LABEL_KEY: Record<ExpenseTypeId, string> = {
+  Direct: 'expenses.direct',
+  Indirect: 'expenses.indirect',
+};
+
+const TAB_LABEL_KEY: Record<'Type' | 'Group' | 'Category', string> = {
+  Type: 'screens.componentsVoucherHomeFilters.tabType',
+  Group: 'screens.componentsVoucherHomeFilters.tabGroup',
+  Category: 'screens.componentsVoucherHomeFilters.tabCategory',
+};
 
 /** Normalize legacy multi-select → radio (empty / single). Both selected ⇒ All. */
 function normalizeExpenseTypeRadio(types: ExpenseTypeId[]): ExpenseTypeId | 'All' {
@@ -496,6 +531,7 @@ export function ExpenseRegisterFilterModal({
   categories: { name: string; count: number }[];
   onApply: (types: ExpenseTypeId[], categories: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'Type' | 'Category'>('Type');
   const [localType, setLocalType] = useState<'All' | ExpenseTypeId>(() => normalizeExpenseTypeRadio(activeTypes));
   const [localCats, setLocalCats] = useState<string[]>([]);
@@ -505,13 +541,15 @@ export function ExpenseRegisterFilterModal({
 
   useMultiFilterHydration(visible, activeCategories, allCatNames, setLocalCats);
 
-  useEffect(() => {
+  const [prevOpenDeps, setPrevOpenDeps] = useState({ visible, activeTypes });
+  if (prevOpenDeps.visible !== visible || prevOpenDeps.activeTypes !== activeTypes) {
+    setPrevOpenDeps({ visible, activeTypes });
     if (visible) {
       setLocalType(normalizeExpenseTypeRadio(activeTypes));
       setCatSearch('');
       setTab('Type');
     }
-  }, [visible, activeTypes]);
+  }
 
   const isAllCats = isFilterAllSelected(localCats, allCatNames);
   const activeCount = (localType === 'All' ? 0 : 1) + (isAllCats ? 0 : localCats.length);
@@ -534,7 +572,7 @@ export function ExpenseRegisterFilterModal({
     onApply(nextTypes, nextCats);
     onClose();
     const parts: string[] = [];
-    if (nextTypes.length) parts.push(nextTypes[0]);
+    if (nextTypes.length) parts.push(t(EXPENSE_TYPE_LABEL_KEY[nextTypes[0]]));
     if (nextCats.length) parts.push(...nextCats);
     notifyFiltersApplied(parts);
   };
@@ -543,11 +581,11 @@ export function ExpenseRegisterFilterModal({
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter Expenses"
+      title={t('screens.componentsVoucherHomeFilters.filterExpenses')}
       activeCount={activeCount}
       onClear={() => { setLocalType('All'); setLocalCats([...allCatNames]); }}
       onApply={handleApply}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.componentsVoucherHomeFilters.applyFilters')}
       applyDisabled={!canApply}
       heightFraction={0.68}
     >
@@ -559,7 +597,7 @@ export function ExpenseRegisterFilterModal({
             onPress={() => setTab(cat)}
             activeOpacity={0.7}
           >
-            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{t(TAB_LABEL_KEY[cat])}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -567,19 +605,19 @@ export function ExpenseRegisterFilterModal({
       {tab === 'Type' ? (
         <View>
           <FilterRadioRow
-            label="All"
+            label={t('common.all')}
             count={typeCounts.all}
             selected={localType === 'All'}
             onPress={() => setLocalType('All')}
           />
           <FilterRadioRow
-            label="Direct"
+            label={t('expenses.direct')}
             count={typeCounts.direct}
             selected={localType === 'Direct'}
             onPress={() => setLocalType('Direct')}
           />
           <FilterRadioRow
-            label="Indirect"
+            label={t('expenses.indirect')}
             count={typeCounts.indirect}
             selected={localType === 'Indirect'}
             onPress={() => setLocalType('Indirect')}
@@ -591,19 +629,19 @@ export function ExpenseRegisterFilterModal({
             <Ionicons name="search" size={14} color={COLORS.textTertiary} />
             <TextInput
               style={fm.searchInput}
-              placeholder="Search category..."
+              placeholder={t('screens.componentsVoucherHomeFilters.searchCategory')}
               placeholderTextColor={COLORS.textTertiary}
               value={catSearch}
               onChangeText={setCatSearch}
             />
           </View>
           <FilterCheckRow
-            label="All categories"
+            label={t('screens.componentsVoucherHomeFilters.allCategories')}
             selected={isAllCats}
             onPress={() => setLocalCats((prev) => toggleFilterAll(prev, allCatNames))}
           />
           {filteredCats.length === 0 ? (
-            <Text style={fm.groupHint}>No categories in this date range</Text>
+            <Text style={fm.groupHint}>{t('screens.componentsVoucherHomeFilters.noCategories')}</Text>
           ) : (
             filteredCats.map((c) => (
               <FilterCheckRow

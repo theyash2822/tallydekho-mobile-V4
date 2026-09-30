@@ -8,7 +8,7 @@ import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGrad, Stop, Text as
 import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -29,6 +29,11 @@ import {
 const { width: SW } = Dimensions.get('window');
 const PERIOD_TABS = ['7D', '1M', '3M', '6M'] as const;
 const TYPE_TABS = ['All', 'Cash', 'Bank'] as const;
+const TYPE_TAB_LABEL_KEYS: Record<(typeof TYPE_TABS)[number], string> = {
+  All: 'common.all',
+  Cash: 'screens.kpiReceipts.cash',
+  Bank: 'screens.kpiReceipts.bank',
+};
 
 const CHART_COLOR = '#2D7D46';
 const DONUT_CASH = '#A89060';
@@ -85,15 +90,20 @@ function DailyInflowChart({
   data: DayPoint[];
   formatAmountCompact: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const defaultIdx = Math.max(0, data.length - 1);
   const [activeIdx, setActiveIdx] = useState<number | null>(defaultIdx);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataRef = useRef(data);
-  dataRef.current = data;
-
   useEffect(() => {
+    dataRef.current = data;
+  });
+
+  const [prevData, setPrevData] = useState(data);
+  if (prevData !== data) {
+    setPrevData(data);
     setActiveIdx(Math.max(0, data.length - 1));
-  }, [data]);
+  }
 
   const vals = data.map((d) => d.amount);
   const maxV = niceMax(Math.max(...vals, 1));
@@ -114,6 +124,7 @@ function DailyInflowChart({
 
   const pan = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder invokes these callbacks only from touch events, never during render
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
@@ -162,7 +173,7 @@ function DailyInflowChart({
               {changePos ? '+' : ''}{formatAmountCompact(Math.round(change))} ({changePct}%)
             </Text>
           ) : (
-            <Text style={[ch.changeVal, { color: COLORS.textTertiary }]}>vs prior day</Text>
+            <Text style={[ch.changeVal, { color: COLORS.textTertiary }]}>{t('screens.kpiReceipts.vsPriorDay')}</Text>
           )}
         </View>
         <View style={ch.dayTag}>
@@ -218,7 +229,7 @@ function DailyInflowChart({
         </Svg>
       </View>
 
-      <Text style={ch.chartLabel}>Daily Inflow — touch to explore</Text>
+      <Text style={ch.chartLabel}>{t('screens.kpiReceipts.dailyInflowHint')}</Text>
     </View>
   );
 }
@@ -260,7 +271,7 @@ function CashBankDonut({
                 <Text style={dc.centerAmt} numberOfLines={1}>
                   {formatAmountCompact(Math.round(total))}
                 </Text>
-                <Text style={dc.centerLbl}>Total</Text>
+                <Text style={dc.centerLbl}>{t('sales.total')}</Text>
               </View>
             )}
           />
@@ -335,15 +346,15 @@ export default function ReceiptsScreen() {
       if (hasDataRef.current) {
         const ts = dataAsOfRef.current
           ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-          : 'earlier';
-        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+          : t('home.earlier');
+        setApiError(t('home.refreshFailed', { time: ts }));
       } else {
-        setApiError(err?.message || 'Failed to load receipts');
+        setApiError(err?.message || t('screens.kpiReceipts.loadFailed'));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
+  }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt, t]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -394,11 +405,11 @@ export default function ReceiptsScreen() {
     const bank = Number(apiData?.bank_total) || 0;
     return [
       { id: 'period', icon: 'download-outline', label: t('kpi.periodReceipts', { period }), amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
-      { id: 'today', icon: 'calendar-outline', label: 'Today', amount: formatAmountCompact(Math.round(today)), trend: null, positive: true },
-      { id: 'cash', icon: 'cash-outline', label: 'Cash', amount: formatAmountCompact(Math.round(cash)), trend: null, positive: true },
-      { id: 'bank', icon: 'business-outline', label: 'Bank', amount: formatAmountCompact(Math.round(bank)), trend: null, positive: true },
+      { id: 'today', icon: 'calendar-outline', label: t('sales.today'), amount: formatAmountCompact(Math.round(today)), trend: null, positive: true },
+      { id: 'cash', icon: 'cash-outline', label: t('screens.kpiReceipts.cash'), amount: formatAmountCompact(Math.round(cash)), trend: null, positive: true },
+      { id: 'bank', icon: 'business-outline', label: t('screens.kpiReceipts.bank'), amount: formatAmountCompact(Math.round(bank)), trend: null, positive: true },
     ];
-  }, [apiData, period, formatAmountCompact]);
+  }, [apiData, period, formatAmountCompact, t]);
 
   const daily: DayPoint[] = useMemo(() => {
     const rows = Array.isArray(apiData?.daily_series) ? apiData.daily_series : [];
@@ -473,32 +484,32 @@ export default function ReceiptsScreen() {
               </View>
 
               <View style={s.typeRow}>
-                {TYPE_TABS.map((t) => (
+                {TYPE_TABS.map((tab) => (
                   <TouchableOpacity
-                    key={t}
-                    style={[s.typeBtn, typeTab === t && s.typeBtnActive]}
-                    onPress={() => setTypeTab(t)}
+                    key={tab}
+                    style={[s.typeBtn, typeTab === tab && s.typeBtnActive]}
+                    onPress={() => setTypeTab(tab)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[s.typeTxt, typeTab === t && s.typeTxtActive]}>{t}</Text>
+                    <Text style={[s.typeTxt, typeTab === tab && s.typeTxtActive]}>{t(TYPE_TAB_LABEL_KEYS[tab])}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {filtered.length === 0 ? (
                 <View style={s.empty}>
-                  <Text style={s.emptyTxt}>No receipts in this period</Text>
+                  <Text style={s.emptyTxt}>{t('screens.kpiReceipts.noReceipts')}</Text>
                 </View>
               ) : filtered.map((p, idx) => (
                 <TxnListRow
                   key={p.guid || `${p.voucher_number}-${idx}`}
                   icon={p.mode === 'Cash' ? 'cash-outline' : 'card-outline'}
-                  title={p.mode || 'Receipt'}
+                  title={p.mode || t('voucher.receipt')}
                   refLabel={p.voucher_number || '—'}
                   subtitle={`${p.party_name || '—'} · ${fmtDate(p.date)}`}
                   amount={formatAmount(Math.round(p.amount))}
                   showBorder={idx < filtered.length - 1}
-                  onPress={() => p.guid && safePush(router, `/document/${p.guid}?type=receipt_voucher` as any)}
+                  onPress={() => openVoucherPreview(router, { guid: p.guid, docType: 'receipt_voucher' })}
                 />
               ))}
             </View>

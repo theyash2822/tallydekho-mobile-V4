@@ -17,6 +17,7 @@ import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { getStocks, getInventorySettings } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 const STOCK_ICON_BG = '#E8E7E1';
 
@@ -25,6 +26,7 @@ function OnHandCard({
 }: {
   item: any; onPress: () => void; lowThreshold: number;
 }) {
+  const { t } = useTranslation();
   const isLow = item.qty > 0 && item.qty <= lowThreshold;
   return (
     <EntityListTile
@@ -38,7 +40,7 @@ function OnHandCard({
         <View style={sc.right}>
           <Text style={sc.value}>{item.value}</Text>
           <View style={[sc.qtyBadge, isLow && sc.qtyLow]}>
-            <Text style={[sc.qtyTxt, isLow && sc.qtyLowTxt]}>{item.qty} units</Text>
+            <Text style={[sc.qtyTxt, isLow && sc.qtyLowTxt]}>{t('screens.stocksOnHandStock.units', { qty: item.qty })}</Text>
           </View>
         </View>
       )}
@@ -74,14 +76,8 @@ export default function OnHandStockScreen() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const load = useCallback(() => {
-    if (!companyGuid) {
-      setItems([]);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    setApiError(null);
+  const fetchStock = useCallback(() => {
+    if (!companyGuid) return;
     Promise.all([
       getInventorySettings(companyGuid).catch(() => null),
       getStocks(companyGuid, { limit: '5000' }),
@@ -122,11 +118,35 @@ export default function OnHandStockScreen() {
           }));
         setItems(mapped);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load stock'))
+      .catch((e: any) => setApiError(e?.message || i18n.t('screens.stocksOnHandStock.loadFailed')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, formatAmount]);
 
-  useEffect(() => { load(); }, [load, lastSyncAt]);
+  const load = useCallback(() => {
+    if (!companyGuid) {
+      setItems([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setApiError(null);
+    fetchStock();
+  }, [companyGuid, fetchStock]);
+
+  const loadDeps = [fetchStock, lastSyncAt];
+  const [prevLoadDeps, setPrevLoadDeps] = useState<unknown[] | null>(null);
+  if (prevLoadDeps === null || loadDeps.some((d, i) => d !== prevLoadDeps[i])) {
+    setPrevLoadDeps(loadDeps);
+    if (!companyGuid) {
+      setItems([]);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
+  useEffect(() => { fetchStock(); }, [fetchStock, lastSyncAt]);
 
   const filtered = items.filter(
     (i: any) =>
@@ -136,7 +156,7 @@ export default function OnHandStockScreen() {
 
   const totalQty = items.reduce((s: number, i: any) => s + (i.qty || 0), 0);
   const lowStock = items.filter((i: any) => (i.qty || 0) > 0 && (i.qty || 0) <= lowThreshold).length;
-  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : 'All Time';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : t('screens.stocksOnHandStock.allTime');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -164,9 +184,9 @@ export default function OnHandStockScreen() {
 
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${items.length}` },
-          { label: 'Quantity', value: totalQty.toLocaleString('en-IN') },
-          { label: 'Low Stock', value: `${lowStock}`, warn: lowStock > 0 },
+          { label: t('screens.stocksOnHandStock.skuCount'), value: `${items.length}` },
+          { label: t('screens.stocksOnHandStock.quantity'), value: totalQty.toLocaleString('en-IN') },
+          { label: t('screens.stocksOnHandStock.lowStock'), value: `${lowStock}`, warn: lowStock > 0 },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
             <Text style={[styles.summaryVal, s.warn && { color: COLORS.negative }]}>{s.value}</Text>
@@ -175,10 +195,10 @@ export default function OnHandStockScreen() {
         ))}
       </View>
 
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." />
+      <SearchBar value={query} onChangeText={setQuery} placeholder={t('screens.stocksOnHandStock.searchPh')} />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>{filtered.length} items</Text>
+        <Text style={styles.sectionLabel}>{t('screens.stocksOnHandStock.itemsCount', { count: filtered.length })}</Text>
         {isLoading && (
           <>
             <LedgerRowSkeleton />
@@ -189,7 +209,7 @@ export default function OnHandStockScreen() {
         {!isLoading && filtered.length === 0 && (
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={32} color={COLORS.textTertiary} />
-            <Text style={styles.emptyTxt}>No on-hand stock found</Text>
+            <Text style={styles.emptyTxt}>{t('screens.stocksOnHandStock.empty')}</Text>
           </View>
         )}
         {!isLoading && filtered.map(item => (
@@ -197,7 +217,7 @@ export default function OnHandStockScreen() {
             key={item.id}
             item={item}
             lowThreshold={lowThreshold}
-            onPress={() => safePush(router, `/stocks/item-detail?id=${item.id}` as any)}
+            onPress={() => safePush(router, `/stocks/item-detail?id=${encodeURIComponent(String(item.id))}` as any)}
           />
         ))}
         <View style={{ height: 80 }} />

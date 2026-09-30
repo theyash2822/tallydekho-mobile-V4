@@ -36,9 +36,9 @@ type LowStockRow = {
   kind: 'low' | 'out';
 };
 
-const TABS: { key: Bucket; label: string }[] = [
-  { key: 'low', label: 'Low stock' },
-  { key: 'out', label: 'Out of stock' },
+const TABS: { key: Bucket; labelKey: string }[] = [
+  { key: 'low', labelKey: 'screens.stocksLowStock.tabLow' },
+  { key: 'out', labelKey: 'screens.stocksLowStock.tabOut' },
 ];
 
 function stockRateString(r: any): string {
@@ -64,6 +64,7 @@ function ItemCard({
   onLongPress: () => void;
   onAddToPo: () => void;
 }) {
+  const { t } = useTranslation();
   const isOut = item.kind === 'out';
   const barPct = !isOut && threshold > 0
     ? Math.min(Math.round((item.qty / threshold) * 100), 100)
@@ -92,22 +93,22 @@ function ItemCard({
         </View>
         <View style={[s.tag, isOut ? s.tagOut : s.tagLow]}>
           <Text style={[s.tagTxt, isOut ? s.tagOutTxt : s.tagLowTxt]}>
-            {isOut ? 'Out' : 'Low'}
+            {isOut ? t('screens.stocksLowStock.tagOut') : t('screens.stocksLowStock.tagLow')}
           </Text>
         </View>
       </View>
 
       {isOut ? (
-        <Text style={s.bodyLine}>Qty 0{item.unit ? ` ${item.unit}` : ''}</Text>
+        <Text style={s.bodyLine}>{t('screens.stocksLowStock.qtyZero')}{item.unit ? ` ${item.unit}` : ''}</Text>
       ) : (
         <>
           <View style={s.statsRow}>
             <Text style={s.bodyLine}>
-              Qty: <Text style={s.bodyStrong}>{item.qty}</Text>
+              {t('screens.stocksLowStock.qtyLabel')} <Text style={s.bodyStrong}>{item.qty}</Text>
               {item.unit ? ` ${item.unit}` : ''}
             </Text>
             <Text style={s.bodyLine}>
-              Low at ≤ <Text style={s.bodyStrong}>{threshold}</Text>
+              {t('screens.stocksLowStock.lowAt')} <Text style={s.bodyStrong}>{threshold}</Text>
             </Text>
           </View>
           <View style={s.progressBg}>
@@ -119,11 +120,11 @@ function ItemCard({
       {!multiSelectMode && (
         <View style={s.cardActions}>
           <Text style={s.rateHint}>
-            {item.rate ? `Rate ₹${item.rate}` : 'Rate —'}
+            {item.rate ? t('screens.stocksLowStock.rateValue', { rate: item.rate }) : t('screens.stocksLowStock.rateNone')}
           </Text>
           <TouchableOpacity style={s.poBtn} onPress={onAddToPo} activeOpacity={0.85}>
             <Ionicons name="cart-outline" size={13} color={COLORS.white} />
-            <Text style={s.poBtnTxt}>Add to PO</Text>
+            <Text style={s.poBtnTxt}>{t('screens.stocksLowStock.addToPo')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -146,14 +147,20 @@ export default function LowStockScreen() {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const load = useCallback(() => {
+  const [loadedFor, setLoadedFor] = useState<{ guid?: string } | null>(null);
+  if (!loadedFor || loadedFor.guid !== companyGuid) {
+    setLoadedFor({ guid: companyGuid });
     if (!companyGuid) {
       setRows([]);
       setIsLoading(false);
-      return;
+    } else {
+      setIsLoading(true);
+      setApiError(null);
     }
-    setIsLoading(true);
-    setApiError(null);
+  }
+
+  const fetchRows = useCallback(() => {
+    if (!companyGuid) return;
     Promise.all([
       getInventorySettings(companyGuid).catch(() => null),
       getStocks(companyGuid, { limit: '5000', stockHealth: 'low' }),
@@ -204,11 +211,22 @@ export default function LowStockScreen() {
         });
         setRows(mapped);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load low stock'))
+      .catch((e: any) => setApiError(e?.message || t('screens.stocksLowStock.loadFailed')))
       .finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, t]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(() => {
+    if (!companyGuid) {
+      setRows([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setApiError(null);
+    fetchRows();
+  }, [companyGuid, fetchRows]);
+
+  useEffect(() => { fetchRows(); }, [fetchRows]);
 
   const lowCount = useMemo(() => rows.filter(r => r.kind === 'low').length, [rows]);
   const outCount = useMemo(() => rows.filter(r => r.kind === 'out').length, [rows]);
@@ -261,26 +279,26 @@ export default function LowStockScreen() {
       exitMultiSelect();
       safePush(router, '/purchase/create-order' as any);
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Could not open PO', text2: e?.message || '' });
+      Toast.show({ type: 'error', text1: t('screens.stocksLowStock.openPoFailed'), text2: e?.message || '' });
     }
-  }, [companyGuid, exitMultiSelect, router]);
+  }, [companyGuid, exitMultiSelect, router, t]);
 
   const handleBulkAddToPo = useCallback(() => {
     const selected = rows.filter(r => selectedIds.includes(r.id));
     if (!selected.length) {
-      Toast.show({ type: 'error', text1: 'No items selected' });
+      Toast.show({ type: 'error', text1: t('screens.stocksLowStock.noItemsSelected') });
       return;
     }
     openPoWithItems(selected);
-  }, [rows, selectedIds, openPoWithItems]);
+  }, [rows, selectedIds, openPoWithItems, t]);
 
   const allVisibleSelected =
     filtered.length > 0 && filtered.every(r => selectedIds.includes(r.id));
 
   const emptyTitle =
     bucket === 'out'
-      ? 'No zero-qty items'
-      : `No items at or below ${threshold} units`;
+      ? t('screens.stocksLowStock.emptyOut')
+      : t('screens.stocksLowStock.emptyLow', { threshold });
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -297,7 +315,7 @@ export default function LowStockScreen() {
           <TouchableOpacity onPress={exitMultiSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={20} color={COLORS.white} />
           </TouchableOpacity>
-          <Text style={s.multiCount}>{selectedIds.length} selected</Text>
+          <Text style={s.multiCount}>{t('common.selected', { count: selectedIds.length })}</Text>
           <View style={s.multiActions}>
             <TouchableOpacity
               style={s.multiBtnGhost}
@@ -314,7 +332,7 @@ export default function LowStockScreen() {
               }}
               activeOpacity={0.8}
             >
-              <Text style={s.multiBtnGhostTxt}>{allVisibleSelected ? 'Clear' : 'Select all'}</Text>
+              <Text style={s.multiBtnGhostTxt}>{allVisibleSelected ? t('common.clear') : t('screens.stocksLowStock.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.multiBtn, selectedIds.length === 0 && { opacity: 0.5 }]}
@@ -323,7 +341,7 @@ export default function LowStockScreen() {
               disabled={selectedIds.length === 0}
             >
               <Ionicons name="cart-outline" size={15} color={COLORS.white} />
-              <Text style={s.multiBtnTxt}>Add to PO</Text>
+              <Text style={s.multiBtnTxt}>{t('screens.stocksLowStock.addToPo')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -332,24 +350,24 @@ export default function LowStockScreen() {
           <View style={s.summaryRow}>
             <View style={s.summaryCard}>
               <Text style={[s.summaryVal, { color: '#D97706' }]}>{lowCount}</Text>
-              <Text style={s.summaryLbl}>Low ≤ {threshold}</Text>
+              <Text style={s.summaryLbl}>{t('screens.stocksLowStock.lowLte', { threshold })}</Text>
             </View>
             <View style={s.summaryDiv} />
             <View style={s.summaryCard}>
               <Text style={[s.summaryVal, { color: '#DC2626' }]}>{outCount}</Text>
-              <Text style={s.summaryLbl}>Out of stock</Text>
+              <Text style={s.summaryLbl}>{t('screens.stocksLowStock.tabOut')}</Text>
             </View>
             <View style={s.summaryDiv} />
             <View style={s.summaryCard}>
               <Text style={s.summaryVal}>{rows.length}</Text>
-              <Text style={s.summaryLbl}>Total</Text>
+              <Text style={s.summaryLbl}>{t('screens.stocksLowStock.total')}</Text>
             </View>
           </View>
 
           <View style={s.thresholdRow}>
-            <Text style={s.thresholdTxt}>Using default level: {threshold} units</Text>
+            <Text style={s.thresholdTxt}>{t('screens.stocksLowStock.usingDefaultLevel', { threshold })}</Text>
             <TouchableOpacity onPress={() => safePush(router, '/stocks/settings' as any)} activeOpacity={0.7}>
-              <Text style={s.thresholdLink}>Change</Text>
+              <Text style={s.thresholdLink}>{t('screens.stocksLowStock.change')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -361,7 +379,7 @@ export default function LowStockScreen() {
                 onPress={() => setBucket(tab.key)}
                 activeOpacity={0.7}
               >
-                <Text style={[s.tabTxt, bucket === tab.key && s.tabTxtActive]}>{tab.label}</Text>
+                <Text style={[s.tabTxt, bucket === tab.key && s.tabTxtActive]}>{t(tab.labelKey)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -398,7 +416,7 @@ export default function LowStockScreen() {
               </View>
               <Text style={s.emptyTitle}>{emptyTitle}</Text>
               <Text style={s.emptyDesc}>
-                Long-press a row to multi-select and add items to a purchase order.
+                {t('screens.stocksLowStock.emptyDesc')}
               </Text>
             </View>
           }

@@ -225,9 +225,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const switchWorkspaceRef = React.useRef<((id: string) => Promise<void>) | null>(null);
   const setCompanyRef = React.useRef(setCompany);
-  setCompanyRef.current = setCompany;
   const workspacesRef = React.useRef(workspaces);
-  workspacesRef.current = workspaces;
+  React.useLayoutEffect(() => {
+    setCompanyRef.current = setCompany;
+    workspacesRef.current = workspaces;
+  });
   const accessJsonRef = React.useRef<string>('');
   const refreshInFlightRef = React.useRef(false);
   const pendingRefreshRef = React.useRef(false);
@@ -282,7 +284,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [isAuthenticated]);
 
-  const refreshContext = useCallback(async () => {
+  const refreshContext = useCallback(async function refreshContextOnce(): Promise<void> {
     // Prefer module-level active id so callers (e.g. switchWorkspace) that
     // applyActiveWorkspace() then await refreshContext() hit the NEW workspace
     // before React re-renders with updated workspaceId state.
@@ -379,28 +381,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       refreshInFlightRef.current = false;
       if (pendingRefreshRef.current) {
         pendingRefreshRef.current = false;
-        refreshContext();
+        refreshContextOnce();
       }
     }
   }, [isAuthenticated, isStale]);
 
-  const refreshWorkspaces = useCallback(async () => {
-    if (!isAuthenticated) {
-      setWorkspaces([]);
-      applyActiveWorkspace(null);
-      setLoading(false);
-      return;
-    }
-    // Only the first load may flip `loading`. Background re-lists (20s timer,
-    // lastSyncAt after voucher create/sync) must NOT — create screens use
-    // useRequireCapability which unmounts the form whenever loading goes true.
-    const bootstrapping = workspacesRef.current.length === 0;
-    if (bootstrapping) setLoading(true);
+  const loadWorkspaceList = useCallback(() => {
     // This runs on a 20s timer, so a switch can easily land mid-flight. The id
     // it picked is only valid for the generation it was read in.
     const gen = wsGenRef.current;
-    try {
-      const res: any = await listMyWorkspaces();
+    return listMyWorkspaces().then(async (res: any) => {
       if (wsGenRef.current !== gen) return;
       const list = normalizeList(res);
       setWorkspaces(list);
@@ -471,12 +461,27 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } else {
         applyActiveWorkspace(null);
       }
-    } catch {
+    }).catch(() => {
       setWorkspaces([]);
-    } finally {
+    }).finally(() => {
       setLoading(false);
+    });
+  }, [setSelectedFY, applyActiveWorkspace]);
+
+  const refreshWorkspaces = useCallback(async () => {
+    if (!isAuthenticated) {
+      setWorkspaces([]);
+      applyActiveWorkspace(null);
+      setLoading(false);
+      return;
     }
-  }, [isAuthenticated, setSelectedFY, applyActiveWorkspace]);
+    // Only the first load may flip `loading`. Background re-lists (20s timer,
+    // lastSyncAt after voucher create/sync) must NOT — create screens use
+    // useRequireCapability which unmounts the form whenever loading goes true.
+    const bootstrapping = workspacesRef.current.length === 0;
+    if (bootstrapping) setLoading(true);
+    return loadWorkspaceList();
+  }, [isAuthenticated, applyActiveWorkspace, loadWorkspaceList]);
 
   const switchWorkspace = useCallback(async (id: string) => {
     // Safe switch (§10): clear in-memory company/FY first — never restore a
@@ -513,7 +518,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await refreshContext();
   }, [setCompany, setSelectedFY, applyActiveWorkspace, refreshContext]);
 
-  switchWorkspaceRef.current = switchWorkspace;
+  React.useLayoutEffect(() => {
+    switchWorkspaceRef.current = switchWorkspace;
+  });
 
   const renameWorkspace = useCallback(async (id: string, name: string) => {
     const trimmed = String(name || '').trim();
@@ -529,6 +536,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- logout reset must stay in lockstep with the module-level active-workspace globals cleared by applyActiveWorkspace
       setWorkspaces([]);
       setAccess(null);
       applyActiveWorkspace(null);
@@ -541,10 +549,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // After Desktop sync / pair advances lastSyncAt, re-list workspaces so we can
   // jump Personal → CONNECTED WS (Owner mobile Demo stickiness).
+  const [syncRelistDeps, setSyncRelistDeps] = useState<unknown[] | null>(null);
+  if (
+    !syncRelistDeps || syncRelistDeps[0] !== lastSyncAt || syncRelistDeps[1] !== isAuthenticated ||
+    syncRelistDeps[2] !== setSelectedFY
+  ) {
+    setSyncRelistDeps([lastSyncAt, isAuthenticated, setSelectedFY]);
+    if (isAuthenticated && lastSyncAt && workspaces.length === 0) setLoading(true);
+  }
+
   useEffect(() => {
     if (!isAuthenticated || !lastSyncAt) return;
-    refreshWorkspaces();
-  }, [lastSyncAt, isAuthenticated, refreshWorkspaces]);
+    loadWorkspaceList();
+  }, [lastSyncAt, isAuthenticated, loadWorkspaceList]);
 
   // Periodic workspace list refresh while app is open (pair may happen on Web)
   useEffect(() => {
@@ -557,6 +574,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     if (!workspaceId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshContext's sync reset writes state together with accessJsonRef and module-level workspace globals; splitting it would reorder them
     refreshContext();
     socketService.setWorkspaceContext?.(workspaceId);
   }, [workspaceId, refreshContext]);
@@ -564,6 +582,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // After Desktop sync advances lastSyncAt, re-read pairing (RECONNECTING → CONNECTED)
   useEffect(() => {
     if (!isAuthenticated || !workspaceId || !lastSyncAt) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshContext's sync reset writes state together with accessJsonRef and module-level workspace globals; splitting it would reorder them
     refreshContext();
   }, [lastSyncAt, isAuthenticated, workspaceId, refreshContext]);
 

@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
@@ -43,6 +43,12 @@ const STATUS_LABEL: Record<string, string> = {
   unpaid:      'Unpaid',
   irm:         'IRM',
   credit_note: 'Credit Note',
+};
+
+const STATUS_FILTER_LABEL_KEYS: Record<string, string> = {
+  All:    'screens.salesRegister.statusAll',
+  Paid:   'screens.salesRegister.statusPaid',
+  Unpaid: 'screens.salesRegister.statusUnpaid',
 };
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -85,12 +91,14 @@ export default function SalesRegisterScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // When FY changes, reset date range to full FY
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState({ from: fyFrom, to: fyTo });
+  if (prevFyRange.from !== fyFrom || prevFyRange.to !== fyTo) {
+    setPrevFyRange({ from: fyFrom, to: fyTo });
     if (fyFrom && fyTo) {
       setFromDate(fyFrom);
       setToDate(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const mapSalesInv = (r: any, i: number): Invoice => ({
     // Prefer Tally guid — voucher_number can repeat across parties/FYs (e.g. TD1531-3-2026)
@@ -112,15 +120,11 @@ export default function SalesRegisterScreen() {
     : ALL_SALES_DOC_TYPE_IDS.join(',');
   const partyGroupsParam = partyGroups.length ? partyGroups.join(',') : undefined;
 
-  const loadRegister = useCallback(() => {
+  const fetchRegister = useCallback(() => {
     if (!companyGuid) return;
-    setLoadingData(true);
-    setPage(1);
-    setHasMore(false);
     const from = fromDate || fyFrom;
     const to   = toDate   || fyTo;
     const range = from && to ? { from, to } : {};
-    setApiError(null);
     Promise.all([
       getSalesVouchers(companyGuid, {
         search, ...range, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam,
@@ -135,13 +139,33 @@ export default function SalesRegisterScreen() {
       setTypeCounts(cntData);
       setPartyGroupOptions(Array.isArray(cntData.partyGroups) ? cntData.partyGroups : []);
     }).catch((err: any) => {
-      setApiError(err?.message || 'Failed to load sales data');
+      setApiError(err?.message || t('screens.salesRegister.loadFailed'));
     }).finally(() => setLoadingData(false));
-  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam]);
+  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam, t]);
+
+  const startRegisterLoad = () => {
+    setLoadingData(true);
+    setPage(1);
+    setHasMore(false);
+    setApiError(null);
+  };
+
+  const loadRegister = () => {
+    if (!companyGuid) return;
+    startRegisterLoad();
+    fetchRegister();
+  };
+
+  const registerDeps = [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam];
+  const [loadedDeps, setLoadedDeps] = useState<unknown[] | null>(null);
+  if (!loadedDeps || registerDeps.some((d, i) => d !== loadedDeps[i])) {
+    setLoadedDeps(registerDeps);
+    if (companyGuid) startRegisterLoad();
+  }
 
   useEffect(() => {
-    loadRegister();
-  }, [loadRegister]);
+    fetchRegister();
+  }, [fetchRegister]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -166,13 +190,7 @@ export default function SalesRegisterScreen() {
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      displayGroups.forEach(g => next.add(g.id));
-      return next;
-    });
-  }, [liveInvoices.length]);
+  const [expandedForCount, setExpandedForCount] = useState<number | null>(null);
   const toggleMonth = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -222,12 +240,12 @@ export default function SalesRegisterScreen() {
           }
         );
         if (failed > 0) {
-          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+          Toast.show({ type: 'info', text1: t('screens.salesRegister.sharedOf', { shared, total: items.length }), text2: t('screens.salesRegister.couldNotLoad', { count: failed }) });
         }
       }
       clearSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.salesRegister.shareFailedMsg'));
     } finally {
       setIsSharing(false);
     }
@@ -254,7 +272,7 @@ export default function SalesRegisterScreen() {
     const map: Record<string, MonthGroup> = {};
     liveInvoices.forEach(inv => {
       let monthKey = 'Other';
-      let monthLabel = 'Other';
+      let monthLabel = t('screens.salesRegister.other');
       const d = inv.date;
       if (d && d.includes('-') && d.length === 10) {
         const parts = d.split('-');
@@ -271,6 +289,15 @@ export default function SalesRegisterScreen() {
     });
     return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
   })();
+
+  if (expandedForCount !== liveInvoices.length) {
+    setExpandedForCount(liveInvoices.length);
+    setExpanded(prev => {
+      const next = new Set(prev);
+      displayGroups.forEach(g => next.add(g.id));
+      return next;
+    });
+  }
 
   // Summary stats across all months
   const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));
@@ -293,17 +320,17 @@ export default function SalesRegisterScreen() {
 
       <FilterPillRow>
         <FilterDatePill
-          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}
+          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : t('screens.salesRegister.dates')}
           onPress={() => setShowDatePicker(true)}
         />
         <FilterDropdownPill
-          label={statusFilter}
+          label={STATUS_FILTER_LABEL_KEYS[statusFilter] ? t(STATUS_FILTER_LABEL_KEYS[statusFilter]) : statusFilter}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
           options={['All', 'Paid', 'Unpaid']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
-          placeholder="Status"
+          placeholder={t('screens.salesRegister.status')}
         />
       </FilterPillRow>
 
@@ -324,7 +351,7 @@ export default function SalesRegisterScreen() {
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search vouchers, parties..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder={t('screens.salesRegister.searchPlaceholder')} />
 
       {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
@@ -337,10 +364,10 @@ export default function SalesRegisterScreen() {
             const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
             const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [
-              { label: 'Total', value: fmtAmt(totalAmt) },
-              { label: 'Tax',   value: '—' },
-              { label: 'AVG',   value: fmtAmt(avgAmt) },
-              { label: 'Docs',  value: String(allFiltered.length) },
+              { label: t('screens.salesRegister.statTotal'), value: fmtAmt(totalAmt) },
+              { label: t('screens.salesRegister.statTax'),   value: '—' },
+              { label: t('screens.salesRegister.statAvg'),   value: fmtAmt(avgAmt) },
+              { label: t('screens.salesRegister.statDocs'),  value: String(allFiltered.length) },
             ];
           })().map(stat => (
             <View key={stat.label} style={s.statCell}>
@@ -354,8 +381,8 @@ export default function SalesRegisterScreen() {
         {!loadingData && liveInvoices.length === 0 && allFiltered.length === 0 && (
           <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
             <Ionicons name="document-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No sales vouchers</Text>
-            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or adjust filters</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.salesRegister.emptyTitle')}</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.salesRegister.emptyDesc')}</Text>
           </View>
         )}
         {/* ── Collapsible Month Sections ────────────────────────────── */}
@@ -375,7 +402,7 @@ export default function SalesRegisterScreen() {
                 <View style={s.monthHeaderLeft}>
                   <View style={s.monthDot} />
                   <Text style={s.monthLabel}>{group.label}</Text>
-                  <Text style={s.monthCount}>{groupInvoices.length} docs</Text>
+                  <Text style={s.monthCount}>{t('screens.salesRegister.docsCount', { count: groupInvoices.length })}</Text>
                 </View>
                 <Ionicons
                   name={isOpen ? 'chevron-up' : 'chevron-down'}
@@ -398,7 +425,7 @@ export default function SalesRegisterScreen() {
                             if (isSelecting) { toggleSelect(inv.id); }
                             else {
                               const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
-                              safePush(router, `/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                              openVoucherPreview(router, { guid: inv.guid, docType: routeType });
                             }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
@@ -435,12 +462,12 @@ export default function SalesRegisterScreen() {
           <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
             {isLoadingMore
               ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-              : <Text style={s.loadMoreTxt}>Load More</Text>
+              : <Text style={s.loadMoreTxt}>{t('screens.salesRegister.loadMore')}</Text>
             }
           </TouchableOpacity>
         )}
         {!hasMore && liveInvoices.length > 0 && (
-          <Text style={s.endTxt}>All {liveInvoices.length} invoices loaded</Text>
+          <Text style={s.endTxt}>{t('screens.salesRegister.allLoaded', { count: liveInvoices.length })}</Text>
         )}
 
       </ScrollView>
@@ -449,12 +476,12 @@ export default function SalesRegisterScreen() {
       {isSelecting && (
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
-            <Text style={s.actionCount}>{selected.length} selected</Text>
+            <Text style={s.actionCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Select All</Text>
+              <Text style={s.cancelTxt}>{t('screens.salesRegister.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -467,7 +494,7 @@ export default function SalesRegisterScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.actionBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.actionBtnTxt}>{isSharing ? t('screens.salesRegister.preparing') : t('screens.salesRegister.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -486,7 +513,7 @@ export default function SalesRegisterScreen() {
       <DocTypeFilterModal
         visible={showTypeFilter}
         onClose={() => setShowTypeFilter(false)}
-        title="Filter Sales"
+        title={t('screens.salesRegister.filterTitle')}
         options={SALES_DOC_TYPES}
         selectedIds={docTypes}
         selectedGroups={partyGroups}

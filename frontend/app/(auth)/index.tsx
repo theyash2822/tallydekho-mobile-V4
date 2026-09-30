@@ -62,8 +62,8 @@ export default function LoginScreen() {
     if (!isValid) {
       const range =
         selectedCountry.minDigits === selectedCountry.maxDigits
-          ? `${selectedCountry.minDigits}-digit`
-          : `${selectedCountry.minDigits}–${selectedCountry.maxDigits}-digit`;
+          ? t('screens.auth.digitRangeSingle', { digits: selectedCountry.minDigits })
+          : t('screens.auth.digitRange', { min: selectedCountry.minDigits, max: selectedCountry.maxDigits });
       setError(t('auth.validMobile', { range }));
       return;
     }
@@ -77,7 +77,7 @@ export default function LoginScreen() {
         params: { phone: fullPhone },
       });
     } catch {
-      setError('Failed to send OTP. Please try again.');
+      setError(t('screens.auth.sendOtpFailed'));
     } finally {
       setLoading(false);
     }

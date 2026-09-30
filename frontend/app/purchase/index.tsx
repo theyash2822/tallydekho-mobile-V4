@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -275,7 +276,7 @@ export default function PurchaseScreen() {
             ) : recent.length === 0 ? (
               <View style={s.emptyBox}>
                 <Ionicons name="cart-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No purchase invoices in this period</Text>
+                <Text style={s.emptyTxt}>{t('screens.purchase.noInvoicesPeriod')}</Text>
               </View>
             ) : (
               recent.map((inv, index) => (
@@ -283,7 +284,7 @@ export default function PurchaseScreen() {
                   key={inv.guid || `purchase-${index}`}
                   onPress={() => {
                     const routeType = docTypeToRouteType(inv.docType || 'invoice', 'purchase');
-                    safePush(router, `/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                    openVoucherPreview(router, { guid: inv.guid, docType: routeType });
                   }}
                 >
                   <VoucherListTile
@@ -315,7 +316,7 @@ export default function PurchaseScreen() {
             ) : liveTopVendors.length === 0 ? (
               <View style={s.emptyBox}>
                 <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No vendor data in this period</Text>
+                <Text style={s.emptyTxt}>{t('screens.purchase.noVendorData')}</Text>
               </View>
             ) : (
               liveTopVendors.map((vendor, idx) => (
@@ -323,7 +324,7 @@ export default function PurchaseScreen() {
                   key={vendor.id || `vendor-${idx}`}
                   name={vendor.name}
                   amount={vendor.amount}
-                  subtitle={`${vendor.transactions} transactions`}
+                  subtitle={t('screens.purchase.transactionsCount', { count: vendor.transactions })}
                   onPress={() => openLedgerDetail(router, companyGuid, { name: vendor.name })}
                 />
               ))

@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { currentTenantKey, prefillFeature } from '../../src/utils/tenantStorage';
@@ -40,6 +41,7 @@ function isoToDMY(iso: string): string {
 }
 
 export default function OrderPreviewScreen() {
+  const { t } = useTranslation();
   const { tdkRef } = useLocalSearchParams<{ tdkRef: string }>();
   const { company } = useAuth();
   const router = useRouter();
@@ -51,29 +53,47 @@ export default function OrderPreviewScreen() {
   const [isProvisional, setIsProvisional] = useState(false);
   const [converting, setConverting] = useState(false);
 
-  const fetchPreview = useCallback(async () => {
-    if (!tdkRef || !company?.guid) return;
-    try {
+  const companyGuid = company?.guid;
+
+  const loadPreview = useCallback(() => {
+    if (!tdkRef || !companyGuid) return;
+    getOrderPreview(tdkRef, companyGuid)
+      .then((res) => {
+        if (res?.status && res?.data) {
+          // documentType is forced: a stray voucher_type would otherwise fall
+          // through to the sales_invoice default and print the wrong title block.
+          setDoc(toVoucherDocument(res.data, { documentType: 'sales_order' }));
+          setRawData(res.data);
+          setIsProvisional(res.data.isProvisional ?? false);
+        } else {
+          setError(t('screens.salesOrderPreview.loadFailed'));
+        }
+      })
+      .catch((e: any) => {
+        setError(e?.message || t('screens.salesOrderPreview.loadPreviewFailed'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [tdkRef, companyGuid, t]);
+
+  const fetchPreview = useCallback(() => {
+    if (!tdkRef || !companyGuid) return;
+    setLoading(true);
+    setError(null);
+    loadPreview();
+  }, [tdkRef, companyGuid, loadPreview]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== tdkRef || loadDeps[1] !== companyGuid) {
+    setLoadDeps([tdkRef, companyGuid]);
+    if (tdkRef && companyGuid) {
       setLoading(true);
       setError(null);
-      const res = await getOrderPreview(tdkRef, company.guid);
-      if (res?.status && res?.data) {
-        // documentType is forced: a stray voucher_type would otherwise fall
-        // through to the sales_invoice default and print the wrong title block.
-        setDoc(toVoucherDocument(res.data, { documentType: 'sales_order' }));
-        setRawData(res.data);
-        setIsProvisional(res.data.isProvisional ?? false);
-      } else {
-        setError('Could not load sales order preview.');
-      }
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load preview.');
-    } finally {
-      setLoading(false);
     }
-  }, [tdkRef, company?.guid]);
+  }
 
-  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+  useEffect(() => { loadPreview(); }, [loadPreview]);
 
   // WebSocket: auto-refresh when Tally posts the order (same event as invoices)
   useEffect(() => {
@@ -91,7 +111,7 @@ export default function OrderPreviewScreen() {
 
   // ── Convert to Sales Invoice — prefer full rawPayload from app_vouchers.
   const handleConvertToInvoice = useCallback(async () => {
-    if (!company?.guid || !doc) return;
+    if (!companyGuid || !doc) return;
     setConverting(true);
     try {
       const rawPayload = rawData?.rawPayload || {};
@@ -119,11 +139,11 @@ export default function OrderPreviewScreen() {
         ledgerName: lg.ledgerName || '',
         amount: String(lg.amount ?? ''),
         addTaxes: Array.isArray(lg.taxes) && lg.taxes.length > 0,
-        taxEntries: (lg.taxes || []).map((t: any) => ({
+        taxEntries: (lg.taxes || []).map((tx: any) => ({
           id: Date.now().toString() + Math.random().toString(36).slice(2),
-          ledgerName: t.ledgerName || '',
-          taxRate: String(t.taxRate ?? ''),
-          taxAmount: String(t.taxAmount ?? ''),
+          ledgerName: tx.ledgerName || '',
+          taxRate: String(tx.taxRate ?? ''),
+          taxAmount: String(tx.taxAmount ?? ''),
         })),
       }));
 
@@ -135,11 +155,11 @@ export default function OrderPreviewScreen() {
             && Array.isArray(rawPayload.taxes) && rawPayload.taxes.length) {
           items[0] = {
             ...items[0],
-            taxEntries: rawPayload.taxes.map((t: any) => ({
+            taxEntries: rawPayload.taxes.map((tx: any) => ({
               id: Date.now().toString() + Math.random().toString(36).slice(2),
-              ledgerName: t.ledgerName || '',
-              taxRate: String(t.taxRate ?? ''),
-              taxAmount: String(t.taxAmount ?? ''),
+              ledgerName: tx.ledgerName || '',
+              taxRate: String(tx.taxRate ?? ''),
+              taxAmount: String(tx.taxAmount ?? ''),
             })),
           };
         }
@@ -167,14 +187,14 @@ export default function OrderPreviewScreen() {
         dueDate: rawPayload.dueDate ? isoToDMY(rawPayload.dueDate) : '',
         savedAt: Date.now(),
       };
-      await AsyncStorage.setItem(currentTenantKey(company.guid, prefillFeature('tdso')), JSON.stringify(prefill));
+      await AsyncStorage.setItem(currentTenantKey(companyGuid, prefillFeature('tdso')), JSON.stringify(prefill));
       router.replace('/sales/create-invoice');
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Could not start invoice', text2: err?.message || '' });
+      Toast.show({ type: 'error', text1: t('screens.salesOrderPreview.convertFailed'), text2: err?.message || '' });
     } finally {
       setConverting(false);
     }
-  }, [company?.guid, doc, rawData, tdkRef, router]);
+  }, [companyGuid, doc, rawData, tdkRef, router, t]);
 
   if (loading) {
     return (
@@ -183,12 +203,12 @@ export default function OrderPreviewScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.navTitle}>Sales Order</Text>
+          <Text style={s.navTitle}>{t('screens.salesOrderPreview.title')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <View style={s.center}>
           <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Loading order…</Text>
+          <Text style={s.loadingTxt}>{t('screens.salesOrderPreview.loadingOrder')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -201,14 +221,14 @@ export default function OrderPreviewScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.navTitle}>Sales Order</Text>
+          <Text style={s.navTitle}>{t('screens.salesOrderPreview.title')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <View style={s.center}>
           <Ionicons name="warning-outline" size={40} color={COLORS.warning} />
-          <Text style={s.errorTxt}>{error || 'Sales order not found.'}</Text>
+          <Text style={s.errorTxt}>{error || t('screens.salesOrderPreview.notFound')}</Text>
           <TouchableOpacity style={s.retryBtn} onPress={fetchPreview} activeOpacity={0.8}>
-            <Text style={s.retryTxt}>Retry</Text>
+            <Text style={s.retryTxt}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -238,7 +258,7 @@ export default function OrderPreviewScreen() {
           {converting
             ? <ActivityIndicator size="small" color={COLORS.white} />
             : <Ionicons name="repeat-outline" size={16} color={COLORS.white} />}
-          <Text style={s.convertBtnTxt}>{converting ? 'Starting invoice...' : 'Convert to Invoice'}</Text>
+          <Text style={s.convertBtnTxt}>{converting ? t('screens.salesOrderPreview.startingInvoice') : t('screens.salesOrderPreview.convertToInvoice')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>

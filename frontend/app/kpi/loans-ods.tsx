@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -19,6 +19,7 @@ import {
 } from '../../src/components/KPICarouselCard';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -48,12 +49,33 @@ function fmtDate(iso?: string | null) {
 function srcLabel(f?: SrcField | null) {
   if (!f?.value && f?.value !== 0) return null;
   const s = f.source;
-  if (s === 'PREDICTED' || s === 'DERIVED') return f.label || (s === 'PREDICTED' ? 'Expected' : 'Estimated');
+  if (s === 'PREDICTED' || s === 'DERIVED') return f.label || (s === 'PREDICTED' ? i18n.t('screens.kpiLoansOds.expected') : i18n.t('screens.kpiLoansOds.estimated'));
   return null;
 }
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const MONTH_KEYS = [
+  'screens.componentsDateRangePickerModal.monthJanuary',
+  'screens.componentsDateRangePickerModal.monthFebruary',
+  'screens.componentsDateRangePickerModal.monthMarch',
+  'screens.componentsDateRangePickerModal.monthApril',
+  'screens.componentsDateRangePickerModal.monthMay',
+  'screens.componentsDateRangePickerModal.monthJune',
+  'screens.componentsDateRangePickerModal.monthJuly',
+  'screens.componentsDateRangePickerModal.monthAugust',
+  'screens.componentsDateRangePickerModal.monthSeptember',
+  'screens.componentsDateRangePickerModal.monthOctober',
+  'screens.componentsDateRangePickerModal.monthNovember',
+  'screens.componentsDateRangePickerModal.monthDecember',
+];
+const DAY_LABELS = [
+  { id: 'Su', labelKey: 'screens.componentsDateRangePickerModal.daySu' },
+  { id: 'Mo', labelKey: 'screens.componentsDateRangePickerModal.dayMo' },
+  { id: 'Tu', labelKey: 'screens.componentsDateRangePickerModal.dayTu' },
+  { id: 'We', labelKey: 'screens.componentsDateRangePickerModal.dayWe' },
+  { id: 'Th', labelKey: 'screens.componentsDateRangePickerModal.dayTh' },
+  { id: 'Fr', labelKey: 'screens.componentsDateRangePickerModal.dayFr' },
+  { id: 'Sa', labelKey: 'screens.componentsDateRangePickerModal.daySa' },
+];
 
 type CalEvent = { dueDate: string; amount: number; tag: string; loan: string };
 
@@ -71,23 +93,27 @@ function LoanCalendarModal({
   events: CalEvent[];
   formatAmount: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const today = new Date();
   const firstEvent = events[0]?.dueDate ? new Date(`${events[0].dueDate.slice(0, 10)}T12:00:00`) : today;
   const [viewYear, setViewYear] = useState(firstEvent.getFullYear());
   const [viewMonth, setViewMonth] = useState(firstEvent.getMonth());
   const [selDate, setSelDate] = useState<number | null>(null);
+  const [syncedFor, setSyncedFor] = useState<{ visible: boolean; events: CalEvent[] } | null>(null);
 
-  useEffect(() => {
-    if (!visible) return;
-    const ref = events[0]?.dueDate
-      ? new Date(`${events[0].dueDate.slice(0, 10)}T12:00:00`)
-      : new Date();
-    if (!Number.isNaN(ref.getTime())) {
-      setViewYear(ref.getFullYear());
-      setViewMonth(ref.getMonth());
+  if (!syncedFor || syncedFor.visible !== visible || syncedFor.events !== events) {
+    setSyncedFor({ visible, events });
+    if (visible) {
+      const ref = events[0]?.dueDate
+        ? new Date(`${events[0].dueDate.slice(0, 10)}T12:00:00`)
+        : new Date();
+      if (!Number.isNaN(ref.getTime())) {
+        setViewYear(ref.getFullYear());
+        setViewMonth(ref.getMonth());
+      }
+      setSelDate(null);
     }
-    setSelDate(null);
-  }, [visible, events]);
+  }
 
   const calDays = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -115,7 +141,7 @@ function LoanCalendarModal({
   };
 
   const selectedEvents = selDate != null ? eventsForDay(selDate) : [];
-  const title = mode === 'emi' ? 'Expected EMI Calendar' : 'Expected OD Interest';
+  const title = mode === 'emi' ? t('screens.kpiLoansOds.expectedEmiCalendar') : t('screens.kpiLoansOds.expectedOdInterest');
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -130,21 +156,21 @@ function LoanCalendarModal({
             </TouchableOpacity>
           </View>
           <Text style={cs.hint}>
-            Marked dates are expected from Tally history — not contractual bank due dates.
+            {t('screens.kpiLoansOds.markedDatesHint')}
           </Text>
 
           <View style={cs.navRow}>
             <TouchableOpacity style={cs.navBtn} onPress={prevMonth} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            <Text style={cs.monthYear}>{MONTHS[viewMonth]} {viewYear}</Text>
+            <Text style={cs.monthYear}>{t(MONTH_KEYS[viewMonth])} {viewYear}</Text>
             <TouchableOpacity style={cs.navBtn} onPress={nextMonth} activeOpacity={0.7}>
               <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <View style={cs.dayRow}>
-            {DAY_LABELS.map((d) => <Text key={d} style={cs.dayLabel}>{d}</Text>)}
+            {DAY_LABELS.map((d) => <Text key={d.id} style={cs.dayLabel}>{t(d.labelKey)}</Text>)}
           </View>
 
           <View style={cs.grid}>
@@ -174,7 +200,7 @@ function LoanCalendarModal({
             <View style={cs.legendItem}>
               <View style={[cs.legendDot, { backgroundColor: COLORS.brandPrimary }]} />
               <Text style={cs.legendTxt}>
-                {mode === 'emi' ? 'Expected EMI' : 'Expected OD interest'}
+                {mode === 'emi' ? t('screens.kpiLoansOds.expectedEmi') : t('screens.kpiLoansOds.expectedOdInterestLower')}
               </Text>
             </View>
           </View>
@@ -182,10 +208,10 @@ function LoanCalendarModal({
           {selDate !== null && (
             <View style={cs.emiList}>
               <Text style={cs.emiListTitle}>
-                {selDate} {MONTHS[viewMonth]} — {mode === 'emi' ? 'Expected EMIs' : 'Expected interest'}
+                {selDate} {t(MONTH_KEYS[viewMonth])} — {mode === 'emi' ? t('screens.kpiLoansOds.expectedEmis') : t('screens.kpiLoansOds.expectedInterest')}
               </Text>
               {selectedEvents.length === 0 ? (
-                <Text style={cs.noEmi}>No expected payment on this date</Text>
+                <Text style={cs.noEmi}>{t('screens.kpiLoansOds.noExpectedPayment')}</Text>
               ) : (
                 selectedEvents.map((e, i) => (
                   <View key={`${e.dueDate}-${i}`} style={[cs.emiRow, i < selectedEvents.length - 1 && cs.emiRowBorder]}>
@@ -251,15 +277,15 @@ export default function LoansODsScreen() {
       if (hasDataRef.current) {
         const ts = dataAsOfRef.current
           ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-          : 'earlier';
-        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+          : t('home.earlier');
+        setApiError(t('home.refreshFailed', { time: ts }));
       } else {
-        setApiError(err?.message || 'Failed to load loans & ODs');
+        setApiError(err?.message || t('screens.kpiLoansOds.loadFailed'));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, lastSyncAt]);
+  }, [companyGuid, lastSyncAt, t]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -273,16 +299,16 @@ export default function LoansODsScreen() {
     }));
   }, [apiData]);
 
-  useEffect(() => {
-    if (cardIdx >= cards.length) setCardIdx(0);
-  }, [cards.length, cardIdx]);
+  if (cardIdx >= cards.length && cardIdx !== 0) setCardIdx(0);
 
   const active = cards[cardIdx] || null;
   const isOd = active?.facilityType === 'OD';
 
-  useEffect(() => {
+  const [tabSyncedFor, setTabSyncedFor] = useState<{ key: string | undefined; isOd: boolean } | null>(null);
+  if (!tabSyncedFor || tabSyncedFor.key !== active?._key || tabSyncedFor.isOd !== isOd) {
+    setTabSyncedFor({ key: active?._key, isOd });
     setActiveTab(isOd ? 'od' : 'history');
-  }, [active?._key, isOd]);
+  }
 
   const kpiCards = useMemo(() => {
     const apiKpiCards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
@@ -314,10 +340,10 @@ export default function LoansODsScreen() {
     const loanTotal = Number(apiData?.loan_total) || 0;
     const odTotal = Number(apiData?.od_total) || 0;
     return [
-      { id: 'total', icon: 'cash-outline', label: 'Total Outstanding', amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
+      { id: 'total', icon: 'cash-outline', label: t('kpi.totalOutstanding'), amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
       { id: 'term', icon: 'business-outline', label: t('kpi.loans'), amount: formatAmountCompact(Math.round(loanTotal)), trend: null, positive: true },
-      { id: 'od', icon: 'swap-horizontal-outline', label: 'ODs / Overdraft', amount: formatAmountCompact(Math.round(odTotal)), trend: null, positive: true },
-      { id: 'count', icon: 'list-outline', label: 'Accounts', amount: String(cards.length), trend: null, positive: true },
+      { id: 'od', icon: 'swap-horizontal-outline', label: t('screens.kpiLoansOds.odsOverdraft'), amount: formatAmountCompact(Math.round(odTotal)), trend: null, positive: true },
+      { id: 'count', icon: 'list-outline', label: t('kpi.accounts'), amount: String(cards.length), trend: null, positive: true },
     ];
   }, [apiData, cards.length, formatAmountCompact, t]);
 
@@ -349,17 +375,17 @@ export default function LoansODsScreen() {
       return [{
         dueDate: String(d).slice(0, 10),
         amount: 0,
-        tag: srcLabel(active.nextInterestDate) || 'Expected Interest',
+        tag: srcLabel(active.nextInterestDate) || t('screens.kpiLoansOds.expectedInterestTag'),
         loan: active.name,
       }];
     }
     return upcoming.map((e: any) => ({
       dueDate: String(e.dueDate || '').slice(0, 10),
       amount: Number(e.scheduledAmount) || 0,
-      tag: e.label || 'Expected EMI',
+      tag: e.label || t('screens.kpiLoansOds.expectedEmi'),
       loan: active.name,
     })).filter((e: CalEvent) => !!e.dueDate);
-  }, [active, isOd, upcoming]);
+  }, [active, isOd, upcoming, t]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -404,7 +430,7 @@ export default function LoansODsScreen() {
 
             {cards.length === 0 ? (
               <View style={s.emptyCard}>
-                <Text style={s.emptyTxt}>No loan or OD ledgers found</Text>
+                <Text style={s.emptyTxt}>{t('screens.kpiLoansOds.noLedgers')}</Text>
               </View>
             ) : (
               <View style={s.loanSection}>
@@ -431,33 +457,33 @@ export default function LoansODsScreen() {
                           <Text style={s.loanName} numberOfLines={1}>{card.name}</Text>
                           <Text style={s.loanMaturity}>
                             {card.facilityType === 'OD'
-                              ? 'Overdraft'
+                              ? t('screens.kpiLoansOds.overdraft')
                               : (card.maturity?.value
-                                ? `${srcLabel(card.maturity) || 'Payoff'} ${fmtDate(card.maturity.value)}`
-                                : (card.securityType === 'UNSECURED' ? 'Unsecured' : 'Secured'))}
+                                ? `${srcLabel(card.maturity) || t('screens.kpiLoansOds.payoff')} ${fmtDate(card.maturity.value)}`
+                                : (card.securityType === 'UNSECURED' ? t('screens.kpiLoansOds.unsecured') : t('screens.kpiLoansOds.secured')))}
                           </Text>
                         </View>
                         <View style={s.loanStatsRow}>
                           {(
                             card.facilityType === 'OD'
                               ? [
-                                  { label: 'Limit', value: card.creditLimit?.value != null ? formatAmountCompact(Math.round(card.creditLimit.value)) : '—', hint: srcLabel(card.creditLimit) },
-                                  { label: 'Utilised', value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
-                                  { label: 'Available', value: card.available?.value != null ? formatAmountCompact(Math.round(card.available.value)) : '—', hint: srcLabel(card.available) },
+                                  { label: t('screens.kpiLoansOds.limit'), value: card.creditLimit?.value != null ? formatAmountCompact(Math.round(card.creditLimit.value)) : '—', hint: srcLabel(card.creditLimit) },
+                                  { label: t('screens.kpiLoansOds.utilised'), value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
+                                  { label: t('screens.kpiLoansOds.available'), value: card.available?.value != null ? formatAmountCompact(Math.round(card.available.value)) : '—', hint: srcLabel(card.available) },
                                 ]
                               : card.mode === 'RICH'
                                 ? [
-                                    { label: 'Outstanding', value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
-                                    { label: srcLabel(card.interestRate) || 'Rate', value: card.interestRate?.value != null ? `${card.interestRate.value}%` : '—', hint: null },
+                                    { label: t('sales.outstanding'), value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
+                                    { label: srcLabel(card.interestRate) || t('pdf.rate'), value: card.interestRate?.value != null ? `${card.interestRate.value}%` : '—', hint: null },
                                     {
-                                      label: srcLabel(card.emi?.amount) || 'EMI',
+                                      label: srcLabel(card.emi?.amount) || t('screens.kpiLoansOds.emi'),
                                       value: card.emi?.amount?.value != null ? formatAmountCompact(Math.round(card.emi.amount.value)) : '—',
                                       hint: card.emi?.nextDate?.value ? fmtDate(card.emi.nextDate.value) : null,
                                     },
                                   ]
                                 : [
-                                    { label: 'Outstanding', value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
-                                    { label: 'Type', value: card.securityType === 'UNSECURED' ? 'Unsecured' : 'Secured', hint: null },
+                                    { label: t('sales.outstanding'), value: formatAmountCompact(Math.round(card.outstanding?.value ?? 0)), hint: null },
+                                    { label: t('screens.kpiLoansOds.type'), value: card.securityType === 'UNSECURED' ? t('screens.kpiLoansOds.unsecured') : t('screens.kpiLoansOds.secured'), hint: null },
                                   ]
                           ).map((st: any, i: number) => (
                             <View key={i} style={s.loanStat}>
@@ -479,8 +505,8 @@ export default function LoansODsScreen() {
               <View style={s.tabCard}>
                 <View style={s.tabRow}>
                   {(isOd
-                    ? ([{ id: 'od', label: 'OD utilisation (30D)' }, { id: 'history', label: 'Recent activity' }] as const)
-                    : ([{ id: 'history', label: rich ? 'Outstanding (6m)' : 'Recent activity' }, { id: 'od', label: 'Transactions' }] as const)
+                    ? ([{ id: 'od', label: t('screens.kpiLoansOds.odUtilisation30d') }, { id: 'history', label: t('screens.kpiLoansOds.recentActivity') }] as const)
+                    : ([{ id: 'history', label: rich ? t('screens.kpiLoansOds.outstanding6m') : t('screens.kpiLoansOds.recentActivity') }, { id: 'od', label: t('ledger.transactions') }] as const)
                   ).map(tab => (
                     <TouchableOpacity
                       key={tab.id}
@@ -496,7 +522,7 @@ export default function LoansODsScreen() {
                 <View style={s.tabContent}>
                   {isOd && activeTab === 'od' ? (
                     odSeries.length === 0 ? (
-                      <View style={s.empty}><Text style={s.emptyTxt}>No utilisation series yet</Text></View>
+                      <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiLoansOds.noUtilisation')}</Text></View>
                     ) : odSeries.map((row: any, idx: number) => (
                       <View key={row.date} style={[s.dataRow, idx < odSeries.length - 1 && s.dataRowBorder]}>
                         <View style={s.dataIcon}>
@@ -504,7 +530,7 @@ export default function LoansODsScreen() {
                         </View>
                         <View style={s.dataInfo}>
                           <Text style={s.dataMain}>{fmtDate(row.date)}</Text>
-                          <Text style={s.dataSub}>{formatAmountCompact(Math.round(row.utilised))} utilised</Text>
+                          <Text style={s.dataSub}>{t('screens.kpiLoansOds.amountUtilised', { amount: formatAmountCompact(Math.round(row.utilised)) })}</Text>
                         </View>
                         {row.utilisationPct != null && (
                           <>
@@ -516,7 +542,7 @@ export default function LoansODsScreen() {
                     ))
                   ) : !isOd && activeTab === 'history' && rich ? (
                     outstandingRows.length === 0 ? (
-                      <View style={s.empty}><Text style={s.emptyTxt}>No history yet</Text></View>
+                      <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiLoansOds.noHistory')}</Text></View>
                     ) : outstandingRows.map((row: { month: string; amount: number; pct: number | null }, idx: number) => (
                       <View key={row.month} style={[s.dataRow, idx < outstandingRows.length - 1 && s.dataRowBorder]}>
                         <View style={s.dataIcon}>
@@ -524,7 +550,7 @@ export default function LoansODsScreen() {
                         </View>
                         <View style={s.dataInfo}>
                           <Text style={s.dataMain}>{row.month}</Text>
-                          <Text style={s.dataSub}>{formatAmount(Math.round(row.amount))} outstanding</Text>
+                          <Text style={s.dataSub}>{t('screens.kpiLoansOds.amountOutstanding', { amount: formatAmount(Math.round(row.amount)) })}</Text>
                         </View>
                         {row.pct != null && (
                           <>
@@ -536,24 +562,24 @@ export default function LoansODsScreen() {
                     ))
                   ) : (
                     txns.length === 0 ? (
-                      <View style={s.empty}><Text style={s.emptyTxt}>No transactions found</Text></View>
-                    ) : txns.map((t: any, idx: number) => (
+                      <View style={s.empty}><Text style={s.emptyTxt}>{t('ledger.noTransactions')}</Text></View>
+                    ) : txns.map((tx: any, idx: number) => (
                       <TouchableOpacity
-                        key={t.guid || idx}
+                        key={tx.guid || idx}
                         style={[s.dataRow, idx < txns.length - 1 && s.dataRowBorder]}
                         activeOpacity={0.7}
-                        onPress={() => t.guid && safePush(router, `/document/${t.guid}` as any)}
+                        onPress={() => openVoucherPreview(router, { guid: tx.guid })}
                       >
                         <View style={s.dataIcon}>
                           <Ionicons name="document-text-outline" size={18} color={COLORS.textSecondary} />
                         </View>
                         <View style={s.dataInfo}>
                           <Text style={s.dataMain} numberOfLines={1}>
-                            {t.eventType || t.voucher_type || 'Voucher'} · {t.voucher_number || '—'}
+                            {tx.eventType || tx.voucher_type || t('screens.kpiLoansOds.voucher')} · {tx.voucher_number || '—'}
                           </Text>
-                          <Text style={s.dataSub}>{[t.party_name, fmtDate(t.date)].filter(Boolean).join(' · ')}</Text>
+                          <Text style={s.dataSub}>{[tx.party_name, fmtDate(tx.date)].filter(Boolean).join(' · ')}</Text>
                         </View>
-                        <Text style={s.dataAmt}>{formatAmount(Math.round(t.amount || 0))}</Text>
+                        <Text style={s.dataAmt}>{formatAmount(Math.round(tx.amount || 0))}</Text>
                       </TouchableOpacity>
                     ))
                   )}
@@ -564,10 +590,10 @@ export default function LoansODsScreen() {
             {active && !isOd && rich && (
               <View style={s.emiSection}>
                 <TouchableOpacity style={s.emiHeadingRow} onPress={() => setShowCalendar(true)} activeOpacity={0.7}>
-                  <Text style={s.emiHeading}>Expected EMI</Text>
+                  <Text style={s.emiHeading}>{t('screens.kpiLoansOds.expectedEmi')}</Text>
                   <View style={s.emiCalBtn}>
                     <Ionicons name="calendar-outline" size={15} color={COLORS.brandPrimary} />
-                    <Text style={s.emiCalBtnTxt}>View Calendar</Text>
+                    <Text style={s.emiCalBtnTxt}>{t('screens.kpiLoansOds.viewCalendar')}</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -581,7 +607,7 @@ export default function LoansODsScreen() {
                         <Text style={s.emiLoan}>{active.name}</Text>
                         <View style={s.emiTagBadge}>
                           <Text style={s.emiTagTxt}>
-                            {e.label || e.eventType || 'EMI'}
+                            {e.label || e.eventType || t('screens.kpiLoansOds.emi')}
                           </Text>
                         </View>
                       </View>
@@ -594,7 +620,7 @@ export default function LoansODsScreen() {
                 ))}
 
                 {!upcoming.length && !recentEmis.length && (
-                  <View style={s.empty}><Text style={s.emptyTxt}>No EMI schedule yet</Text></View>
+                  <View style={s.empty}><Text style={s.emptyTxt}>{t('screens.kpiLoansOds.noEmiSchedule')}</Text></View>
                 )}
               </View>
             )}
@@ -602,15 +628,15 @@ export default function LoansODsScreen() {
             {active && isOd && (
               <View style={s.emiSection}>
                 <View style={s.emiHeadingRow}>
-                  <Text style={s.emiHeading}>OD interest</Text>
+                  <Text style={s.emiHeading}>{t('screens.kpiLoansOds.odInterest')}</Text>
                 </View>
                 <View style={s.emiRow}>
                   <View style={s.emiInfo}>
                     <Text style={s.emiLoan}>
-                      {srcLabel(active.nextInterestDate) || 'Next interest'}
+                      {srcLabel(active.nextInterestDate) || t('screens.kpiLoansOds.nextInterest')}
                     </Text>
                     <Text style={s.emiDate}>
-                      {active.nextInterestDate?.value ? fmtDate(active.nextInterestDate.value) : 'Not enough history to estimate'}
+                      {active.nextInterestDate?.value ? fmtDate(active.nextInterestDate.value) : t('screens.kpiLoansOds.notEnoughHistory')}
                     </Text>
                   </View>
                 </View>

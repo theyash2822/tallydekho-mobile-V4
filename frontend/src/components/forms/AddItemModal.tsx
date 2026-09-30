@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { ALL_TAX_RATES } from '../../data/stockData';
 import { useAuth } from '../../context/AuthContext';
 import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../services/api';
@@ -16,6 +17,7 @@ export function AddItemModal({
 }: {
   visible: boolean; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { company } = useAuth();
 
   const [groupOptions,     setGroupOptions]     = useState<{id:string;label:string}[]>([]);
@@ -55,23 +57,23 @@ export function AddItemModal({
 
   const validate = () => {
     if (!name.trim()) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Product name is required.' });
+      Toast.show({ type: 'error', text1: t('common.required'), text2: t('screens.componentsFormsAddItemModal.productNameRequired') });
       return false;
     }
     if (!group) {
-      Toast.show({ type: 'error', text1: 'Group Required', text2: 'Select a stock group from the list.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsAddItemModal.groupRequired'), text2: t('screens.componentsFormsAddItemModal.groupRequiredMsg') });
       return false;
     }
     if (!unit) {
-      Toast.show({ type: 'error', text1: 'Unit Required', text2: 'Select a unit of measure.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsAddItemModal.unitRequired'), text2: t('screens.componentsFormsAddItemModal.unitRequiredMsg') });
       return false;
     }
     if (qty && parseFloat(qty) < 0) {
-      Toast.show({ type: 'error', text1: 'Invalid Qty', text2: 'Opening quantity cannot be negative.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsAddItemModal.invalidQty'), text2: t('screens.componentsFormsAddItemModal.invalidQtyMsg') });
       return false;
     }
     if (purchPrice && parseFloat(purchPrice) < 0) {
-      Toast.show({ type: 'error', text1: 'Invalid Price', text2: 'Purchase price cannot be negative.' });
+      Toast.show({ type: 'error', text1: t('screens.componentsFormsAddItemModal.invalidPrice'), text2: t('screens.componentsFormsAddItemModal.invalidPriceMsg') });
       return false;
     }
     return true;
@@ -99,16 +101,16 @@ export function AddItemModal({
       const queued = res?.queued;
       Toast.show({
         type: 'success',
-        text1: queued ? 'Item Queued ⏳' : 'Item Added ✅',
-        text2: queued ? 'Will create in Tally when desktop connects.' : `"${itemName}" created in Tally`,
+        text1: queued ? t('screens.componentsFormsAddItemModal.itemQueued') : t('screens.componentsFormsAddItemModal.itemAdded'),
+        text2: queued ? t('screens.componentsFormsAddItemModal.itemQueuedMsg') : t('screens.componentsFormsAddItemModal.itemCreatedMsg', { name: itemName }),
       });
       reset();
       onClose();
     } catch (e: any) {
       Toast.show({
         type: 'error',
-        text1: 'Could not save item',
-        text2: e?.message || 'Please try again.',
+        text1: t('screens.componentsFormsAddItemModal.saveFailed'),
+        text2: e?.message || t('screens.componentsFormsAddItemModal.pleaseTryAgain'),
       });
       throw e;
     }
@@ -120,86 +122,86 @@ export function AddItemModal({
     <BottomModalShell
       visible={visible}
       onClose={handleClose}
-      title="Add New Item"
+      title={t('screens.componentsFormsAddItemModal.title')}
       footer={
         <SubmitButton
-          idleLabel="Save Item"
-          loadingLabel="Saving..."
-          successLabel="✓ Saved"
+          idleLabel={t('screens.componentsFormsAddItemModal.saveItem')}
+          loadingLabel={t('common.saving')}
+          successLabel={t('screens.componentsFormsAddItemModal.savedCheck')}
           onValidate={validate}
           onDone={handleDone}
         />
       }
     >
       <InlineDropdownField
-        label="Group"
+        label={t('screens.componentsFormsAddItemModal.group')}
         options={groupOptions}
         value={group}
         onSelect={setGroup}
-        placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
+        placeholder={groupOptions.length > 0 ? t('screens.componentsFormsAddItemModal.selectGroup') : t('screens.componentsFormsAddItemModal.loadingGroups')}
         required
       />
 
       <InlineField
-        label="Product name"
+        label={t('screens.componentsFormsAddItemModal.productName')}
         value={name}
         onChange={setName}
-        placeholder="Enter product name"
+        placeholder={t('screens.componentsFormsAddItemModal.productNamePlaceholder')}
         required
       />
 
       <InlineField
-        label="HSN"
+        label={t('screens.componentsFormsAddItemModal.hsn')}
         value={hsnCode}
         onChange={setHsnCode}
-        placeholder="HSN / SAC"
+        placeholder={t('screens.componentsFormsAddItemModal.hsnPlaceholder')}
         keyboardType="numeric"
       />
 
       <View style={ms.row}>
         <InlineDropdownField
-          label="Unit of measure"
+          label={t('screens.componentsFormsAddItemModal.unitOfMeasure')}
           options={unitOptions}
           value={unit}
           onSelect={setUnit}
-          placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
+          placeholder={unitOptions.length > 0 ? t('screens.componentsFormsAddItemModal.selectUnit') : t('common.loading')}
           required
         />
         <InlineDropdownField
-          label="Tax rate (GST %)"
+          label={t('screens.componentsFormsAddItemModal.taxRate')}
           options={ALL_TAX_RATES}
           value={taxRate}
           onSelect={setTaxRate}
-          placeholder="Select"
+          placeholder={t('common.select')}
         />
       </View>
 
       <CurrencyField
-        label="Purchase Price"
+        label={t('screens.componentsFormsAddItemModal.purchasePrice')}
         value={purchPrice}
         onChange={setPurchPrice}
         placeholder="₹ 0.00"
       />
 
       <InlineDropdownField
-        label="Warehouse Placement"
+        label={t('screens.componentsFormsAddItemModal.warehousePlacement')}
         options={warehouseOptions}
         value={warehouse}
         onSelect={setWarehouse}
-        placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
+        placeholder={warehouseOptions.length > 0 ? t('screens.componentsFormsAddItemModal.selectWarehouse') : t('common.loading')}
         icon="home-outline"
       />
 
       <View style={ms.row}>
         <InlineField
-          label="Opening Qty"
+          label={t('screens.componentsFormsAddItemModal.openingQty')}
           value={qty}
           onChange={setQty}
           placeholder="0"
           keyboardType="numeric"
         />
         <CurrencyField
-          label="Sale Price"
+          label={t('screens.componentsFormsAddItemModal.salePrice')}
           value={salePrice}
           onChange={setSalePrice}
           placeholder="₹ 0.00"

@@ -3,10 +3,11 @@
  * While workspace caps are loading/unknown → deny (no content).
  * Once known and missing → toast + replace/back to home.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useWorkspace } from '../context/WorkspaceContext';
+import i18n from '../i18n';
 
 type Options = {
   /** Fallback when router cannot go back. Default: home tabs. */
@@ -20,20 +21,21 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
   const redirected = useRef(false);
   // Once granted for this mount, stay true across background workspace re-lists.
   // Without this, refreshWorkspaces → loading=true remounts every create-voucher form.
-  const grantedOnce = useRef(false);
-  if (!loading && hasCapability(capability)) {
-    grantedOnce.current = true;
+  const [grantedOnce, setGrantedOnce] = useState(false);
+  const grantedNow = !loading && hasCapability(capability);
+  if (grantedNow && !grantedOnce) {
+    setGrantedOnce(true);
   }
-  const allowed = grantedOnce.current || (!loading && hasCapability(capability));
+  const allowed = grantedOnce || grantedNow;
 
   useEffect(() => {
-    if (loading || redirected.current || grantedOnce.current) return;
+    if (loading || redirected.current || grantedOnce) return;
     if (hasCapability(capability)) return;
     redirected.current = true;
     Toast.show({
       type: 'error',
-      text1: 'Not allowed',
-      text2: opts?.message || 'You do not have access to this screen',
+      text1: i18n.t('screens.componentsRequireCapability.notAllowed'),
+      text2: opts?.message || i18n.t('screens.componentsRequireCapability.noAccess'),
     });
     try {
       if (typeof (router as any).canGoBack === 'function' && (router as any).canGoBack()) {
@@ -44,7 +46,7 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
     } catch {
       router.replace((opts?.href || '/(tabs)') as any);
     }
-  }, [loading, capability, hasCapability, router, opts?.href, opts?.message]);
+  }, [loading, grantedOnce, capability, hasCapability, router, opts?.href, opts?.message]);
 
   return allowed;
 }

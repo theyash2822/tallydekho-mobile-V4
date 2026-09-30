@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ShimmerBox } from '../../src/components/Skeleton';
 import { pairWorkspaceTally, unpairWorkspaceTally, getTallySyncStatus } from '../../src/services/api';
@@ -17,15 +19,16 @@ import { useWorkspace } from '../../src/context/WorkspaceContext';
 // ─────────────────────────────────────────────────────────────────────────────
 // HelpSheet — "Where do I find the code?"
 // ─────────────────────────────────────────────────────────────────────────────
-const HELP_STEPS = [
-  'On your desktop, open any browser and visit tallydekho.com',
-  'Download the TallyDekho Desktop Application',
-  'Run the setup file and complete the installation',
-  'Open the desktop app and sync your company',
-  'A 6-digit pairing code will appear in the TallyDekho Desktop Agent',
+const HELP_STEP_KEYS = [
+  'screens.settingsTallySync.helpStep1',
+  'screens.settingsTallySync.helpStep2',
+  'screens.settingsTallySync.helpStep3',
+  'screens.settingsTallySync.helpStep4',
+  'screens.settingsTallySync.helpStep5',
 ];
 
 function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={hs.overlay}>
@@ -33,7 +36,7 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
         <View style={hs.sheet}>
           <View style={hs.handle} />
           <View style={hs.hdr}>
-            <Text style={hs.title}>Where Do I Find The Code?</Text>
+            <Text style={hs.title}>{t('screens.settingsTallySync.helpTitle')}</Text>
             <TouchableOpacity onPress={onClose} style={hs.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -43,27 +46,27 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
               <Ionicons name="desktop-outline" size={32} color={COLORS.brandPrimary} />
             </View>
           </View>
-          <Text style={hs.subtitle}>TallyDekho Desktop Agent</Text>
+          <Text style={hs.subtitle}>{t('screens.settingsTallySync.desktopAgent')}</Text>
           <View style={hs.steps}>
-            {HELP_STEPS.map((step, i) => (
+            {HELP_STEP_KEYS.map((stepKey, i) => (
               <View key={i} style={hs.stepRow}>
                 <View style={hs.stepNum}>
                   <Text style={hs.stepNumTxt}>{i + 1}</Text>
                 </View>
-                <Text style={hs.stepTxt}>{step}</Text>
+                <Text style={hs.stepTxt}>{t(stepKey)}</Text>
               </View>
             ))}
           </View>
           <TouchableOpacity
             style={hs.dlBtn}
             onPress={() => {
-              Toast.show({ type: 'info', text1: 'Download', text2: 'Opening tallydekho.com…' });
+              Toast.show({ type: 'info', text1: t('common.download'), text2: t('screens.settingsTallySync.openingSite') });
               onClose();
             }}
             activeOpacity={0.85}
           >
             <Ionicons name="cloud-download-outline" size={17} color={COLORS.white} />
-            <Text style={hs.dlBtnTxt}>Download Desktop App</Text>
+            <Text style={hs.dlBtnTxt}>{t('screens.settingsTallySync.downloadApp')}</Text>
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </View>
@@ -96,6 +99,7 @@ const hs = StyleSheet.create({
 function DisconnectSheet({
   visible, onClose, onConfirm,
 }: { visible: boolean; onClose: () => void; onConfirm: () => void }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={ds.overlay}>
@@ -107,14 +111,14 @@ function DisconnectSheet({
               <Ionicons name="unlink-outline" size={28} color={COLORS.negative} />
             </View>
           </View>
-          <Text style={ds.title}>Disconnect Tally?</Text>
-          <Text style={ds.sub}>You will need to re-pair your device to sync data again.</Text>
+          <Text style={ds.title}>{t('screens.settingsTallySync.disconnectTitle')}</Text>
+          <Text style={ds.sub}>{t('screens.settingsTallySync.disconnectSub')}</Text>
           <TouchableOpacity style={ds.disconnectBtn} onPress={onConfirm} activeOpacity={0.85}>
             <Ionicons name="unlink-outline" size={16} color={COLORS.white} />
-            <Text style={ds.disconnectTxt}>Yes, Disconnect</Text>
+            <Text style={ds.disconnectTxt}>{t('screens.settingsTallySync.disconnectConfirm')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={ds.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={ds.cancelTxt}>Cancel</Text>
+            <Text style={ds.cancelTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <View style={{ height: 20 }} />
         </View>
@@ -201,6 +205,7 @@ const ci = StyleSheet.create({
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TallySyncScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { setCompany } = useAuth();
   const { workspaceId, isOwnerOrAdmin, pairingStatus, refreshContext, canPair, canUnpair } = useWorkspace();
@@ -218,9 +223,11 @@ export default function TallySyncScreen() {
   const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
 
   // Keep pairState in sync if pairing changes externally (e.g. desktop unpairs)
-  useEffect(() => {
+  const [prevWorkspacePaired, setPrevWorkspacePaired] = useState(workspacePaired);
+  if (prevWorkspacePaired !== workspacePaired) {
+    setPrevWorkspacePaired(workspacePaired);
     setPairState(workspacePaired ? 'paired' : 'idle');
-  }, [workspacePaired]);
+  }
 
   // Fetch real device info when paired (CONNECTED or RECONNECTING)
   useEffect(() => {
@@ -231,7 +238,7 @@ export default function TallySyncScreen() {
         if (d?.device) {
           const lastSeen = d.device.last_seen
             ? new Date(Number(d.device.last_seen) * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-            : 'Never';
+            : i18n.t('screens.settingsTallySync.never');
           setDeviceInfo({ name: d.device.name || 'TallyDekho Desktop', lastSync: lastSeen });
         }
       })
@@ -250,15 +257,15 @@ export default function TallySyncScreen() {
 
   const handlePair = async () => {
     if (!allowPair) {
-      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'Ask the Workspace Owner or Admin to pair Tally.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsTallySync.notAllowed'), text2: t('screens.settingsTallySync.notAllowedPair') });
       return;
     }
     if (!workspaceId) {
-      Toast.show({ type: 'error', text1: 'No Workspace', text2: 'Select a Workspace first.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsTallySync.noWorkspace'), text2: t('screens.settingsTallySync.noWorkspaceMsg') });
       return;
     }
     if (!isComplete) {
-      Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 6 digits.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsTallySync.incompleteCode'), text2: t('screens.settingsTallySync.incompleteCodeMsg') });
       return;
     }
     setPairState('awaiting');
@@ -274,11 +281,11 @@ export default function TallySyncScreen() {
         }
         await refreshContext();
         setPairState('paired');
-        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'Waiting for first Desktop sync to load live books.' });
+        Toast.show({ type: 'success', text1: t('screens.settingsTallySync.pairedToast'), text2: t('screens.settingsTallySync.pairedToastMsg') });
       } else {
         setPairState('idle');
-        const msg = (res as any)?.error?.message || 'Invalid or expired code. Try again.';
-        Toast.show({ type: 'error', text1: 'Pairing Failed', text2: msg });
+        const msg = (res as any)?.error?.message || t('screens.settingsTallySync.invalidCode');
+        Toast.show({ type: 'error', text1: t('screens.settingsTallySync.pairingFailed'), text2: msg });
       }
     } catch (err: any) {
       setPairState('idle');
@@ -286,23 +293,23 @@ export default function TallySyncScreen() {
       const backend = err?.message || err?.error?.message;
       const msg =
         code === 'DEVICE_ALREADY_PAIRED'
-          ? (backend || 'This Tally Desktop is already connected to another TallyDekho workspace.')
+          ? (backend || t('screens.settingsTallySync.errDeviceAlreadyPaired'))
           : code === 'WORKSPACE_ALREADY_HAS_DESKTOP'
-            ? (backend || 'This Workspace already has a connected Tally Desktop. If the old computer is unavailable, use Restore / Replace Computer.')
-            : (backend || 'Could not connect. Check your network.');
-      Toast.show({ type: 'error', text1: 'Cannot pair this Desktop', text2: msg, visibilityTime: 6000 });
+            ? (backend || t('screens.settingsTallySync.errWorkspaceHasDesktop'))
+            : (backend || t('screens.settingsTallySync.errNetwork'));
+      Toast.show({ type: 'error', text1: t('screens.settingsTallySync.cannotPair'), text2: msg, visibilityTime: 6000 });
     }
   };
 
   const handleSyncNow = () => {
     // Sync is triggered from the desktop app, not from mobile.
     // This button is informational only.
-    Toast.show({ type: 'info', text1: 'Sync from Desktop', text2: 'Open TallyDekho Desktop and click "Sync Now".' });
+    Toast.show({ type: 'info', text1: t('screens.settingsTallySync.syncFromDesktop'), text2: t('screens.settingsTallySync.syncFromDesktopMsg') });
   };
 
   const handleDisconnect = async () => {
     if (!allowUnpair) {
-      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'Ask the Workspace Owner or Admin to unpair.' });
+      Toast.show({ type: 'error', text1: t('screens.settingsTallySync.notAllowed'), text2: t('screens.settingsTallySync.notAllowedUnpair') });
       return;
     }
     try {
@@ -312,7 +319,7 @@ export default function TallySyncScreen() {
     setCode(Array(6).fill(''));
     setShowDisconnect(false);
     await refreshContext();
-    Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
+    Toast.show({ type: 'info', text1: t('screens.settingsTallySync.disconnected'), text2: t('screens.settingsTallySync.disconnectedMsg') });
   };
 
   return (
@@ -322,7 +329,7 @@ export default function TallySyncScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.back} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Tally Prime Sync</Text>
+        <Text style={s.hdrTitle}>{t('screens.settingsTallySync.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -341,8 +348,8 @@ export default function TallySyncScreen() {
             <View style={s.pairedBanner}>
               <Ionicons name="checkmark-circle" size={22} color={COLORS.positive} />
               <View style={{ flex: 1 }}>
-                <Text style={s.pairedTitle}>Tally Paired</Text>
-                <Text style={s.pairedSub}>Last synced: {deviceInfo?.lastSync || 'Syncing...'}</Text>
+                <Text style={s.pairedTitle}>{t('screens.settingsTallySync.paired')}</Text>
+                <Text style={s.pairedSub}>{t('screens.settingsTallySync.lastSynced', { time: deviceInfo?.lastSync || t('screens.settingsTallySync.syncingDots') })}</Text>
               </View>
             </View>
 
@@ -354,10 +361,10 @@ export default function TallySyncScreen() {
                 </View>
                 <View style={s.deviceInfo}>
                   <Text style={s.deviceName}>{deviceInfo?.name || 'TallyDekho Desktop'}</Text>
-                  <Text style={s.deviceSub}>Last seen: {deviceInfo?.lastSync || 'Unknown'}</Text>
+                  <Text style={s.deviceSub}>{t('screens.settingsTallySync.lastSeen', { time: deviceInfo?.lastSync || t('screens.settingsTallySync.unknown') })}</Text>
                   <View style={s.onlineRow}>
                     <View style={s.onlineDot} />
-                    <Text style={s.onlineTxt}>Online</Text>
+                    <Text style={s.onlineTxt}>{t('common.online')}</Text>
                   </View>
                 </View>
               </View>
@@ -371,7 +378,7 @@ export default function TallySyncScreen() {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="unlink-outline" size={15} color={COLORS.negative} />
-                  <Text style={s.disconnectTxt}>Disconnect</Text>
+                  <Text style={s.disconnectTxt}>{t('screens.settingsTallySync.disconnect')}</Text>
                 </TouchableOpacity>
                 )}
 
@@ -385,7 +392,7 @@ export default function TallySyncScreen() {
                     ? <ActivityIndicator size="small" color={COLORS.white} />
                     : <Ionicons name="sync-outline" size={15} color={COLORS.white} />
                   }
-                  <Text style={s.syncNowTxt}>{syncing ? 'Syncing…' : 'Sync Now'}</Text>
+                  <Text style={s.syncNowTxt}>{syncing ? t('common.syncing') : t('screens.settingsTallySync.syncNow')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -394,7 +401,7 @@ export default function TallySyncScreen() {
             <View style={s.infoCard}>
               <Ionicons name="information-circle-outline" size={17} color={COLORS.textSecondary} />
               <Text style={s.infoTxt}>
-                Make sure TallyPrime is open and TallyDekho Desktop Agent is running to enable sync.
+                {t('screens.settingsTallySync.pairedInfo')}
               </Text>
             </View>
             {isOwnerOrAdmin && (
@@ -405,8 +412,8 @@ export default function TallySyncScreen() {
               >
                 <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={s.deviceName}>Hard Sync & Restore approvals</Text>
-                  <Text style={s.deviceSub}>Approve a full rebuild or a new-computer restore.</Text>
+                  <Text style={s.deviceName}>{t('screens.settingsTallySync.approvalsTitle')}</Text>
+                  <Text style={s.deviceSub}>{t('screens.settingsTallySync.approvalsSub')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
               </TouchableOpacity>
@@ -427,8 +434,8 @@ export default function TallySyncScreen() {
                   >
                     <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
                     <View style={{ flex: 1 }}>
-                      <Text style={s.deviceName}>Hard Sync & Restore approvals</Text>
-                      <Text style={s.deviceSub}>Approve a full rebuild or a new-computer restore.</Text>
+                      <Text style={s.deviceName}>{t('screens.settingsTallySync.approvalsTitle')}</Text>
+                      <Text style={s.deviceSub}>{t('screens.settingsTallySync.approvalsSub')}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
                   </TouchableOpacity>
@@ -437,7 +444,7 @@ export default function TallySyncScreen() {
               <View style={[s.infoCard, { marginBottom: 12 }]}>
                 <Ionicons name="lock-closed-outline" size={17} color={COLORS.textSecondary} />
                 <Text style={s.infoTxt}>
-                  Only the Workspace Owner or Admin can pair or unpair Tally Desktop.
+                  {t('screens.settingsTallySync.onlyAdmin')}
                 </Text>
               </View>
             )}
@@ -445,15 +452,15 @@ export default function TallySyncScreen() {
               <View style={[s.infoCard, { marginBottom: 12 }]}>
                 <Ionicons name="information-circle-outline" size={17} color={COLORS.textSecondary} />
                 <Text style={s.infoTxt}>
-                  One Desktop belongs to only one workspace. If this Workspace already has a Desktop, use Restore / Replace Computer — do not treat Unpair as normal recovery.
+                  {t('screens.settingsTallySync.oneDesktopInfo')}
                 </Text>
               </View>
             )}
-            <Text style={s.stepsHeader}>Follow the steps mentioned below</Text>
+            <Text style={s.stepsHeader}>{t('screens.settingsTallySync.stepsHeader')}</Text>
 
             {/* ── Step 1: Download ── */}
             <View style={s.stepCard}>
-              <Text style={s.stepLabel}>Step 1</Text>
+              <Text style={s.stepLabel}>{t('screens.settingsTallySync.step1')}</Text>
 
               {/* Tally logo box */}
               <View style={s.tallyLogoBox}>
@@ -461,33 +468,33 @@ export default function TallySyncScreen() {
               </View>
 
               <Text style={s.stepBody}>
-                Download{' '}
+                {t('common.download')}{' '}
                 <Text style={s.boldText}>TallyDekho</Text>
-                {' '}Agent from{'\n'}
+                {' '}{t('screens.settingsTallySync.agentFrom')}{'\n'}
                 <Text style={s.linkText}>https://www.tallydekho.com/download</Text>
               </Text>
             </View>
 
             {/* ── Step 2: Pairing instructions ── */}
             <View style={s.stepCard}>
-              <Text style={s.stepLabel}>Step 2</Text>
-              <Text style={s.stepTitle}>Pairing</Text>
+              <Text style={s.stepLabel}>{t('screens.settingsTallySync.step2')}</Text>
+              <Text style={s.stepTitle}>{t('screens.settingsTallySync.pairing')}</Text>
               <Text style={s.stepInstr}>
-                Open the TallyDekho Desktop Agent on your PC. A 6-digit pairing code will be displayed there.
+                {t('screens.settingsTallySync.step2Instr1')}
               </Text>
               <Text style={[s.stepInstr, { marginTop: 8 }]}>
-                Enter that code below in the Pair Device section to connect your account.
+                {t('screens.settingsTallySync.step2Instr2')}
               </Text>
             </View>
 
             {/* ── Pair Device ── */}
-            <Text style={s.pairDeviceHeader}>Pair Device</Text>
+            <Text style={s.pairDeviceHeader}>{t('screens.settingsTallySync.pairDevice')}</Text>
 
             <View style={s.pairCard}>
               {pairState === 'idle' ? (
                 <>
                   <SixDigitInput code={code} onChange={setCode} />
-                  <Text style={s.codeHint}>Enter 6-digit code from the TallyDekho Desktop Agent</Text>
+                  <Text style={s.codeHint}>{t('screens.settingsTallySync.codeHint')}</Text>
 
                   {isComplete && allowPair && (
                   <TouchableOpacity
@@ -495,7 +502,7 @@ export default function TallySyncScreen() {
                     onPress={handlePair}
                     activeOpacity={0.85}
                   >
-                    <Text style={s.primaryTxt}>Pair Now</Text>
+                    <Text style={s.primaryTxt}>{t('screens.settingsTallySync.pairNow')}</Text>
                   </TouchableOpacity>
                   )}
 
@@ -504,7 +511,7 @@ export default function TallySyncScreen() {
                     onPress={() => setShowHelp(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={s.helpLinkTxt}>Where do I find the code?</Text>
+                    <Text style={s.helpLinkTxt}>{t('screens.settingsTallySync.whereCode')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -515,14 +522,14 @@ export default function TallySyncScreen() {
                     <ShimmerBox height={16} width={180} borderRadius={6} />
                     <ShimmerBox height={11} width={230} borderRadius={5} />
                   </View>
-                  <Text style={s.awaitingTxt}>Awaiting Pairing…</Text>
-                  <Text style={s.awaitingSub}>Confirm on the TallyDekho Desktop Agent</Text>
+                  <Text style={s.awaitingTxt}>{t('screens.settingsTallySync.awaiting')}</Text>
+                  <Text style={s.awaitingSub}>{t('screens.settingsTallySync.awaitingSub')}</Text>
                   <TouchableOpacity
                     style={s.cancelBtn}
                     onPress={() => { setPairState('idle'); setCode(Array(6).fill('')); }}
                     activeOpacity={0.7}
                   >
-                    <Text style={s.cancelTxt}>Cancel</Text>
+                    <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

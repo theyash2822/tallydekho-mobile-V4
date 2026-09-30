@@ -3,7 +3,8 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIn
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -13,6 +14,8 @@ import { getEWBList, getEWBPending } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 
 // Data loaded from API
 
@@ -25,10 +28,13 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBListScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [ewbData, setEwbData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -39,20 +45,38 @@ export default function EWBListScreen() {
   const [isSharing, setIsSharing] = useState(false);
 
   // Always sync dates when selectedFY changes
-  useEffect(() => {
+  const [syncedFy, setSyncedFy] = useState<{ start: string | undefined; end: string | undefined } | null>(null);
+  if (!syncedFy || syncedFy.start !== selectedFY?.startDate || syncedFy.end !== selectedFY?.endDate) {
+    setSyncedFy({ start: selectedFY?.startDate, end: selectedFY?.endDate });
     if (selectedFY?.startDate) {
       setFromDate(selectedFY.startDate);
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
-  }, [selectedFY?.startDate, selectedFY?.endDate]);
+  }
+
+  const [loadedFor, setLoadedFor] = useState<{
+    guid: string | undefined; fy: typeof selectedFY; from: string; to: string; reloadKey: number;
+  } | null>(null);
+  if (
+    !loadedFor ||
+    loadedFor.guid !== company?.guid ||
+    loadedFor.fy !== selectedFY ||
+    loadedFor.from !== fromDate ||
+    loadedFor.to !== toDate ||
+    loadedFor.reloadKey !== reloadKey
+  ) {
+    setLoadedFor({ guid: company?.guid, fy: selectedFY, from: fromDate, to: toDate, reloadKey });
+    if (company?.guid) setLoading(true);
+  }
 
   useEffect(() => {
     if (!company?.guid) return;
-    setLoading(true);
+    let cancelled = false;
     const fyParam = fyInfoToParam(selectedFY);
     const dateParams = fromDate && toDate ? { from: fromDate, to: toDate } : (fyParam ? { fy: fyParam } : {});
     const mapItem = (item: any, idx: number, defaultStatus: string) => ({
       id: item.guid || item.id?.toString() || `e${idx}`,
+      guid: item.guid ? String(item.guid) : '',
       ewbNo: item.ewb_number || item.ewb_no || '',
       type: item.voucher_type || 'Outward',
       party: item.party_name || 'Unknown',
@@ -72,15 +96,18 @@ export default function EWBListScreen() {
       subSupplyType: item.sub_supply_type || '',
     });
     Promise.all([
-      getEWBList(company.guid, dateParams).catch(() => ({ data: [] })),
-      getEWBPending(company.guid, dateParams).catch(() => ({ data: [] })),
+      getEWBList(company.guid, dateParams).catch(() => null),
+      getEWBPending(company.guid, dateParams).catch(() => null),
     ]).then(([genRes, pendRes]: any[]) => {
+      if (cancelled) return;
+      setLoadError(genRes && pendRes ? null : i18n.t('screens.reportsEwbList.loadFailed'));
       const generated = (genRes?.data  || []).map((i: any, idx: number) => mapItem(i, idx, 'Active'));
       const pending   = (pendRes?.data || []).map((i: any, idx: number) => mapItem(i, idx, 'Pending'));
       const combined  = [...generated, ...pending].sort((a, b) => b.date.localeCompare(a.date));
       setEwbData(combined);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [company?.guid, selectedFY, fromDate, toDate]);
+    return () => { cancelled = true; };
+  }, [company?.guid, selectedFY, fromDate, toDate, reloadKey]);
   const selectMode = selected.length > 0;
 
   const toggleSelect = (id: string) =>
@@ -116,7 +143,7 @@ export default function EWBListScreen() {
   const handleShare = async () => {
     const items = ewbData.filter(i => selected.includes(i.id) && !!i.ewbNo);
     if (!items.length) {
-      Toast.show({ type: 'info', text1: 'Nothing to share', text2: 'Select e-Way Bills with a bill number.' });
+      Toast.show({ type: 'info', text1: t('screens.reportsEwbList.nothingToShare'), text2: t('screens.reportsEwbList.nothingToShareSub') });
       return;
     }
     if (isSharing) return;
@@ -147,11 +174,11 @@ export default function EWBListScreen() {
         }
       );
       if (failed > 0) {
-        Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be built` });
+        Toast.show({ type: 'info', text1: t('screens.reportsEwbList.sharedOf', { shared, total: items.length }), text2: t('screens.reportsEwbList.failedBuild', { failed }) });
       }
       cancelSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.reportsEwbList.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -165,7 +192,7 @@ export default function EWBListScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>E-Way Bills</Text>
+        <Text style={s.headerTitle}>{t('reports.ewayBills')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -173,17 +200,18 @@ export default function EWBListScreen() {
       <View style={s.filterRow}>
         <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt}>{fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}</Text>
+          <Text style={s.dateTxt}>{fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : t('screens.reportsEwbList.dates')}</Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {ewbData.length === 0 && !loading && (
+        {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
+        {ewbData.length === 0 && !loading && !loadError && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
             <Ionicons name="document-text-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Way Bills Generated Yet</Text>
-            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>E-Way Bills generated from Tally Prime will appear here once synced.</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.reportsEwbList.emptyTitle')}</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.reportsEwbList.emptySub')}</Text>
           </View>
         )}
         {ewbData.map((item) => {
@@ -195,7 +223,7 @@ export default function EWBListScreen() {
               style={[s.card, isSelected && s.cardSelected]}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { safePush(router, `/document/${item.id}` as any); }
+                else { openVoucherPreview(router, { guid: item.guid }); }
               }}
               onLongPress={() => toggleSelect(item.id)}
               delayLongPress={500}
@@ -244,7 +272,7 @@ export default function EWBListScreen() {
                   ) : (
                     <>
                       <Ionicons name="share-outline" size={14} color={COLORS.brandPrimary} />
-                      <Text style={s.rowShareTxt}>Share PDF</Text>
+                      <Text style={s.rowShareTxt}>{t('pdf.sharePdf')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -259,12 +287,12 @@ export default function EWBListScreen() {
       {selectMode && (
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
-            <Text style={s.shareCount}>{selected.length} selected</Text>
+            <Text style={s.shareCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={() => setSelected(ewbData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-              <Text style={s.shareCancelTxt}>Select All</Text>
+              <Text style={s.shareCancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
-              <Text style={s.shareCancelTxt}>Cancel</Text>
+              <Text style={s.shareCancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -277,7 +305,7 @@ export default function EWBListScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareActionTxt}>{isSharing ? t('screens.reportsEwbList.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

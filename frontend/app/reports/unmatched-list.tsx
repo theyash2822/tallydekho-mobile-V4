@@ -8,12 +8,19 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getUnmatchedInvoices } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 const ERROR_CFG: Record<string, { badgeBg: string; dotColor: string; textColor: string }> = {
   'No GST entry':      { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' },
   'Missing GST type':  { badgeBg: '#FEF3C7', dotColor: '#D97706', textColor: '#D97706' },
   'Unregistered party':{ badgeBg: '#F3E8FF', dotColor: '#7C3AED', textColor: '#7C3AED' },
   'Incomplete GST':    { badgeBg: '#FFF7ED', dotColor: '#EA580C', textColor: '#EA580C' },
+};
+const ISSUE_LABEL_KEYS: Record<string, string> = {
+  'No GST entry':       'screens.reportsUnmatchedList.issueNoGstEntry',
+  'Missing GST type':   'screens.reportsUnmatchedList.issueMissingGstType',
+  'Unregistered party': 'screens.reportsUnmatchedList.issueUnregisteredParty',
+  'Incomplete GST':     'screens.reportsUnmatchedList.issueIncompleteGst',
 };
 const DEFAULT_ERR = { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' };
 
@@ -26,6 +33,7 @@ const isoToDisplay = (d: string) => {
 };
 
 export default function UnmatchedListScreen() {
+  const { t } = useTranslation();
   const { formatAmount } = useSettings();
   const fmt = (n: number) => formatAmount(Math.round(n));
   const router = useRouter();
@@ -40,18 +48,34 @@ export default function UnmatchedListScreen() {
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const load = () => {
-    if (!companyGuid) return;
+  const startLoad = () => {
     setIsLoading(true);
     setApiError(null);
     setPage(1);
     setHasMore(false);
+  };
+
+  const fetchFirstPage = () => {
+    if (!companyGuid) return;
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
     getUnmatchedInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: 1 })
       .then((res: any) => { const rows = res?.data ?? []; setItems(rows); setHasMore(rows.length === PAGE_SIZE); })
-      .catch((err: any) => setApiError(err?.message || 'Failed to load'))
+      .catch((err: any) => setApiError(err?.message || t('screens.reportsUnmatchedList.loadFailed')))
       .finally(() => setIsLoading(false));
   };
+
+  const load = () => {
+    if (!companyGuid) return;
+    startLoad();
+    fetchFirstPage();
+  };
+
+  const loadKey = `${companyGuid}|${selectedFY?.startDate}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (loadedKey !== loadKey) {
+    setLoadedKey(loadKey);
+    if (companyGuid) startLoad();
+  }
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -63,7 +87,7 @@ export default function UnmatchedListScreen() {
       .finally(() => setIsLoadingMore(false));
   };
 
-  useEffect(() => { load(); }, [companyGuid, selectedFY?.startDate]);
+  useEffect(() => { fetchFirstPage(); }, [companyGuid, selectedFY?.startDate]);
 
   const salesCount    = items.filter(i => (i.voucher_type||'').toLowerCase().includes('sales')).length;
   const purchaseCount = items.filter(i => (i.voucher_type||'').toLowerCase().includes('purchase')).length;
@@ -75,7 +99,7 @@ export default function UnmatchedListScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Unmatched Invoices</Text>
+        <Text style={s.headerTitle}>{t('screens.reportsUnmatchedList.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -90,17 +114,17 @@ export default function UnmatchedListScreen() {
 
           {/* Stats */}
           <View style={s.statsRow}>
-            <View style={s.stat}><Text style={s.statVal}>{items.length}</Text><Text style={s.statLbl}>Total</Text></View>
-            <View style={s.stat}><Text style={[s.statVal, { color: COLORS.negative }]}>{salesCount}</Text><Text style={s.statLbl}>Sales</Text></View>
-            <View style={s.stat}><Text style={[s.statVal, { color: COLORS.warning }]}>{purchaseCount}</Text><Text style={s.statLbl}>Purchase</Text></View>
-            <View style={s.stat}><Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit>{fmt(totalAmt)}</Text><Text style={s.statLbl}>Value</Text></View>
+            <View style={s.stat}><Text style={s.statVal}>{items.length}</Text><Text style={s.statLbl}>{t('screens.reportsUnmatchedList.total')}</Text></View>
+            <View style={s.stat}><Text style={[s.statVal, { color: COLORS.negative }]}>{salesCount}</Text><Text style={s.statLbl}>{t('screens.reportsUnmatchedList.sales')}</Text></View>
+            <View style={s.stat}><Text style={[s.statVal, { color: COLORS.warning }]}>{purchaseCount}</Text><Text style={s.statLbl}>{t('screens.reportsUnmatchedList.purchase')}</Text></View>
+            <View style={s.stat}><Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit>{fmt(totalAmt)}</Text><Text style={s.statLbl}>{t('screens.reportsUnmatchedList.value')}</Text></View>
           </View>
 
           {items.length === 0 ? (
             <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
               <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.positive} />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>All invoices matched</Text>
-              <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>No GST issues found for this period</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.reportsUnmatchedList.allMatched')}</Text>
+              <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.reportsUnmatchedList.noIssues')}</Text>
             </View>
           ) : (
             <>
@@ -114,7 +138,7 @@ export default function UnmatchedListScreen() {
                       <View style={s.info}>
                         <View style={s.topRow}>
                           <View style={[s.badge, { backgroundColor: cfg.badgeBg }]}>
-                            <Text style={[s.badgeTxt, { color: cfg.textColor }]}>{item.issue}</Text>
+                            <Text style={[s.badgeTxt, { color: cfg.textColor }]}>{ISSUE_LABEL_KEYS[item.issue] ? t(ISSUE_LABEL_KEYS[item.issue]) : item.issue}</Text>
                           </View>
                           <Text style={s.voucherNo}>{item.voucher_number}</Text>
                         </View>
@@ -132,12 +156,12 @@ export default function UnmatchedListScreen() {
               <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
                 {isLoadingMore
                   ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                  : <Text style={s.loadMoreTxt}>Load More</Text>
+                  : <Text style={s.loadMoreTxt}>{t('screens.reportsUnmatchedList.loadMore')}</Text>
                 }
               </TouchableOpacity>
             )}
             {!hasMore && items.length > 0 && (
-              <Text style={s.endTxt}>All {items.length} entries loaded</Text>
+              <Text style={s.endTxt}>{t('screens.reportsUnmatchedList.allLoaded', { count: items.length })}</Text>
             )}
             </>
           )}

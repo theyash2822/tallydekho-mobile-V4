@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -34,16 +34,16 @@ type TxType = 'payment' | 'receipt' | 'contra';
 type FilterType = 'all' | 'inflow' | 'outflow';
 
 interface TxItem {
-  id: string; voucher: string; desc: string; date: string;
+  id: string; guid?: string; voucher: string; desc: string; date: string;
   amount: string; positive: boolean; type: TxType;
 }
 interface MonthGroup { id: string; label: string; items: TxItem[] }
 
 const CASH_VOUCHER_TYPES = ['Payment', 'Receipt', 'Contra'];
-const TYPE_LABELS: Record<FilterType, string> = {
-  all: 'All',
-  inflow: 'Inflow',
-  outflow: 'Outflow',
+const TYPE_LABEL_KEYS: Record<FilterType, string> = {
+  all: 'common.all',
+  inflow: 'kpi.inflow',
+  outflow: 'kpi.outflow',
 };
 
 function isCashVoucher(row: any): boolean {
@@ -69,33 +69,35 @@ function CashRegisterFilterModal({
   typeFilter: FilterType;
   onApply: (type: FilterType) => void;
 }) {
+  const { t } = useTranslation();
   const [localType, setLocalType] = useState<FilterType>(typeFilter);
-
-  useEffect(() => {
+  const [prevSync, setPrevSync] = useState<unknown[] | null>(null);
+  if (!prevSync || prevSync[0] !== visible || prevSync[1] !== typeFilter) {
+    setPrevSync([visible, typeFilter]);
     if (visible) setLocalType(typeFilter);
-  }, [visible, typeFilter]);
+  }
 
   return (
     <FilterBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Filter"
+      title={t('common.filter')}
       activeCount={localType !== 'all' ? 1 : 0}
       onClear={() => setLocalType('all')}
       onApply={() => onApply(localType)}
-      applyLabel="Apply Filters"
+      applyLabel={t('screens.kpiCashRegister.applyFilters')}
       heightFraction={0.42}
     >
       <View style={fm.tabs}>
         <TouchableOpacity style={[fm.tab, fm.tabActive]} activeOpacity={1}>
-          <Text style={[fm.tabTxt, fm.tabTxtActive]}>Type</Text>
+          <Text style={[fm.tabTxt, fm.tabTxtActive]}>{t('screens.kpiCashRegister.type')}</Text>
         </TouchableOpacity>
       </View>
       <View style={fm.panel}>
         {(['all', 'inflow', 'outflow'] as FilterType[]).map(opt => (
           <FilterCheckRow
             key={opt}
-            label={TYPE_LABELS[opt]}
+            label={t(TYPE_LABEL_KEYS[opt])}
             selected={localType === opt}
             onPress={() => setLocalType(opt)}
           />
@@ -134,15 +136,18 @@ export default function CashRegisterScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isSharing, setIsSharing] = useState(false);
 
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState(`${fyFrom}|${fyTo}`);
+  if (prevFyRange !== `${fyFrom}|${fyTo}`) {
+    setPrevFyRange(`${fyFrom}|${fyTo}`);
     if (fyFrom && fyTo) {
       setDateFrom(fyFrom);
       setDateTo(fyTo);
     }
-  }, [fyFrom, fyTo]);
+  }
 
   const mapCashItem = useCallback((r: any): TxItem => ({
     id: r.guid || String(r.id),
+    guid: r.guid || '',
     voucher: r.voucher_number || '',
     desc: r.narration || r.party_name || '',
     date: r.date || '',
@@ -175,12 +180,8 @@ export default function CashRegisterScreen() {
       .map(mapCashItem)
   ), [mapCashItem, typeFilter]);
 
-  const loadCash = useCallback(() => {
+  const fetchCash = useCallback(() => {
     if (!companyGuid) return;
-    setPage(1);
-    setHasMore(false);
-    setIsLoading(true);
-    setApiError(null);
     const { apiType, query } = fetchParams(1);
     getVouchers(companyGuid, apiType, query)
       .then((res: any) => {
@@ -188,13 +189,33 @@ export default function CashRegisterScreen() {
         setLiveItems(rows);
         setHasMore((res?.data ?? []).length === PAGE_SIZE);
       })
-      .catch((err: any) => setApiError(err?.message || 'Failed to load'))
+      .catch((err: any) => setApiError(err?.message || t('screens.kpiCashRegister.failedToLoad')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, fetchParams, filterRows]);
 
+  const loadCash = useCallback(() => {
+    if (!companyGuid) return;
+    setPage(1);
+    setHasMore(false);
+    setIsLoading(true);
+    setApiError(null);
+    fetchCash();
+  }, [companyGuid, fetchCash]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== companyGuid || loadDeps[1] !== fetchParams || loadDeps[2] !== filterRows) {
+    setLoadDeps([companyGuid, fetchParams, filterRows]);
+    if (companyGuid) {
+      setPage(1);
+      setHasMore(false);
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
+
   useEffect(() => {
-    loadCash();
-  }, [loadCash]);
+    fetchCash();
+  }, [fetchCash]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -238,7 +259,7 @@ export default function CashRegisterScreen() {
       if (mode === 'combined') {
         await shareDayBookPdf({
           company: companyFromAuth(company),
-          title: 'Cash Register',
+          title: t('kpi.cashRegister'),
           period: dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : undefined,
           rows: items.map(item => dayBookRowFromListItem({
             date: item.date,
@@ -250,8 +271,8 @@ export default function CashRegisterScreen() {
           })),
         }, { onBeforeShare: () => setIsSharing(false) });
       } else {
-        const typeLabel = (t: TxType) =>
-          t === 'payment' ? 'Payment' : t === 'receipt' ? 'Receipt' : 'Contra';
+        const typeLabel = (tx: TxType) =>
+          tx === 'payment' ? 'Payment' : tx === 'receipt' ? 'Receipt' : 'Contra';
         const { shared, failed } = await shareVouchersAsMultiPagePdf(
           companyGuid,
           items.map(item => ({
@@ -265,12 +286,12 @@ export default function CashRegisterScreen() {
           }
         );
         if (failed > 0) {
-          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+          Toast.show({ type: 'info', text1: t('screens.kpiCashRegister.sharedOf', { shared, total: items.length }), text2: t('screens.kpiCashRegister.couldNotBeLoaded', { failed }) });
         }
       }
       clearSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.kpiCashRegister.couldNotSharePdfs'));
     } finally {
       setIsSharing(false);
     }
@@ -290,7 +311,7 @@ export default function CashRegisterScreen() {
   liveItems.forEach(item => {
     const d = item.date;
     let key = 'other';
-    let label = 'Other';
+    let label = t('screens.kpiCashRegister.other');
     if (d && d.includes('-') && d.length === 10) {
       const [y, m] = d.split('-');
       key = `${y}-${m}`;
@@ -338,7 +359,7 @@ export default function CashRegisterScreen() {
       {typeFilter !== 'all' && (
         <ActiveFilterChips
           variant="amber"
-          chips={[{ id: 'type', label: TYPE_LABELS[typeFilter] }]}
+          chips={[{ id: 'type', label: t(TYPE_LABEL_KEYS[typeFilter]) }]}
           onRemove={() => setTypeFilter('all')}
           onClearAll={() => setTypeFilter('all')}
         />
@@ -347,17 +368,17 @@ export default function CashRegisterScreen() {
       <SearchBar
         value={search}
         onChangeText={setSearch}
-        placeholder="Search transactions..."
+        placeholder={t('screens.kpiCashRegister.searchTransactions')}
       />
 
       <View style={s.summaryRow}>
         <View style={s.summaryItem}>
-          <Text style={s.summaryLbl}>Inflow</Text>
+          <Text style={s.summaryLbl}>{t('kpi.inflow')}</Text>
           <Text style={[s.summaryVal, { color: COLORS.positive }]}>+{fmtAmt(inflowTotal)}</Text>
         </View>
         <View style={s.summaryDivider} />
         <View style={s.summaryItem}>
-          <Text style={s.summaryLbl}>Outflow</Text>
+          <Text style={s.summaryLbl}>{t('kpi.outflow')}</Text>
           <Text style={[s.summaryVal, { color: COLORS.negative }]}>-{fmtAmt(outflowTotal)}</Text>
         </View>
       </View>
@@ -377,7 +398,7 @@ export default function CashRegisterScreen() {
           ) : filteredGroups.length === 0 ? (
             <View style={s.emptyWrap}>
               <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
-              <Text style={s.emptyTxt}>No transactions found</Text>
+              <Text style={s.emptyTxt}>{t('ledger.noTransactions')}</Text>
             </View>
           ) : (
             filteredGroups.map(group => {
@@ -387,14 +408,14 @@ export default function CashRegisterScreen() {
                   <TouchableOpacity style={s.monthHeader} onPress={() => toggleMonth(group.id)} activeOpacity={0.7}>
                     <View style={s.monthDot} />
                     <Text style={s.monthHeaderLabel}>{group.label}</Text>
-                    <Text style={[s.monthHeaderCount, { flex: 1 }]}>{group.items.length} entries</Text>
+                    <Text style={[s.monthHeaderCount, { flex: 1 }]}>{t('screens.kpiCashRegister.entriesCount', { count: group.items.length })}</Text>
                     <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textSecondary} />
                   </TouchableOpacity>
 
                   {!isCollapsed && group.items.map((item) => {
                     const isSel = selected.has(item.id);
                     const typeColor = item.type === 'receipt' ? COLORS.positive : item.type === 'contra' ? '#A89060' : COLORS.negative;
-                    const typeLabel = item.type === 'receipt' ? 'Cr' : 'Dr';
+                    const typeLabel = item.type === 'receipt' ? t('screens.kpiCashRegister.cr') : t('screens.kpiCashRegister.dr');
                     const typeBg = item.type === 'receipt' ? COLORS.positiveBg : item.type === 'contra' ? '#FDF9F4' : COLORS.negativeBg;
 
                     return (
@@ -407,7 +428,7 @@ export default function CashRegisterScreen() {
                           if (selected.size > 0) {
                             toggleSelect(item.id);
                           } else {
-                            safePush(router, `/document/${item.id}` as any);
+                            openVoucherPreview(router, { guid: item.guid });
                           }
                         }}
                         onLongPress={() => toggleSelect(item.id)}
@@ -434,12 +455,12 @@ export default function CashRegisterScreen() {
             <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
               {isLoadingMore
                 ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                : <Text style={s.loadMoreTxt}>Load More</Text>
+                : <Text style={s.loadMoreTxt}>{t('screens.kpiCashRegister.loadMore')}</Text>
               }
             </TouchableOpacity>
           )}
           {!hasMore && liveItems.length > 0 && (
-            <Text style={s.endTxt}>All {liveItems.length} entries loaded</Text>
+            <Text style={s.endTxt}>{t('screens.kpiCashRegister.allEntriesLoaded', { count: liveItems.length })}</Text>
           )}
           <View style={{ height: 120 }} />
         </ScrollView>
@@ -448,12 +469,12 @@ export default function CashRegisterScreen() {
       {selected.size > 0 && (
         <View style={s.shareBtnWrap}>
           <View style={s.shareLeft}>
-            <Text style={s.shareCount}>{selected.size} selected</Text>
+            <Text style={s.shareCount}>{t('common.selected', { count: selected.size })}</Text>
             <TouchableOpacity onPress={selectAllVisible} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.shareLink}>Select All</Text>
+              <Text style={s.shareLink}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.shareLink}>Cancel</Text>
+              <Text style={s.shareLink}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -466,7 +487,7 @@ export default function CashRegisterScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareBtnTxt}>{isSharing ? t('screens.kpiCashRegister.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -7,7 +7,7 @@
  * Delaying the whole CameraView made the first aim feel dead.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useIsFocused } from 'expo-router';
 
@@ -31,8 +31,8 @@ export function useAppForeground(): boolean {
 
 /** Unique id per component mount so overlapping instances are distinguishable in logs. */
 export function useCameraMountId(scannerName: string): string {
-  const idRef = useRef(`${scannerName}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
-  return idRef.current;
+  const [id] = useState(() => `${scannerName}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
+  return id;
 }
 
 /**
@@ -75,21 +75,21 @@ export function useCameraOwnerGate(opts: {
   // Preview mounts immediately with the gate
   const mountCamera = gateOpen;
 
-  const [barcodeListenReady, setBarcodeListenReady] = useState(Platform.OS !== 'ios');
+  const needsSettle = Platform.OS === 'ios' && iosSettleMs > 0;
+  const [settled, setSettled] = useState(false);
+  const [settleKey, setSettleKey] = useState({ gateOpen, iosSettleMs });
+  if (settleKey.gateOpen !== gateOpen || settleKey.iosSettleMs !== iosSettleMs) {
+    setSettleKey({ gateOpen, iosSettleMs });
+    setSettled(false);
+  }
 
   useEffect(() => {
-    if (!gateOpen) {
-      setBarcodeListenReady(false);
-      return;
-    }
-    if (Platform.OS !== 'ios' || iosSettleMs <= 0) {
-      setBarcodeListenReady(true);
-      return;
-    }
-    setBarcodeListenReady(false);
-    const t = setTimeout(() => setBarcodeListenReady(true), iosSettleMs);
+    if (!gateOpen || !needsSettle) return;
+    const t = setTimeout(() => setSettled(true), iosSettleMs);
     return () => clearTimeout(t);
-  }, [gateOpen, iosSettleMs]);
+  }, [gateOpen, needsSettle, iosSettleMs]);
+
+  const barcodeListenReady = gateOpen && (!needsSettle || settled);
 
   return {
     isFocused,

@@ -536,9 +536,11 @@ export default function CreateDebitNoteScreen() {
   const [sharingPdf, setSharingPdf] = useState(false);
   const companyGuid = company?.guid;
 
-  useEffect(() => {
+  const [dateSyncedFor, setDateSyncedFor] = useState<{ entryType: typeof entryType } | null>(null);
+  if (!dateSyncedFor || dateSyncedFor.entryType !== entryType) {
+    setDateSyncedFor({ entryType });
     if (entryType === 'regular') setDate(todayDMY());
-  }, [entryType]);
+  }
 
   useEffect(() => {
     if (!submitResult) return;
@@ -593,16 +595,19 @@ export default function CreateDebitNoteScreen() {
     },
   );
 
-  useEffect(() => {
-    if (!contextState.data || !selectedInvoice || contextState.data.items.length === 0) return;
-    setSelectedInvoice(contextState.data.invoice);
-    setItems(contextState.data.items);
-    setTaxes(contextState.data.taxes);
-    setReturnTaxMode(contextState.data.returnTaxMode);
-    setTaxGeometry(contextState.data.taxGeometry);
-    setInvoicePurchaseLedgers(contextState.data.purchaseLedgerCandidates);
-    setStep(2);
-  }, [contextState.data]);
+  const [appliedContext, setAppliedContext] = useState<{ data: typeof contextState.data } | null>(null);
+  if (!appliedContext || appliedContext.data !== contextState.data) {
+    setAppliedContext({ data: contextState.data });
+    if (contextState.data && selectedInvoice && contextState.data.items.length > 0) {
+      setSelectedInvoice(contextState.data.invoice);
+      setItems(contextState.data.items);
+      setTaxes(contextState.data.taxes);
+      setReturnTaxMode(contextState.data.returnTaxMode);
+      setTaxGeometry(contextState.data.taxGeometry);
+      setInvoicePurchaseLedgers(contextState.data.purchaseLedgerCandidates);
+      setStep(2);
+    }
+  }
 
   const partyOptions: BSSOption[] = useMemo(() => scopeParties(partiesState.data || []).map((row: any) => ({
     label: row.name,
@@ -766,35 +771,35 @@ export default function CreateDebitNoteScreen() {
   }, [updateItem]);
 
   const stepOneError = useMemo(() => {
-    if (!party) return 'Select a vendor';
-    if (!selectedInvoice) return 'Select the original Purchase invoice';
-    if (contextState.loading) return 'Wait for the invoice return context';
-    if (!contextState.data || contextState.data.items.length === 0) return 'Load a returnable invoice context';
+    if (!party) return t('screens.purchaseCreateDebitNote.errSelectVendor');
+    if (!selectedInvoice) return t('screens.purchaseCreateDebitNote.errSelectInvoice');
+    if (contextState.loading) return t('screens.purchaseCreateDebitNote.errWaitContext');
+    if (!contextState.data || contextState.data.items.length === 0) return t('screens.purchaseCreateDebitNote.errLoadContext');
     return null;
-  }, [party, selectedInvoice, contextState.loading, contextState.data]);
+  }, [party, selectedInvoice, contextState.loading, contextState.data, t]);
 
-  const submissionError = useMemo(() => {
-    if (!company?.guid || !company?.name) return 'Company is not loaded';
-    if (!party || !selectedInvoice) return 'Vendor and linked invoice are required';
+  const submissionError = ((): string | null => {
+    if (!company?.guid || !company?.name) return t('screens.purchaseCreateDebitNote.errCompany');
+    if (!party || !selectedInvoice) return t('screens.purchaseCreateDebitNote.errVendorInvoice');
     if (selectedInvoice.party && selectedInvoice.party.trim().toLowerCase() !== party.trim().toLowerCase()) {
-      return 'Linked invoice does not belong to the selected vendor';
+      return t('screens.purchaseCreateDebitNote.errInvoiceVendor');
     }
-    if (!selectedItems.length) return 'Select at least one returned item';
+    if (!selectedItems.length) return t('screens.purchaseCreateDebitNote.errSelectItem');
     for (const item of selectedItems) {
       const qty = num(item.returnQty);
-      if (qty <= 0) return `Enter return quantity for ${item.itemName}`;
-      if (qty > item.remainingQty) return `${item.itemName} exceeds remaining quantity`;
-      if (item.rate <= 0) return `Original rate is missing for ${item.itemName}`;
-      if (lineReturnAmount(item) <= 0) return `Enter return amount for ${item.itemName}`;
-      if (!item.purchaseLedger) return `Select Purchase ledger for ${item.itemName}`;
-      if (!item.godown) return `Select godown for ${item.itemName}`;
+      if (qty <= 0) return t('screens.purchaseCreateDebitNote.errQty', { item: item.itemName });
+      if (qty > item.remainingQty) return t('screens.purchaseCreateDebitNote.errExceeds', { item: item.itemName });
+      if (item.rate <= 0) return t('screens.purchaseCreateDebitNote.errRate', { item: item.itemName });
+      if (lineReturnAmount(item) <= 0) return t('screens.purchaseCreateDebitNote.errAmount', { item: item.itemName });
+      if (!item.purchaseLedger) return t('screens.purchaseCreateDebitNote.errLedger', { item: item.itemName });
+      if (!item.godown) return t('screens.purchaseCreateDebitNote.errGodown', { item: item.itemName });
     }
     if (returnTaxMode === 'SALES_RETURN_WITH_GST' && computedTaxes.some(tax => !tax.ledger || tax.amount < 0)) {
-      return 'Complete the tax ledger details';
+      return t('screens.purchaseCreateDebitNote.errTax');
     }
-    if (!narration.trim()) return 'Reason / narration is required';
+    if (!narration.trim()) return t('screens.purchaseCreateDebitNote.errNarration');
     return null;
-  }, [company, party, selectedInvoice, selectedItems, returnTaxMode, computedTaxes, narration]);
+  })();
 
   const handleSubmit = async () => {
     // Same pattern as Purchase Invoice: dismiss BEFORE validation so the success
@@ -803,7 +808,7 @@ export default function CreateDebitNoteScreen() {
     Keyboard.dismiss();
 
     if (submissionError) {
-      Alert.alert('Required', submissionError);
+      Alert.alert(t('common.required'), submissionError);
       return;
     }
     if (!selectedInvoice) return;
@@ -867,7 +872,7 @@ export default function CreateDebitNoteScreen() {
       });
       return;
     } catch (error: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: error?.message || 'Could not create debit note.' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateDebitNote.submitFailed'), text2: error?.message || t('screens.purchaseCreateDebitNote.submitFailedMsg') });
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -882,7 +887,7 @@ export default function CreateDebitNoteScreen() {
         onBeforeShare: () => setSharingPdf(false),
       });
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'PDF Error', text2: e?.message || 'Could not generate PDF' });
+      Toast.show({ type: 'error', text1: t('screens.purchaseCreateDebitNote.pdfError'), text2: e?.message || t('screens.purchaseCreateDebitNote.pdfErrorMsg') });
     } finally {
       setSharingPdf(false);
     }
@@ -890,18 +895,18 @@ export default function CreateDebitNoteScreen() {
 
   const renderStepOne = () => (
     <>
-      <Text style={s.sectionTitle}>Details & Invoice</Text>
+      <Text style={s.sectionTitle}>{t('screens.purchaseCreateDebitNote.sectionDetails')}</Text>
       <View style={s.card}>
         <View style={s.row2}>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>DBN No.</Text>
+            <Text style={s.label}>{t('screens.purchaseCreateDebitNote.dbnNo')}</Text>
             <View style={s.lockedField}>
-              <Text style={s.lockedText}>Auto</Text>
+              <Text style={s.lockedText}>{t('screens.purchaseCreateDebitNote.auto')}</Text>
               <Ionicons name="lock-closed-outline" size={14} color={COLORS.textTertiary} />
             </View>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>Date <Text style={s.required}>*</Text></Text>
+            <Text style={s.label}>{t('voucher.date')} <Text style={s.required}>*</Text></Text>
             {entryType === 'regular' ? (
               <View style={[s.lockedField, { opacity: 0.65 }]}>
                 <Text style={s.lockedText}>{date}</Text>
@@ -915,16 +920,16 @@ export default function CreateDebitNoteScreen() {
             )}
           </View>
         </View>
-        <Text style={s.helper}>Numbering follows Settings → Voucher Config. Regular uses today; Optional can use any date inside the selected FY.</Text>
+        <Text style={s.helper}>{t('screens.purchaseCreateDebitNote.numberingHelper')}</Text>
       </View>
 
       <View style={s.card}>
-        <Text style={s.cardTitle}>Purchase Return</Text>
+        <Text style={s.cardTitle}>{t('screens.purchaseCreateDebitNote.purchaseReturn')}</Text>
         {partiesState.error && <ErrorBanner message={partiesState.error} onRetry={partiesState.reload} />}
         <BottomSheetSearch
-          label="Vendor"
+          label={t('screens.purchaseCreateDebitNote.vendor')}
           required
-          placeholder={partiesState.loading ? 'Loading vendors...' : 'Search vendor...'}
+          placeholder={partiesState.loading ? t('screens.purchaseCreateDebitNote.loadingVendors') : t('screens.purchaseCreateDebitNote.searchVendor')}
           options={partyOptions}
           value={party}
           onSelect={selectParty}
@@ -937,16 +942,16 @@ export default function CreateDebitNoteScreen() {
           <>
             {invoicesState.error && <ErrorBanner message={invoicesState.error} onRetry={invoicesState.reload} />}
             <BottomSheetSearch
-              label="Original Purchase Invoice"
+              label={t('screens.purchaseCreateDebitNote.originalInvoice')}
               required
               placeholder={
                 invoicesState.loading
-                  ? 'Loading Purchase invoices...'
+                  ? t('screens.purchaseCreateDebitNote.loadingInvoices')
                   : invoicesState.isEmpty
-                    ? 'No Purchase invoices in selected FY'
-                    : 'Select Purchase invoice...'
+                    ? t('screens.purchaseCreateDebitNote.noInvoicesFy')
+                    : t('screens.purchaseCreateDebitNote.selectInvoice')
               }
-              sheetTitle="Original Purchase Invoice"
+              sheetTitle={t('screens.purchaseCreateDebitNote.originalInvoice')}
               options={invoiceOptions}
               value={selectedInvoice?.id || ''}
               onSelect={option => {
@@ -958,11 +963,11 @@ export default function CreateDebitNoteScreen() {
               disabled={invoicesState.loading || invoicesState.isEmpty}
               icon="document-text-outline"
             />
-            {invoicesState.loading && <InlineState text={`Loading all Purchase invoices for ${party}...`} loading />}
-            {invoicesState.isEmpty && <InlineState text={`No Purchase invoices found for ${party} in this financial year.`} />}
-            {contextState.loading && <InlineState text={`Checking cumulative returns for #${selectedInvoice?.voucherNumber || ''}...`} loading />}
+            {invoicesState.loading && <InlineState text={t('screens.purchaseCreateDebitNote.loadingInvoicesFor', { party })} loading />}
+            {invoicesState.isEmpty && <InlineState text={t('screens.purchaseCreateDebitNote.noInvoicesFor', { party })} />}
+            {contextState.loading && <InlineState text={t('screens.purchaseCreateDebitNote.checkingReturns', { number: selectedInvoice?.voucherNumber || '' })} loading />}
             {contextState.error && <ErrorBanner message={contextState.error} onRetry={contextState.reload} />}
-            {contextState.isEmpty && <InlineState text="This invoice has no returnable inventory lines." />}
+            {contextState.isEmpty && <InlineState text={t('screens.purchaseCreateDebitNote.noReturnable')} />}
           </>
         )}
       </View>
@@ -973,18 +978,18 @@ export default function CreateDebitNoteScreen() {
     <>
       <View style={s.invoiceSummary}>
         <View style={{ flex: 1 }}>
-          <Text style={s.invoiceTitle}>Invoice #{selectedInvoice?.voucherNumber}</Text>
+          <Text style={s.invoiceTitle}>{t('screens.purchaseCreateDebitNote.invoiceNo', { number: selectedInvoice?.voucherNumber ?? '' })}</Text>
           <Text style={s.invoiceMeta}>{party} · {isoToDMY(selectedInvoice?.date || '')}</Text>
         </View>
         <TouchableOpacity onPress={() => setStep(1)} style={s.changeBtn}>
-          <Text style={s.changeText}>Change</Text>
+          <Text style={s.changeText}>{t('screens.purchaseCreateDebitNote.change')}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={s.sectionTitle}>Returned Items & Review</Text>
+      <Text style={s.sectionTitle}>{t('screens.purchaseCreateDebitNote.sectionItems')}</Text>
       <View style={s.natureRow}>
-        <Text style={s.natureLabel}>Nature</Text>
-        <View style={s.natureBadge}><Text style={s.natureText}>Purchase Return</Text></View>
+        <Text style={s.natureLabel}>{t('screens.purchaseCreateDebitNote.nature')}</Text>
+        <View style={s.natureBadge}><Text style={s.natureText}>{t('screens.purchaseCreateDebitNote.purchaseReturn')}</Text></View>
       </View>
 
       {items.map(item => (
@@ -1002,7 +1007,7 @@ export default function CreateDebitNoteScreen() {
             <View style={{ flex: 1 }}>
               <Text style={s.itemName}>{item.itemName}</Text>
               <Text style={s.itemMeta}>
-                Billed {formatQty(item.soldQty)} · Returned {formatQty(item.previouslyReturnedQty)} · Remaining {formatQty(item.remainingQty)} {item.unit}
+                {t('screens.purchaseCreateDebitNote.itemMeta', { billed: formatQty(item.soldQty), returned: formatQty(item.previouslyReturnedQty), remaining: formatQty(item.remainingQty), unit: item.unit ?? '' })}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1011,18 +1016,18 @@ export default function CreateDebitNoteScreen() {
             <View style={s.itemBody}>
               <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.label}>Return Qty <Text style={s.required}>*</Text></Text>
+                  <Text style={s.label}>{t('screens.purchaseCreateDebitNote.returnQty')} <Text style={s.required}>*</Text></Text>
                   <TextInput
                     style={s.textInput}
                     value={item.returnQty}
                     onChangeText={value => updateReturnQty(item, value)}
                     keyboardType="decimal-pad"
-                    placeholder={`Max ${formatQty(item.remainingQty)}`}
+                    placeholder={t('screens.purchaseCreateDebitNote.maxQty', { qty: formatQty(item.remainingQty) })}
                     placeholderTextColor={COLORS.textTertiary}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.label}>Unit / Original Net Rate</Text>
+                  <Text style={s.label}>{t('screens.purchaseCreateDebitNote.unitRate')}</Text>
                   <View style={s.lockedField}>
                     <Text style={s.lockedText}>{item.unit || '—'} · {formatMoney(unitNet(item))}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -1030,26 +1035,26 @@ export default function CreateDebitNoteScreen() {
                 </View>
               </View>
               <BottomSheetSearch
-                label="Purchase Ledger"
+                label={t('screens.purchaseCreateDebitNote.purchaseLedger')}
                 required
                 options={purchaseLedgerOptions}
                 value={item.purchaseLedger}
                 onSelect={option => updateItem(item.id, { purchaseLedger: option.value })}
-                placeholder="Select original Purchase ledger..."
+                placeholder={t('screens.purchaseCreateDebitNote.selectLedger')}
                 icon="book-outline"
               />
               <BottomSheetSearch
-                label="Godown"
+                label={t('screens.purchaseCreateDebitNote.godown')}
                 required
                 options={warehouseOptions}
                 value={item.godown}
                 onSelect={option => updateItem(item.id, { godown: option.value })}
-                placeholder="Select original godown..."
+                placeholder={t('screens.purchaseCreateDebitNote.selectGodown')}
                 icon="business-outline"
                 containerStyle={{ marginBottom: 0 }}
               />
               <View style={s.amountField}>
-                <Text style={s.label}>Returned Taxable Value <Text style={s.required}>*</Text></Text>
+                <Text style={s.label}>{t('screens.purchaseCreateDebitNote.returnedTaxable')} <Text style={s.required}>*</Text></Text>
                 <TextInput
                   style={[s.textInput, num(item.returnQty) <= 0 && s.textInputDisabled]}
                   value={item.returnAmount}
@@ -1058,20 +1063,20 @@ export default function CreateDebitNoteScreen() {
                   editable={num(item.returnQty) > 0}
                   placeholder={num(item.returnQty) > 0
                     ? formatMoney(num(item.returnQty) * unitNet(item))
-                    : 'Enter return quantity first'}
+                    : t('screens.purchaseCreateDebitNote.enterQtyFirst')}
                   placeholderTextColor={COLORS.textTertiary}
                 />
                 <Text style={s.amountHelper}>
                   {num(item.returnQty) > 0
                     ? (item.manualAmount
-                      ? 'Edited manually — change qty to recalculate from original invoice net rate.'
-                      : `Auto from ${formatQty(num(item.returnQty))} × ${formatMoney(unitNet(item))} (original net taxable/unit).`)
-                    : 'Enter Return Qty first — amount fills from original invoice.'}
+                      ? t('screens.purchaseCreateDebitNote.editedManually')
+                      : t('screens.purchaseCreateDebitNote.autoFrom', { qty: formatQty(num(item.returnQty)), rate: formatMoney(unitNet(item)) }))
+                    : t('screens.purchaseCreateDebitNote.enterQtyFirstHint')}
                 </Text>
               </View>
               {(lineTaxMap.get(item.id) || []).length > 0 && (
                 <View style={s.lineTaxBox}>
-                  <Text style={s.lineTaxTitle}>GST reversal (this item)</Text>
+                  <Text style={s.lineTaxTitle}>{t('screens.purchaseCreateDebitNote.lineTaxTitle')}</Text>
                   {(lineTaxMap.get(item.id) || []).map(row => (
                     <View key={`${item.id}-${row.ledger}`} style={s.lineTaxRow}>
                       <Text style={s.lineTaxLabel}>{row.ledger}{row.rate > 0 ? ` @ ${row.rate}%` : ''}</Text>
@@ -1079,7 +1084,7 @@ export default function CreateDebitNoteScreen() {
                     </View>
                   ))}
                   <View style={s.lineTaxRow}>
-                    <Text style={s.lineTaxTotalLabel}>Line debit</Text>
+                    <Text style={s.lineTaxTotalLabel}>{t('screens.purchaseCreateDebitNote.lineDebit')}</Text>
                     <Text style={s.lineTaxTotalValue}>
                       {formatMoney(lineReturnAmount(item) + (lineTaxMap.get(item.id) || []).reduce((sum, row) => sum + row.amount, 0))}
                     </Text>
@@ -1091,41 +1096,41 @@ export default function CreateDebitNoteScreen() {
         </View>
       ))}
 
-      <Text style={s.sectionTitle}>GST Reversal</Text>
+      <Text style={s.sectionTitle}>{t('screens.purchaseCreateDebitNote.sectionGst')}</Text>
       <View style={s.card}>
         {returnTaxMode === 'SALES_RETURN_WITHOUT_GST' ? (
-          <Text style={s.emptyText}>Original invoice had no GST — no tax will be reversed.</Text>
+          <Text style={s.emptyText}>{t('screens.purchaseCreateDebitNote.noGst')}</Text>
         ) : computedTaxes.length === 0 ? (
-          <Text style={s.emptyText}>Select returned items to see GST reversal.</Text>
+          <Text style={s.emptyText}>{t('screens.purchaseCreateDebitNote.selectItemsForGst')}</Text>
         ) : (
           <>
             {taxGeometry.fallbackUsed || taxGeometry.allocationMode === 'proportional' ? (
               <Text style={s.taxIntro}>
-                Tax allocated from original invoice totals (proportional to returned taxable value).
+                {t('screens.purchaseCreateDebitNote.taxProportional')}
               </Text>
             ) : (
               <Text style={s.taxIntro}>
-                GST reversed from original invoice rates (CGST/SGST or IGST). Not today’s item master.
+                {t('screens.purchaseCreateDebitNote.taxFromRates')}
               </Text>
             )}
             {computedTaxes.map((tax, index) => (
               <View key={tax.id} style={[s.taxBlock, index < computedTaxes.length - 1 && s.divider]}>
                 <View style={s.row2}>
                   <View style={{ flex: 1.4 }}>
-                    <Text style={s.label}>Tax Ledger</Text>
+                    <Text style={s.label}>{t('screens.purchaseCreateDebitNote.taxLedger')}</Text>
                     <View style={s.lockedField}>
                       <Text style={s.lockedText}>{tax.ledger}</Text>
                       <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                     </View>
                   </View>
                   <View style={{ flex: 0.7 }}>
-                    <Text style={s.label}>Rate %</Text>
+                    <Text style={s.label}>{t('screens.purchaseCreateDebitNote.ratePct')}</Text>
                     <View style={s.lockedField}>
                       <Text style={s.lockedText}>{tax.rate > 0 ? String(tax.rate) : '—'}</Text>
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.label}>Tax Amount</Text>
+                    <Text style={s.label}>{t('screens.purchaseCreateDebitNote.taxAmount')}</Text>
                     <View style={s.lockedField}>
                       <Text style={s.lockedText}>{formatMoney(tax.amount)}</Text>
                     </View>
@@ -1137,12 +1142,12 @@ export default function CreateDebitNoteScreen() {
         )}
       </View>
 
-      <Text style={s.sectionTitle}>Reason & Summary</Text>
+      <Text style={s.sectionTitle}>{t('screens.purchaseCreateDebitNote.sectionReason')}</Text>
       <View
         style={s.card}
         onLayout={event => { narrationY.current = event.nativeEvent.layout.y; }}
       >
-        <Text style={s.label}>Reason / Narration <Text style={s.required}>*</Text></Text>
+        <Text style={s.label}>{t('screens.purchaseCreateDebitNote.reason')} <Text style={s.required}>*</Text></Text>
         <TextInput
           ref={narrationInputRef}
           style={s.textArea}
@@ -1151,17 +1156,17 @@ export default function CreateDebitNoteScreen() {
           multiline
           numberOfLines={3}
           textAlignVertical="top"
-          placeholder="Why are these goods being returned?"
+          placeholder={t('screens.purchaseCreateDebitNote.reasonPh')}
           placeholderTextColor={COLORS.textTertiary}
           blurOnSubmit
           onFocus={() => setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, narrationY.current - 80), animated: true }), 250)}
         />
         <View style={s.summary}>
-          <SummaryRow label="Selected items" value={String(selectedItems.length)} />
-          <SummaryRow label="Returned item value" value={formatMoney(subtotal)} />
-          <SummaryRow label="GST reversal" value={formatMoney(taxTotal)} />
+          <SummaryRow label={t('screens.purchaseCreateDebitNote.sumSelected')} value={String(selectedItems.length)} />
+          <SummaryRow label={t('screens.purchaseCreateDebitNote.sumValue')} value={formatMoney(subtotal)} />
+          <SummaryRow label={t('screens.purchaseCreateDebitNote.sumGst')} value={formatMoney(taxTotal)} />
           <View style={s.summaryDivider} />
-          <SummaryRow label="Total vendor debit" value={formatMoney(totalAmount)} strong />
+          <SummaryRow label={t('screens.purchaseCreateDebitNote.sumTotal')} value={formatMoney(totalAmount)} strong />
         </View>
       </View>
     </>
@@ -1181,7 +1186,7 @@ export default function CreateDebitNoteScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{t('purchase.createDebitNote')}</Text>
-          <Text style={s.headerSub}>Step {step} of 2</Text>
+          <Text style={s.headerSub}>{t('screens.purchaseCreateDebitNote.stepOf', { step })}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
@@ -1214,7 +1219,7 @@ export default function CreateDebitNoteScreen() {
           <View style={s.footerRow}>
             {step === 2 && (
               <TouchableOpacity style={s.secondaryBtn} onPress={() => setStep(1)} disabled={submitting}>
-                <Text style={s.secondaryText}>Back</Text>
+                <Text style={s.secondaryText}>{t('common.back')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1230,7 +1235,7 @@ export default function CreateDebitNoteScreen() {
               {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : (
                 <Ionicons name={step === 1 ? 'arrow-forward' : 'return-up-back'} size={18} color={COLORS.white} />
               )}
-              <Text style={s.primaryText}>{submitting ? 'Submitting...' : step === 1 ? 'Continue' : 'Issue Debit Note'}</Text>
+              <Text style={s.primaryText}>{submitting ? t('voucher.submitting') : step === 1 ? t('common.continue') : t('screens.purchaseCreateDebitNote.issue')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1243,7 +1248,7 @@ export default function CreateDebitNoteScreen() {
         maxDate={fyEnd}
         onSelect={value => { setDate(value); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
-        title="Debit Note Date"
+        title={t('screens.purchaseCreateDebitNote.dateTitle')}
       />
 
       {!!submitResult && (
@@ -1260,22 +1265,22 @@ export default function CreateDebitNoteScreen() {
               size={58}
               color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
             />
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Debit Note Posted'}</Text>
+            <Text style={ss.title}>{submitResult.isQueued ? t('voucher.journalQueued') : t('screens.purchaseCreateDebitNote.posted')}</Text>
             <Text style={ss.subtitle}>
               {submitResult.isQueued
-                ? 'Queued and ready to post when Tally Desktop reconnects.'
-                : 'Purchase Return sent to TallyPrime.'}
+                ? t('screens.purchaseCreateDebitNote.queuedMsg')
+                : t('screens.purchaseCreateDebitNote.postedMsg')}
             </Text>
             <View style={ss.refBox}>
-              <Text style={ss.refLabel}>Debit Note No.</Text>
+              <Text style={ss.refLabel}>{t('screens.purchaseCreateDebitNote.dnNo')}</Text>
               <Text style={ss.refValue}>
                 {submitResult.voucherNumber
-                  || (submitResult.isQueued ? 'Will be assigned when synced' : 'Check Day Book in TallyPrime')}
+                  || (submitResult.isQueued ? t('screens.purchaseCreateDebitNote.assignedOnSync') : t('screens.purchaseCreateDebitNote.checkDayBook'))}
               </Text>
             </View>
             {!!submitResult.tdkRef && (
               <View style={ss.refBox}>
-                <Text style={ss.refLabel}>TDK Reference</Text>
+                <Text style={ss.refLabel}>{t('screens.purchaseCreateDebitNote.tdkRef')}</Text>
                 <Text style={ss.refValue}>{submitResult.tdkRef}</Text>
               </View>
             )}
@@ -1289,7 +1294,7 @@ export default function CreateDebitNoteScreen() {
                 }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.actionText}>Preview</Text>
+                <Text style={ss.actionText}>{t('currency.preview')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={ss.actionBtn}
@@ -1299,11 +1304,11 @@ export default function CreateDebitNoteScreen() {
                 {sharingPdf
                   ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
                   : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
-                <Text style={ss.actionText}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
+                <Text style={ss.actionText}>{sharingPdf ? t('pdf.generating') : t('pdf.sharePdf')}</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={ss.closeBtn} onPress={() => { Keyboard.dismiss(); router.back(); }}>
-              <Text style={ss.closeText}>Close</Text>
+              <Text style={ss.closeText}>{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>

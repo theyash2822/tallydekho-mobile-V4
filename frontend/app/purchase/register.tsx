@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
@@ -37,6 +37,13 @@ import {
 } from '../../src/utils/multiShare';
 
 const { width: SW } = Dimensions.get('window');
+
+const STATUS_FILTER_LABEL_KEYS: Record<string, string> = {
+  All:    'common.all',
+  Paid:   'purchase.paid',
+  Unpaid: 'purchase.unpaid',
+  IRM:    'screens.purchaseRegister.irm',
+};
 
 const STATUS_LABEL: Record<string, string> = {
   paid:       'Paid',
@@ -88,9 +95,11 @@ export default function PurchaseRegisterScreen() {
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
 
-  useEffect(() => {
+  const [prevFyRange, setPrevFyRange] = useState({ from: fyFrom, to: fyTo });
+  if (prevFyRange.from !== fyFrom || prevFyRange.to !== fyTo) {
+    setPrevFyRange({ from: fyFrom, to: fyTo });
     if (fyFrom && fyTo) { setFromDate(fyFrom); setToDate(fyTo); }
-  }, [fyFrom, fyTo]);
+  }
 
   const mapPurchaseInv = (r: any, i: number): PurchaseInvoice => ({
     id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
@@ -111,15 +120,11 @@ export default function PurchaseRegisterScreen() {
     : ALL_PURCHASE_DOC_TYPE_IDS.join(',');
   const partyGroupsParam = partyGroups.length ? partyGroups.join(',') : undefined;
 
-  const loadRegister = useCallback(() => {
+  const fetchRegister = useCallback(() => {
     if (!companyGuid) return;
     const from = fromDate || fyFrom;
     const to   = toDate   || fyTo;
     const fyParams = from && to ? { from, to } : {};
-    setIsLoading(true);
-    setApiError(null);
-    setPage(1);
-    setHasMore(false);
     Promise.all([
       getPurchaseVouchers(companyGuid, {
         ...fyParams, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, search,
@@ -133,12 +138,32 @@ export default function PurchaseRegisterScreen() {
       const cntData = cntRes?.data ?? {};
       setTypeCounts(cntData);
       setPartyGroupOptions(Array.isArray(cntData.partyGroups) ? cntData.partyGroups : []);
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam, search]);
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || t('screens.purchaseRegister.loadFailed')); }).finally(() => setIsLoading(false));
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam, search, t]);
+
+  const startRegisterLoad = () => {
+    setIsLoading(true);
+    setApiError(null);
+    setPage(1);
+    setHasMore(false);
+  };
+
+  const loadRegister = () => {
+    if (!companyGuid) return;
+    startRegisterLoad();
+    fetchRegister();
+  };
+
+  const registerDeps = [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam, search];
+  const [loadedDeps, setLoadedDeps] = useState<unknown[] | null>(null);
+  if (!loadedDeps || registerDeps.some((d, i) => d !== loadedDeps[i])) {
+    setLoadedDeps(registerDeps);
+    if (companyGuid) startRegisterLoad();
+  }
 
   useEffect(() => {
-    loadRegister();
-  }, [loadRegister]);
+    fetchRegister();
+  }, [fetchRegister]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -160,13 +185,7 @@ export default function PurchaseRegisterScreen() {
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      displayGroups.forEach(g => next.add(g.id));
-      return next;
-    });
-  }, [liveInvoices.length]);
+  const [expandedForCount, setExpandedForCount] = useState<number | null>(null);
   const toggleMonth = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -197,7 +216,7 @@ export default function PurchaseRegisterScreen() {
   const displayGroups: MonthGroup[] = (() => {
     const map: Record<string, MonthGroup> = {};
     liveInvoices.forEach(inv => {
-      let monthKey = 'Other'; let monthLabel = 'Other';
+      let monthKey = 'Other'; let monthLabel = t('screens.purchaseRegister.other');
       const d = inv.date;
       if (d && d.includes('-') && d.length === 10) {
         const p = d.split('-');
@@ -214,6 +233,15 @@ export default function PurchaseRegisterScreen() {
     return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
   })();
 
+  if (expandedForCount !== liveInvoices.length) {
+    setExpandedForCount(liveInvoices.length);
+    setExpanded(prev => {
+      const next = new Set(prev);
+      displayGroups.forEach(g => next.add(g.id));
+      return next;
+    });
+  }
+
   const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));
   const selectAll = () => setSelected(allFiltered.map(inv => inv.id));
 
@@ -226,7 +254,7 @@ export default function PurchaseRegisterScreen() {
       if (mode === 'combined') {
         await shareDayBookPdf({
           company: companyFromAuth(company),
-          title: 'Purchase Register',
+          title: t('purchase.register'),
           period: fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : undefined,
           rows: items.map(inv => dayBookRowFromListItem({
             date: inv.date,
@@ -250,12 +278,12 @@ export default function PurchaseRegisterScreen() {
           }
         );
         if (failed > 0) {
-          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+          Toast.show({ type: 'info', text1: t('screens.purchaseRegister.sharedOf', { shared, total: items.length }), text2: t('screens.purchaseRegister.couldNotLoad', { count: failed }) });
         }
       }
       clearSelect();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+      Alert.alert(t('common.error'), err?.message || t('screens.purchaseRegister.couldNotShare'));
     } finally {
       setIsSharing(false);
     }
@@ -284,17 +312,17 @@ export default function PurchaseRegisterScreen() {
 
       <FilterPillRow>
         <FilterDatePill
-          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}
+          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : t('screens.purchaseRegister.dates')}
           onPress={() => setShowDatePicker(true)}
         />
         <FilterDropdownPill
-          label={statusFilter}
+          label={t(STATUS_FILTER_LABEL_KEYS[statusFilter] ?? statusFilter)}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
           options={['All', 'Paid', 'Unpaid', 'IRM']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
-          placeholder="Status"
+          placeholder={t('screens.purchaseRegister.status')}
         />
       </FilterPillRow>
 
@@ -315,7 +343,7 @@ export default function PurchaseRegisterScreen() {
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search vouchers, vendors..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder={t('screens.purchaseRegister.searchPlaceholder')} />
 
       {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
@@ -328,10 +356,10 @@ export default function PurchaseRegisterScreen() {
             const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
             const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [
-              { label: 'Total', value: fmtAmt(totalAmt) },
-              { label: 'Tax',   value: '—' },
-              { label: 'AVG',   value: fmtAmt(avgAmt) },
-              { label: 'Docs',  value: String(allFiltered.length) },
+              { label: t('purchase.total'), value: fmtAmt(totalAmt) },
+              { label: t('pdf.tax'),        value: '—' },
+              { label: t('screens.purchaseRegister.avg'),   value: fmtAmt(avgAmt) },
+              { label: t('screens.purchaseRegister.docs'),  value: String(allFiltered.length) },
             ];
           })().map(stat => (
             <View key={stat.label} style={s.statCell}>
@@ -345,8 +373,8 @@ export default function PurchaseRegisterScreen() {
         {liveInvoices.length === 0 && allFiltered.length === 0 && (
           <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
             <Ionicons name="cart-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No purchase vouchers</Text>
-            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or create a new purchase entry</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.purchaseRegister.noVouchers')}</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.purchaseRegister.syncHint')}</Text>
           </View>
         )}
         {/* ── Collapsible Month Sections ────────────────────────────── */}
@@ -366,7 +394,7 @@ export default function PurchaseRegisterScreen() {
                 <View style={s.monthHeaderLeft}>
                   <View style={s.monthDot} />
                   <Text style={s.monthLabel}>{group.label}</Text>
-                  <Text style={s.monthCount}>{groupInvoices.length} invoices</Text>
+                  <Text style={s.monthCount}>{t('purchase.invoicesCount', { count: groupInvoices.length })}</Text>
                 </View>
                 <Ionicons
                   name={isOpen ? 'chevron-up' : 'chevron-down'}
@@ -389,7 +417,7 @@ export default function PurchaseRegisterScreen() {
                             if (isSelecting) { toggleSelect(inv.id); }
                             else {
                               const routeType = docTypeToRouteType(inv.docType || 'invoice', 'purchase');
-                              safePush(router, `/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                              openVoucherPreview(router, { guid: inv.guid, docType: routeType });
                             }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
@@ -426,12 +454,12 @@ export default function PurchaseRegisterScreen() {
           <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
             {isLoadingMore
               ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-              : <Text style={s.loadMoreTxt}>Load More</Text>
+              : <Text style={s.loadMoreTxt}>{t('screens.purchaseRegister.loadMore')}</Text>
             }
           </TouchableOpacity>
         )}
         {!hasMore && liveInvoices.length > 0 && (
-          <Text style={s.endTxt}>All {liveInvoices.length} invoices loaded</Text>
+          <Text style={s.endTxt}>{t('screens.purchaseRegister.allLoaded', { count: liveInvoices.length })}</Text>
         )}
 
       </ScrollView>
@@ -440,12 +468,12 @@ export default function PurchaseRegisterScreen() {
       {isSelecting && (
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
-            <Text style={s.actionCount}>{selected.length} selected</Text>
+            <Text style={s.actionCount}>{t('common.selected', { count: selected.length })}</Text>
             <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Select All</Text>
+              <Text style={s.cancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -458,7 +486,7 @@ export default function PurchaseRegisterScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={s.actionBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.actionBtnTxt}>{isSharing ? t('screens.purchaseRegister.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -477,7 +505,7 @@ export default function PurchaseRegisterScreen() {
       <DocTypeFilterModal
         visible={showTypeFilter}
         onClose={() => setShowTypeFilter(false)}
-        title="Filter Purchase"
+        title={t('screens.purchaseRegister.filterTitle')}
         options={PURCHASE_DOC_TYPES}
         selectedIds={docTypes}
         selectedGroups={partyGroups}

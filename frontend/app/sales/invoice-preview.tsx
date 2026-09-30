@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'; // used for loadi
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../src/i18n';
 import { COLORS, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getInvoicePreview } from '../../src/services/api';
@@ -36,6 +38,7 @@ export default function InvoicePreviewScreen() {
   const { tdkRef, type } = useLocalSearchParams<{ tdkRef: string; type?: string }>();
   const { company } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
   const routeType = resolveDocTypeFromParam(type);
 
   const [loading, setLoading] = useState(true);
@@ -47,44 +50,63 @@ export default function InvoicePreviewScreen() {
   const [converting, setConverting] = useState(false);
   const [rawData, setRawData] = useState<any>(null);
 
-  const fetchPreview = useCallback(async () => {
-    if (!tdkRef || !company?.guid) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await getInvoicePreview(tdkRef, company.guid);
-      if (res?.status && res?.data) {
-        const forcedType: DocumentType | undefined =
-          routeType && isCommercialDocumentType(routeType) ? routeType : undefined;
-        setDoc(toVoucherDocument(res.data, forcedType ? { documentType: forcedType } : {}));
-        setRawData(res.data);
-        setIsProvisional(res.data.isProvisional ?? false);
-        setPostingTag(res.data.postingTag || 'Not Posted');
-        setCanConvertProforma(!!res.data.canConvertProforma);
-      } else {
-        setError('Could not load invoice preview.');
-      }
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load preview.');
-    } finally {
-      setLoading(false);
-    }
+  const loadPreview = useCallback(() => {
+    const guid = company?.guid;
+    if (!tdkRef || !guid) return;
+    getInvoicePreview(tdkRef, guid)
+      .then((res) => {
+        if (res?.status && res?.data) {
+          const forcedType: DocumentType | undefined =
+            routeType && isCommercialDocumentType(routeType) ? routeType : undefined;
+          setDoc(toVoucherDocument(res.data, forcedType ? { documentType: forcedType } : {}));
+          setRawData(res.data);
+          setIsProvisional(res.data.isProvisional ?? false);
+          setPostingTag(res.data.postingTag || 'Not Posted');
+          setCanConvertProforma(!!res.data.canConvertProforma);
+        } else {
+          setError(i18n.t('screens.salesInvoicePreview.loadFailed'));
+        }
+      })
+      .catch((e: any) => {
+        setError(e?.message || i18n.t('screens.salesInvoicePreview.loadFailedShort'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [tdkRef, company?.guid, routeType]);
 
+  const fetchPreview = useCallback(() => {
+    if (!tdkRef || !company?.guid) return;
+    setLoading(true);
+    setError(null);
+    loadPreview();
+  }, [tdkRef, company?.guid, loadPreview]);
+
+  const previewDeps = [tdkRef, company?.guid, routeType];
+  const [prevPreviewDeps, setPrevPreviewDeps] = useState(previewDeps);
+  if (previewDeps.some((d, i) => d !== prevPreviewDeps[i])) {
+    setPrevPreviewDeps(previewDeps);
+    if (tdkRef && company?.guid) {
+      setLoading(true);
+      setError(null);
+    }
+  }
+
   const handleConvertProforma = useCallback(async () => {
-    if (!tdkRef || !company?.guid || !rawData) return;
+    const guid = company?.guid;
+    if (!tdkRef || !guid || !rawData) return;
     setConverting(true);
     try {
       const prefill = buildProformaToInvoicePrefillFromPreview(rawData, tdkRef);
-      await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
+      await AsyncStorage.setItem(proformaPrefillStorageKey(guid), JSON.stringify(prefill));
       router.replace('/sales/create-invoice');
     } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || '' });
+      Toast.show({ type: 'error', text1: i18n.t('screens.salesInvoicePreview.startFailed'), text2: e?.message || '' });
       setConverting(false);
     }
   }, [tdkRef, company?.guid, rawData, router]);
 
-  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+  useEffect(() => { loadPreview(); }, [loadPreview]);
 
   // WebSocket: auto-refresh when Tally posts the invoice
   useEffect(() => {
@@ -107,12 +129,12 @@ export default function InvoicePreviewScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.navTitle}>Invoice Preview</Text>
+          <Text style={s.navTitle}>{t('screens.salesInvoicePreview.title')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <View style={s.center}>
           <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Loading invoice…</Text>
+          <Text style={s.loadingTxt}>{t('screens.salesInvoicePreview.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -125,14 +147,14 @@ export default function InvoicePreviewScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.navTitle}>Invoice Preview</Text>
+          <Text style={s.navTitle}>{t('screens.salesInvoicePreview.title')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <View style={s.center}>
           <Ionicons name="warning-outline" size={40} color={COLORS.warning} />
-          <Text style={s.errorTxt}>{error || 'Invoice not found.'}</Text>
+          <Text style={s.errorTxt}>{error || t('screens.salesInvoicePreview.notFound')}</Text>
           <TouchableOpacity style={s.retryBtn} onPress={fetchPreview} activeOpacity={0.8}>
-            <Text style={s.retryTxt}>Retry</Text>
+            <Text style={s.retryTxt}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -160,7 +182,7 @@ export default function InvoicePreviewScreen() {
             {converting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="repeat-outline" size={16} color={COLORS.white} />}
-            <Text style={s.convertBtnTxt}>{converting ? 'Starting invoice...' : 'Convert to Sales Invoice'}</Text>
+            <Text style={s.convertBtnTxt}>{converting ? t('screens.salesInvoicePreview.starting') : t('screens.salesInvoicePreview.convert')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       )}

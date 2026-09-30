@@ -3,7 +3,7 @@
  * Brand beige tones: #F5F4EF → #E9E8E3 → #E0DED6
  * Usage: import { ShimmerBox, HomeScreenSkeleton, LedgerListSkeleton, ... } from './Skeleton'
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS } from '../constants/colors';
@@ -12,7 +12,7 @@ const W = Dimensions.get('window').width;
 
 // ── Base shimmer animation hook ────────────────────────────────────────────────
 function useShimmer(): Animated.Value {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(anim, {

@@ -5,50 +5,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
-
-// ── Mock Data (Tally Prime format) — shown when no real data available ───────
-const MOCK_PL = {
-  openingStock:     150000,
-  closingStock:    7400000,
-  purchase:         150000,
-  sales:           7400000,
-  directExpense:    150000,
-  indirectExpense: 7400000,
-  indirectIncome:   150000,
-  directIncome:    7400000,
-  grossProfit:      150000,
-  grossLoss:       7400000,
-  netProfit:        150000,
-  netLoss:         7400000,
-};
-
-const MOCK_LIABILITIES = [
-  { name: 'Capital Account',        opening: 500000, current: 520000 },
-  { name: 'Current Liability',      opening: 120000, current: 100000 },
-  { name: 'Loan Liabilities',       opening: 300000, current: 280000 },
-  { name: 'Miscellaneous Expenses', opening:  25000, current:  30000 },
-  { name: 'Profit & Loss',          opening:      0, current:  40000 },
-];
-const MOCK_TOTAL_LIAB = 970000;
-
-const MOCK_ASSETS = [
-  { name: 'Fixed Asset',                   amount: 600000 },
-  { name: 'Current Assets',                amount: 250000 },
-  { name: 'Investments',                   amount:  50000 },
-  { name: 'Difference in Opening Balance', amount:  70000 },
-];
-const MOCK_TOTAL_ASSETS = 970000;
-
-const MOCK_TRIAL = [
-  { left: 'Current Assets',  leftAmt: 250000, right: 'Miscellaneous Expenses', rightAmt:  15000 },
-  { left: 'Sales Account',   leftAmt: 480000, right: 'Purchase Accounts',      rightAmt: 320000 },
-];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtInr(n: number): string {
@@ -122,25 +85,26 @@ const acc = StyleSheet.create({
 // Profit & Loss — 2-column card grid
 // ══════════════════════════════════════════════════════════════════════════════
 function PLCardGrid({ pl }: { pl?: any }) {
+  const { t } = useTranslation();
   // STRICT PRODUCTION DATA RULE: show real data or zeros. NEVER mock.
   // pl is null while loading or if API failed — show empty state.
   if (!pl) {
     return (
       <View style={plg.grid}>
         <View style={plg.demoBanner}>
-          <Text style={plg.demoTxt}>No data — sync Tally to load P&amp;L</Text>
+          <Text style={plg.demoTxt}>{t('screens.reportsFinancial.noDataPl')}</Text>
         </View>
       </View>
     );
   }
 
   const rows = [
-    { left: 'Opening Stock',   leftAmt: pl.openingStock    ?? 0, right: 'Closing Stock',    rightAmt: pl.closingStock    ?? 0 },
-    { left: 'Purchase',        leftAmt: pl.purchase        ?? 0, right: 'Sales',            rightAmt: pl.sales           ?? 0 },
-    { left: 'Direct Expense',  leftAmt: pl.directExpenses  ?? 0, right: 'Indirect Expense', rightAmt: pl.indirectExpenses ?? 0 },
-    { left: 'Indirect Income', leftAmt: pl.indirectIncome  ?? 0, right: 'Direct Income',    rightAmt: pl.directIncome    ?? 0 },
-    { left: 'Gross Profit',    leftAmt: pl.grossProfit     ?? 0, right: 'Gross Loss',       rightAmt: pl.grossLoss       ?? 0 },
-    { left: 'Net Profit',      leftAmt: pl.netProfit       ?? 0, right: 'Net Loss',         rightAmt: pl.netLoss         ?? 0 },
+    { left: t('screens.reportsFinancial.openingStock'),   leftAmt: pl.openingStock    ?? 0, right: t('screens.reportsFinancial.closingStock'),    rightAmt: pl.closingStock    ?? 0 },
+    { left: t('screens.reportsFinancial.purchase'),        leftAmt: pl.purchase        ?? 0, right: t('screens.reportsFinancial.sales'),            rightAmt: pl.sales           ?? 0 },
+    { left: t('screens.reportsFinancial.directExpense'),  leftAmt: pl.directExpenses  ?? 0, right: t('screens.reportsFinancial.indirectExpense'), rightAmt: pl.indirectExpenses ?? 0 },
+    { left: t('screens.reportsFinancial.indirectIncome'), leftAmt: pl.indirectIncome  ?? 0, right: t('screens.reportsFinancial.directIncome'),    rightAmt: pl.directIncome    ?? 0 },
+    { left: t('screens.reportsFinancial.grossProfit'),    leftAmt: pl.grossProfit     ?? 0, right: t('screens.reportsFinancial.grossLoss'),       rightAmt: pl.grossLoss       ?? 0 },
+    { left: t('screens.reportsFinancial.netProfit'),      leftAmt: pl.netProfit       ?? 0, right: t('screens.reportsFinancial.netLoss'),         rightAmt: pl.netLoss         ?? 0 },
   ];
 
   return (
@@ -191,6 +155,7 @@ const plg = StyleSheet.create({
 // Balance Sheet — Liability / Assets tab + tables
 // ══════════════════════════════════════════════════════════════════════════════
 function BalanceSheetSection({ bs }: { bs?: any }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
 
   // Real data from API — group-level totals matching Tally BS format
@@ -209,15 +174,15 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
   return (
     <View>
       <View style={bss.tabs}>
-        {(['liability', 'assets'] as const).map(t => (
+        {(['liability', 'assets'] as const).map(k => (
           <TouchableOpacity
-            key={t}
-            style={[bss.tab, tab === t && bss.tabActive]}
-            onPress={() => setTab(t)}
+            key={k}
+            style={[bss.tab, tab === k && bss.tabActive]}
+            onPress={() => setTab(k)}
             activeOpacity={0.7}
           >
-            <Text style={[bss.tabTxt, tab === t && bss.tabTxtActive]}>
-              {t === 'liability' ? 'Liability' : 'Assets'}
+            <Text style={[bss.tabTxt, tab === k && bss.tabTxtActive]}>
+              {k === 'liability' ? t('screens.reportsFinancial.liability') : t('screens.reportsFinancial.assets')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -228,13 +193,13 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
           <>
             {/* 3-column liability table: Particular | Opening | Current */}
             <View style={[bss.tableRow, bss.hdrRow]}>
-              <Text style={[bss.cell, bss.hdrTxt, { flex: 2.5 }]}>Particular</Text>
-              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>Opening</Text>
-              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>Current</Text>
+              <Text style={[bss.cell, bss.hdrTxt, { flex: 2.5 }]}>{t('screens.reportsFinancial.particular')}</Text>
+              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>{t('screens.reportsFinancial.opening')}</Text>
+              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>{t('screens.reportsFinancial.current')}</Text>
             </View>
             {liabilities.length === 0 && (
               <View style={bss.tableRow}>
-                <Text style={[bss.cell, { color: '#AEACA8', textAlign: 'center', flex: 1 }]}>No data — sync Tally to load</Text>
+                <Text style={[bss.cell, { color: '#AEACA8', textAlign: 'center', flex: 1 }]}>{t('screens.reportsFinancial.noData')}</Text>
               </View>
             )}
             {liabilities.map((row: any, i: number) => (
@@ -249,7 +214,7 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
               </View>
             ))}
             <View style={[bss.tableRow, bss.totalRow]}>
-              <Text style={[bss.cell, bss.totalName, { flex: 2.5 }]}>Total Liabilities</Text>
+              <Text style={[bss.cell, bss.totalName, { flex: 2.5 }]}>{t('screens.reportsFinancial.totalLiabilities')}</Text>
               <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 3 }]}>
                 {fmtInr(totalLiab)}
               </Text>
@@ -258,8 +223,8 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
         ) : (
           <>
             <View style={[bss.tableRow, bss.hdrRow]}>
-              <Text style={[bss.cell, bss.hdrTxt, { flex: 2 }]}>Asset</Text>
-              <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1 }]}>Amount (INR)</Text>
+              <Text style={[bss.cell, bss.hdrTxt, { flex: 2 }]}>{t('screens.reportsFinancial.asset')}</Text>
+              <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1 }]}>{t('screens.reportsFinancial.amountInr')}</Text>
             </View>
             {assets.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
@@ -270,7 +235,7 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
               </View>
             ))}
             <View style={[bss.tableRow, bss.totalRow]}>
-              <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Assets</Text>
+              <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>{t('screens.reportsFinancial.totalAssets')}</Text>
               <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 1 }]}>
                 {fmtInr(totalAssets)}
               </Text>
@@ -339,36 +304,23 @@ function fmtTb(n: number): string {
   return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function TrialBalanceGrid({ tb }: { tb?: any }) {
-  const ledgers: any[] = tb?.ledgers || [];
-
-  if (ledgers.length === 0) {
-    return (
-      <View style={tbg.container}>
-        <Text style={tbg.emptyTxt}>No data — sync Tally to load</Text>
-      </View>
-    );
-  }
-
-  const totalDebit  = tb?.totalDebit  ?? 0;
-  const totalCredit = tb?.totalCredit ?? 0;
-  const isBalanced  = Math.abs(totalDebit - totalCredit) < 1;
-
-  // Each row: name on left, Dr amount (red) + Cr amount (green) stacked on right
-  const TbRow = ({ name, debit, credit, isTotal = false, alt = false }: {
-    name: string; debit: number; credit: number; isTotal?: boolean; alt?: boolean;
-  }) => (
+// Each row: name on left, Dr amount (red) + Cr amount (green) stacked on right
+function TbRow({ name, debit, credit, isTotal = false, alt = false }: {
+  name: string; debit: number; credit: number; isTotal?: boolean; alt?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
     <View style={[tbg.row, alt && tbg.rowAlt, isTotal && tbg.totalRow]}>
       <Text style={[tbg.name, isTotal && tbg.totalName]} numberOfLines={2}>{name}</Text>
       <View style={tbg.amts}>
         {debit > 0.01 && (
           <Text style={[tbg.drLine, isTotal && tbg.totalAmt]}>
-            {fmtTb(debit)} <Text style={tbg.drTag}>Dr</Text>
+            {fmtTb(debit)} <Text style={tbg.drTag}>{t('screens.reportsFinancial.dr')}</Text>
           </Text>
         )}
         {credit > 0.01 && (
           <Text style={[tbg.crLine, isTotal && tbg.totalAmt]}>
-            {fmtTb(credit)} <Text style={tbg.crTag}>Cr</Text>
+            {fmtTb(credit)} <Text style={tbg.crTag}>{t('screens.reportsFinancial.cr')}</Text>
           </Text>
         )}
         {debit < 0.01 && credit < 0.01 && (
@@ -377,6 +329,23 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
       </View>
     </View>
   );
+}
+
+function TrialBalanceGrid({ tb }: { tb?: any }) {
+  const { t } = useTranslation();
+  const ledgers: any[] = tb?.ledgers || [];
+
+  if (ledgers.length === 0) {
+    return (
+      <View style={tbg.container}>
+        <Text style={tbg.emptyTxt}>{t('screens.reportsFinancial.noData')}</Text>
+      </View>
+    );
+  }
+
+  const totalDebit  = tb?.totalDebit  ?? 0;
+  const totalCredit = tb?.totalCredit ?? 0;
+  const isBalanced  = Math.abs(totalDebit - totalCredit) < 1;
 
   return (
     <View style={tbg.container}>
@@ -385,13 +354,13 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
       ))}
 
       {/* Grand Total */}
-      <TbRow name="Grand Total" debit={totalDebit} credit={totalCredit} isTotal />
+      <TbRow name={t('screens.reportsFinancial.grandTotal')} debit={totalDebit} credit={totalCredit} isTotal />
 
       {/* Imbalance warning — only if data issue */}
       {!isBalanced && (
         <View style={tbg.imbalanceRow}>
           <Text style={tbg.imbalanceTxt}>
-            ⚠️ Difference: ₹{Math.abs(totalDebit - totalCredit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+            {t('screens.reportsFinancial.difference', { amount: Math.abs(totalDebit - totalCredit).toLocaleString('en-IN', { maximumFractionDigits: 2 }) })}
           </Text>
         </View>
       )}
@@ -461,6 +430,7 @@ const tbg = StyleSheet.create({
 // Main Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FinancialReportScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company: selectedCompany, selectedFY, lastSyncAt } = useAuth();
   const { formatDate } = useSettings();
@@ -492,31 +462,36 @@ export default function FinancialReportScreen() {
   const [showDateSheet, setShowDateSheet] = useState(false);
 
   // When FY changes → clear custom range so next fetch uses full FY
-  useEffect(() => {
+  // startDate always changes on FY switch (finYear was unreliable)
+  const [prevFyStart, setPrevFyStart] = useState(selectedFY?.startDate);
+  if (prevFyStart !== selectedFY?.startDate) {
+    setPrevFyStart(selectedFY?.startDate);
     setCustomFrom(null);
     setCustomTo(null);
-  }, [selectedFY?.startDate]);  // startDate always changes on FY switch (finYear was unreliable)
+  }
 
   const [loading, setLoading] = useState(true);
   const [plData, setPlData]   = useState<any>(null);
   const [bsData, setBsData]   = useState<any>(null);
   const [tbData, setTbData]   = useState<any>(null);
   const [error,  setError]    = useState<string | null>(null);
+  const [hasReport, setHasReport] = useState(false);
   const hasReportRef = useRef(false);
   const requestGenRef = useRef(0);
 
   // Resolve FY param — finYear (e.g. '2025-2026') or derived from startDate
   const fyParam = fyInfoToParam(selectedFY) ?? selectedFY?.finYear;
+  const companyGuid = selectedCompany?.guid;
 
   // Core fetch — soft when report already showing (no spinner wipe)
   const fetchReport = useCallback((opts?: { soft?: boolean }) => {
-    if (!selectedCompany?.guid) return;
+    if (!companyGuid) return;
     const soft = opts?.soft ?? hasReportRef.current;
     if (!soft) setLoading(true);
     setError(null);
     const gen = ++requestGenRef.current;
     getFullFinancialReport(
-      selectedCompany.guid,
+      companyGuid,
       fyParam,
       customFrom ?? undefined,
       customTo   ?? undefined
@@ -527,16 +502,19 @@ export default function FinancialReportScreen() {
         if (d?.pl)           setPlData(d.pl);
         if (d?.bs)           setBsData(d.bs);
         if (d?.trialBalance) setTbData(d.trialBalance);
-        if (d?.pl || d?.bs || d?.trialBalance) hasReportRef.current = true;
+        if (d?.pl || d?.bs || d?.trialBalance) {
+          hasReportRef.current = true;
+          setHasReport(true);
+        }
       })
       .catch((err: any) => {
         if (gen !== requestGenRef.current) return;
-        setError(err?.message || 'Failed to load financial data');
+        setError(err?.message || t('screens.reportsFinancial.loadFailed'));
       })
       .finally(() => {
         if (gen === requestGenRef.current) setLoading(false);
       });
-  }, [selectedCompany?.guid, fyParam, customFrom, customTo]);
+  }, [companyGuid, fyParam, customFrom, customTo, t]);
 
   // Single fetch path — drop duplicate useFocusEffect (Phase 3 hygiene)
   useEffect(() => {
@@ -550,7 +528,7 @@ export default function FinancialReportScreen() {
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Financial Report</Text>
+        <Text style={s.headerTitle}>{t('screens.reportsFinancial.title')}</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => setShowDateSheet(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20} color={COLORS.brandPrimary} />
         </TouchableOpacity>
@@ -571,7 +549,7 @@ export default function FinancialReportScreen() {
       )}
 
       {/* ── Loading (first paint only) — soft refresh keeps prior numbers ── */}
-      {loading && !hasReportRef.current ? (
+      {loading && !hasReport ? (
         <View style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, flex: 1 }}>
           <CardSkeleton height={180} />
           <CardSkeleton height={140} />
@@ -585,7 +563,7 @@ export default function FinancialReportScreen() {
       >
         <AccSection
           sectionKey="pl"
-          title="Profit & Loss"
+          title={t('screens.reportsFinancial.profitLoss')}
           open={openSection === 'pl'}
           onToggle={toggleSection}
         >
@@ -594,7 +572,7 @@ export default function FinancialReportScreen() {
 
         <AccSection
           sectionKey="bs"
-          title="Balance Sheet"
+          title={t('screens.reportsFinancial.balanceSheet')}
           open={openSection === 'bs'}
           onToggle={toggleSection}
         >
@@ -603,7 +581,7 @@ export default function FinancialReportScreen() {
 
         <AccSection
           sectionKey="tb"
-          title="Trial Balance"
+          title={t('screens.reportsFinancial.trialBalance')}
           open={openSection === 'tb'}
           onToggle={toggleSection}
         >

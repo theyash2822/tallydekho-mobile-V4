@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import Svg, {
   Path, Circle, Rect, Line, G, Text as SvgText, Defs, LinearGradient, Stop,
 } from 'react-native-svg';
@@ -248,6 +249,7 @@ function ReceiptsPaymentsChart({
   data: DayPoint[];
   formatAmountCompact: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   if (!data.length) return null;
 
@@ -372,7 +374,7 @@ function ReceiptsPaymentsChart({
                 fontWeight="700"
                 fill="#FFFFFF"
               >
-                {`In ${formatAmountCompact(Math.round(tip.inflow))}`}
+                {t('screens.kpiCashInHand.tipIn', { amount: formatAmountCompact(Math.round(tip.inflow)) })}
               </SvgText>
               <SvgText
                 x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
@@ -382,7 +384,7 @@ function ReceiptsPaymentsChart({
                 fontWeight="700"
                 fill="#FFFFFF"
               >
-                {`Out ${formatAmountCompact(Math.round(tip.outflow))}`}
+                {t('screens.kpiCashInHand.tipOut', { amount: formatAmountCompact(Math.round(tip.outflow)) })}
               </SvgText>
             </G>
           ) : null}
@@ -433,15 +435,15 @@ export default function CashInHandScreen() {
       if (hasDataRef.current) {
         const ts = dataAsOfRef.current
           ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-          : 'earlier';
-        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+          : t('home.earlier');
+        setApiError(t('home.refreshFailed', { time: ts }));
       } else {
-        setApiError(err?.message || 'Failed to load cash in hand');
+        setApiError(err?.message || t('screens.kpiCashInHand.loadFailed'));
       }
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, fyFrom, fyTo, lastSyncAt]);
+  }, [companyGuid, fyFrom, fyTo, lastSyncAt, t]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -473,12 +475,12 @@ export default function CashInHandScreen() {
     const outflow = Number(apiData?.today_outflow) || 0;
     const net = inflow - outflow;
     return [
-      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: fmtCash(bal), trend: null, positive: true },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: fmtCash(inflow), trend: null, positive: true },
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: fmtCash(outflow), trend: null, positive: true },
-      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: fmtCash(net), trend: null, positive: true },
+      { id: 'bal', icon: 'cash-outline', label: t('screens.kpiCashInHand.cashOnHand'), amount: fmtCash(bal), trend: null, positive: true },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: t('screens.kpiCashInHand.inflowToday'), amount: fmtCash(inflow), trend: null, positive: true },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: t('screens.kpiCashInHand.outflowToday'), amount: fmtCash(outflow), trend: null, positive: true },
+      { id: 'net', icon: 'swap-vertical-outline', label: t('screens.kpiCashInHand.netToday'), amount: fmtCash(net), trend: null, positive: true },
     ];
-  }, [apiData, fmtCash]);
+  }, [apiData, fmtCash, t]);
 
   const daily: DayPoint[] = useMemo(() => {
     const rows = Array.isArray(apiData?.daily_balance) ? apiData.daily_balance : [];
@@ -490,10 +492,12 @@ export default function CashInHandScreen() {
     }));
   }, [apiData]);
 
-  useEffect(() => {
+  const [prevDaily, setPrevDaily] = useState<DayPoint[] | null>(null);
+  if (prevDaily !== daily) {
+    setPrevDaily(daily);
     if (daily.length) setChartDayIdx(daily.length - 1);
     else setChartDayIdx(null);
-  }, [daily]);
+  }
 
   const activeChartDay = chartDayIdx != null ? daily[chartDayIdx] : daily[daily.length - 1];
   const curBal = Number(activeChartDay?.balance ?? apiData?.current_balance) || 0;
@@ -611,7 +615,7 @@ export default function CashInHandScreen() {
                 <Text style={s.chartTitle}>{t('kpi.recentTransactions')}</Text>
                 <ViewAllButton
                   variant="inline"
-                  label="View All"
+                  label={t('common.viewAll')}
                   onPress={() => safePush(router, '/kpi/cash-register' as any)}
                 />
               </View>
@@ -622,7 +626,7 @@ export default function CashInHandScreen() {
                   key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}
                   style={[s.txRow, idx < arr.length - 1 && s.txBorder]}
                   activeOpacity={0.7}
-                  onPress={() => txn.guid && safePush(router, `/document/${txn.guid}` as any)}
+                  onPress={() => openVoucherPreview(router, { guid: txn.guid })}
                 >
                   <View style={[s.txIconBox, { backgroundColor: COLORS.pageBg }]}>
                     <Ionicons
@@ -632,7 +636,7 @@ export default function CashInHandScreen() {
                     />
                   </View>
                   <View style={s.txInfo}>
-                    <Text style={s.txDesc} numberOfLines={1}>{txn.party_name || txn.voucher_type || 'Cash'}</Text>
+                    <Text style={s.txDesc} numberOfLines={1}>{txn.party_name || txn.voucher_type || t('screens.kpiCashInHand.cash')}</Text>
                     <Text style={s.txMeta}>{` ${txn.voucher_number || '—'} · ${fmtDate(txn.date)}`}</Text>
                   </View>
                   <Text style={[s.txAmt, { color: txn.direction === 'in' ? COLORS.positive : COLORS.negative }]}>

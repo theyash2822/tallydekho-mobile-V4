@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useBarcodeScanner } from '../../src/hooks/useBarcodeScanner';
 import { stocksBarcodeScan } from '../../src/utils/stocksBarcodeScan';
@@ -34,6 +35,7 @@ const FRAME_H = 130;
 const INSTANCE = 'stocks-barcode';
 
 export default function StockBarcodeScannerScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   // mode=pick: opened from an invoice/order item row — found product goes back to that row
   // via barcodePicker; no details/link actions. Scan pipeline is identical to the Stocks mode.
@@ -248,18 +250,18 @@ export default function StockBarcodeScannerScreen() {
     if (!result?.granted) {
       if (result?.canAskAgain === false) {
         Alert.alert(
-          'Camera Access Denied',
-          'Enable Camera for TallyDekho / Expo Go in Settings → Privacy → Camera.',
+          t('screens.stocksBarcodeScanner.accessDeniedTitle'),
+          t('screens.stocksBarcodeScanner.accessDeniedMsg'),
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('screens.stocksBarcodeScanner.openSettings'), onPress: () => Linking.openSettings() },
           ],
         );
       } else {
-        Alert.alert('Permission Denied', 'Camera access is required to scan barcodes.');
+        Alert.alert(t('screens.stocksBarcodeScanner.permissionDenied'), t('screens.stocksBarcodeScanner.cameraRequired'));
       }
     }
-  }, [requestPermission]);
+  }, [requestPermission, t]);
 
   if (!permission) {
     return (
@@ -274,24 +276,24 @@ export default function StockBarcodeScannerScreen() {
       <SafeAreaView style={s.permSafe}>
         <View style={s.permWrap}>
           <Ionicons name="camera-outline" size={64} color={COLORS.textTertiary} />
-          <Text style={s.permTitle}>Camera Access Required</Text>
+          <Text style={s.permTitle}>{t('screens.stocksBarcodeScanner.accessRequired')}</Text>
           <Text style={s.permSub}>
-            TallyDekho needs camera access to scan barcodes.
+            {t('screens.stocksBarcodeScanner.permSub')}
             {permission.canAskAgain === false
-              ? ' Permission was denied — open Settings to enable Camera.'
-              : ' Allow camera when prompted, or tap below.'}
+              ? t('screens.stocksBarcodeScanner.permDeniedHint')
+              : t('screens.stocksBarcodeScanner.permPromptHint')}
           </Text>
           {permission.canAskAgain !== false ? (
             <TouchableOpacity style={s.permBtn} onPress={askPermission} activeOpacity={0.85}>
-              <Text style={s.permBtnTxt}>Grant Camera Access</Text>
+              <Text style={s.permBtnTxt}>{t('screens.stocksBarcodeScanner.grantAccess')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={s.permBtn} onPress={() => Linking.openSettings()} activeOpacity={0.85}>
-              <Text style={s.permBtnTxt}>Open Settings</Text>
+              <Text style={s.permBtnTxt}>{t('screens.stocksBarcodeScanner.openSettings')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={handleCancel} style={s.cancelLink} activeOpacity={0.7}>
-            <Text style={s.cancelTxt}>Cancel</Text>
+            <Text style={s.cancelTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -357,7 +359,7 @@ export default function StockBarcodeScannerScreen() {
         </TouchableOpacity>
 
         <View style={s.scanDimTop} pointerEvents="none">
-          <Text style={s.scanTopHint}>Aim barcode at the frame to scan</Text>
+          <Text style={s.scanTopHint}>{t('screens.stocksBarcodeScanner.aimHint')}</Text>
         </View>
 
         <View style={s.scanMiddleRow} pointerEvents="none">
@@ -379,16 +381,16 @@ export default function StockBarcodeScannerScreen() {
           {!scanLookingUp && !scanResult && (
             <>
               {outOfFrame ? (
-                <Text style={[s.scanHint, s.scanHintOutOfFrame]}>Move barcode into frame</Text>
+                <Text style={[s.scanHint, s.scanHintOutOfFrame]}>{t('screens.stocksBarcodeScanner.moveIntoFrame')}</Text>
               ) : torchAutoOn ? (
-                <Text style={s.scanHelperText}>Flash on — hold barcode in the frame</Text>
+                <Text style={s.scanHelperText}>{t('screens.stocksBarcodeScanner.flashOn')}</Text>
               ) : showHelper ? (
-                <Text style={s.scanHelperText}>Move closer or turn on flash</Text>
+                <Text style={s.scanHelperText}>{t('screens.stocksBarcodeScanner.moveCloser')}</Text>
               ) : (
-                <Text style={s.scanHint}>Hold barcode steady in view</Text>
+                <Text style={s.scanHint}>{t('screens.stocksBarcodeScanner.holdSteady')}</Text>
               )}
               <TouchableOpacity style={s.scanCloseBtn} onPress={handleCancel} activeOpacity={0.8}>
-                <Text style={s.scanCloseBtnText}>Cancel</Text>
+                <Text style={s.scanCloseBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -396,7 +398,7 @@ export default function StockBarcodeScannerScreen() {
           {scanLookingUp && (
             <View style={s.scanResultPanel}>
               <ActivityIndicator size="large" color="#fff" />
-              <Text style={s.scanResultLooking}>Looking up barcode…</Text>
+              <Text style={s.scanResultLooking}>{t('screens.stocksBarcodeScanner.lookingUp')}</Text>
             </View>
           )}
 
@@ -411,26 +413,26 @@ export default function StockBarcodeScannerScreen() {
             <View style={s.scanResultPanel}>
               <View style={s.scanResultBadgeFound}>
                 <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                <Text style={s.scanResultBadgeText}>Product Found</Text>
+                <Text style={s.scanResultBadgeText}>{t('screens.stocksBarcodeScanner.productFound')}</Text>
               </View>
               <Text style={s.scanResultName} numberOfLines={2}>{scanResult.item.displayName}</Text>
               <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
               <View style={s.scanResultMeta}>
                 <View style={s.scanResultMetaItem}>
-                  <Text style={s.scanResultMetaLabel}>Qty</Text>
+                  <Text style={s.scanResultMetaLabel}>{t('pdf.qty')}</Text>
                   <Text style={s.scanResultMetaValue}>
                     {Math.round(scanResult.item.currentQty).toLocaleString()} {scanResult.item.unit}
                   </Text>
                 </View>
                 {scanResult.item.sku ? (
                   <View style={s.scanResultMetaItem}>
-                    <Text style={s.scanResultMetaLabel}>SKU</Text>
+                    <Text style={s.scanResultMetaLabel}>{t('screens.stocksBarcodeScanner.sku')}</Text>
                     <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.sku}</Text>
                   </View>
                 ) : null}
                 {scanResult.item.groupName ? (
                   <View style={s.scanResultMetaItem}>
-                    <Text style={s.scanResultMetaLabel}>Group</Text>
+                    <Text style={s.scanResultMetaLabel}>{t('screens.stocksBarcodeScanner.group')}</Text>
                     <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.groupName}</Text>
                   </View>
                 ) : null}
@@ -452,11 +454,11 @@ export default function StockBarcodeScannerScreen() {
                   }}
                 >
                   <Ionicons name="open-outline" size={16} color="#fff" />
-                  <Text style={s.scanResultBtnPrimaryText}>View Full Details</Text>
+                  <Text style={s.scanResultBtnPrimaryText}>{t('screens.stocksBarcodeScanner.viewDetails')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
                   <Ionicons name="scan-outline" size={16} color="#fff" />
-                  <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
+                  <Text style={s.scanResultBtnSecondaryText}>{t('screens.stocksBarcodeScanner.scanAgain')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -466,19 +468,19 @@ export default function StockBarcodeScannerScreen() {
             <View style={s.scanResultPanel}>
               <View style={s.scanResultBadgeNotFound}>
                 <Ionicons name="help-circle" size={16} color="#fff" />
-                <Text style={s.scanResultBadgeText}>Not Linked</Text>
+                <Text style={s.scanResultBadgeText}>{t('screens.stocksBarcodeScanner.notLinked')}</Text>
               </View>
-              <Text style={s.scanResultName}>Barcode not linked to any product</Text>
+              <Text style={s.scanResultName}>{t('screens.stocksBarcodeScanner.notLinkedMsg')}</Text>
               <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
               {pickMode ? (
                 <View style={s.scanResultActions}>
                   <TouchableOpacity style={s.scanResultBtnPrimary} activeOpacity={0.85} onPress={handleScanAgain}>
                     <Ionicons name="scan-outline" size={16} color="#fff" />
-                    <Text style={s.scanResultBtnPrimaryText}>Scan Again</Text>
+                    <Text style={s.scanResultBtnPrimaryText}>{t('screens.stocksBarcodeScanner.scanAgain')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleCancel}>
                     <Ionicons name="close" size={16} color="#fff" />
-                    <Text style={s.scanResultBtnSecondaryText}>Cancel</Text>
+                    <Text style={s.scanResultBtnSecondaryText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -496,11 +498,11 @@ export default function StockBarcodeScannerScreen() {
                   }}
                 >
                   <Ionicons name="link-outline" size={16} color="#fff" />
-                  <Text style={s.scanResultBtnPrimaryText}>Link to Product</Text>
+                  <Text style={s.scanResultBtnPrimaryText}>{t('screens.stocksBarcodeScanner.linkToProduct')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
                   <Ionicons name="scan-outline" size={16} color="#fff" />
-                  <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
+                  <Text style={s.scanResultBtnSecondaryText}>{t('screens.stocksBarcodeScanner.scanAgain')}</Text>
                 </TouchableOpacity>
               </View>
               )}

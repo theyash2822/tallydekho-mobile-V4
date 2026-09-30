@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -47,32 +48,49 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { company, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
   const { pairingStatus, filterScoped, demoMode } = useWorkspace();
   const [selectedFY, setSelectedFY] = useState(contextFY?.label || fyYear);
-  const [selectedCompany, setSelectedCompany] = useState(companyName);
+  const [selectedCompany, setSelectedCompany] = useState(company?.name || companyName);
   const [companyCount, setCompanyCount] = useState(0);
   const [fyLoading, setFyLoading] = useState(false);
   const [showFYModal, setShowFYModal] = useState(false);
   const [liveFYObjects, setLiveFYObjects] = useState<FyObj[]>([]);
   const contextFyStartRef = useRef<string | undefined>(contextFY?.startDate);
-  contextFyStartRef.current = contextFY?.startDate;
-
   useEffect(() => {
+    contextFyStartRef.current = contextFY?.startDate;
+  });
+
+  const [prevCompanyName, setPrevCompanyName] = useState(company?.name);
+  if (prevCompanyName !== company?.name) {
+    setPrevCompanyName(company?.name);
     if (company?.name) setSelectedCompany(company.name);
-  }, [company?.name]);
+  }
 
-  useEffect(() => {
+  const [prevFyLabel, setPrevFyLabel] = useState(contextFY?.label);
+  if (prevFyLabel !== contextFY?.label) {
+    setPrevFyLabel(contextFY?.label);
     if (contextFY?.label) setSelectedFY(contextFY.label);
-  }, [contextFY?.label]);
+  }
+
+  const [prevDemoMode, setPrevDemoMode] = useState(demoMode);
+  if (prevDemoMode !== demoMode) {
+    setPrevDemoMode(demoMode);
+    if (demoMode) setCompanyCount(0);
+  }
+
+  const fyLoadDeps = [company?.guid, lastSyncAt, demoMode, pairingStatus, setContextFY];
+  const [prevFyLoadDeps, setPrevFyLoadDeps] = useState<unknown[] | null>(null);
+  if (prevFyLoadDeps === null || fyLoadDeps.some((d, i) => d !== prevFyLoadDeps[i])) {
+    setPrevFyLoadDeps(fyLoadDeps);
+    if (company?.guid) setFyLoading(true);
+  }
 
   // Count switchable live companies (Demo = never switchable)
   useEffect(() => {
     let cancelled = false;
-    if (demoMode) {
-      setCompanyCount(0);
-      return;
-    }
+    if (demoMode) return;
     getCompanies()
       .then((res: any) => {
         if (cancelled) return;
@@ -92,7 +110,6 @@ const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     let cancelled = false;
     if (!company?.guid) return;
-    setFyLoading(true);
     getCompanyYears(company.guid)
       .then((res: any) => {
         if (cancelled) return;
@@ -137,26 +154,26 @@ const Header: React.FC<HeaderProps> = ({
     if (companyCount <= 1) {
       Toast.show({
         type: 'info',
-        text1: 'Only one company',
-        text2: 'No other live company to switch to',
+        text1: t('screens.componentsHeader.onlyOneCompany'),
+        text2: t('screens.componentsHeader.noOtherCompany'),
         visibilityTime: 2200,
       });
       return;
     }
     safePush(router, '/switch-company' as any);
-  }, [demoMode, companyCount, router]);
+  }, [demoMode, companyCount, router, t]);
 
   const openFySwitcher = useCallback(() => {
     if (!company?.guid) {
-      Toast.show({ type: 'info', text1: 'Select a company first' });
+      Toast.show({ type: 'info', text1: t('screens.componentsHeader.selectCompanyFirst') });
       return;
     }
     if (!liveFYObjects.length && !fyLoading) {
-      Toast.show({ type: 'info', text1: 'No financial years found' });
+      Toast.show({ type: 'info', text1: t('screens.componentsHeader.noFinancialYears') });
       return;
     }
     setShowFYModal(true);
-  }, [company?.guid, liveFYObjects.length, fyLoading]);
+  }, [company?.guid, liveFYObjects.length, fyLoading, t]);
 
   const handleFYSelect = useCallback((fy: FyObj) => {
     setSelectedFY(fy.label);
@@ -201,7 +218,7 @@ const Header: React.FC<HeaderProps> = ({
               <View style={styles.syncRow}>
                 <Ionicons name="sync-outline" size={9} color={COLORS.textTertiary} />
                 <Text style={styles.syncTxt} numberOfLines={1}>
-                  Synced {lastSyncTime}
+                  {t('screens.componentsHeader.synced', { time: lastSyncTime })}
                 </Text>
               </View>
             ) : null}
@@ -253,7 +270,7 @@ const Header: React.FC<HeaderProps> = ({
           />
           <View style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}>
             <View style={styles.dropdownArrowRight} />
-            <Text style={styles.dropdownTitle}>Financial Year</Text>
+            <Text style={styles.dropdownTitle}>{t('screens.componentsHeader.financialYear')}</Text>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }}>
               {liveFYObjects.map((fy) => {
                 const active = selectedFY === fy.label;

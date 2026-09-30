@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getMasterPreview } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 const PAPER = '#FEFDFB';
 const INK = '#1A1A1A';
@@ -49,6 +50,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 }
 
 export default function MasterPreviewScreen() {
+  const { t } = useTranslation();
   const { queueId } = useLocalSearchParams<{ queueId: string }>();
   const { company } = useAuth();
   const router = useRouter();
@@ -56,29 +58,47 @@ export default function MasterPreviewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PreviewData | null>(null);
 
-  const fetchPreview = useCallback(async () => {
-    if (!queueId || !company?.guid) return;
-    try {
+  const companyGuid = company?.guid;
+
+  const loadPreview = useCallback(() => {
+    if (!queueId || !companyGuid) return;
+    getMasterPreview(queueId, companyGuid)
+      .then((res) => {
+        if (res?.status && res?.data) setData(res.data);
+        else setError(t('screens.mastersPreview.couldNotLoad'));
+      })
+      .catch((e: any) => {
+        setError(e?.message || t('screens.mastersPreview.loadFailed'));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [queueId, companyGuid, t]);
+
+  const fetchPreview = useCallback(() => {
+    if (!queueId || !companyGuid) return;
+    setLoading(true);
+    setError(null);
+    loadPreview();
+  }, [queueId, companyGuid, loadPreview]);
+
+  const [loadDeps, setLoadDeps] = useState<unknown[] | null>(null);
+  if (!loadDeps || loadDeps[0] !== queueId || loadDeps[1] !== companyGuid) {
+    setLoadDeps([queueId, companyGuid]);
+    if (queueId && companyGuid) {
       setLoading(true);
       setError(null);
-      const res = await getMasterPreview(queueId, company.guid);
-      if (res?.status && res?.data) setData(res.data);
-      else setError('Could not load preview.');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load preview.');
-    } finally {
-      setLoading(false);
     }
-  }, [queueId, company?.guid]);
+  }
 
-  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+  useEffect(() => { loadPreview(); }, [loadPreview]);
 
   const p = data?.payload || {};
   const posted = data?.booksImpactStatus === 'posted' || data?.syncConfirmed;
   const awaiting = !posted && (data?.queueStatus === 'success' || data?.postingTag === 'Awaiting Sync');
-  const statusLabel = posted ? 'Posted' : awaiting ? 'Awaiting Sync' : (data?.postingTag || 'Not Posted');
+  const statusLabel = posted ? t('screens.mastersPreview.posted') : awaiting ? t('screens.mastersPreview.awaitingSync') : (data?.postingTag || t('screens.mastersPreview.notPosted'));
 
-  const ribbon = (data?.typeLabel || 'MASTER').toUpperCase();
+  const ribbon = (data?.typeLabel || t('screens.mastersPreview.master')).toUpperCase();
   const companyName = company?.name || '';
   const companyGstin = (company as any)?.gstin || '';
 
@@ -88,7 +108,7 @@ export default function MasterPreviewScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.navBack} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.navTitle} numberOfLines={1}>{data?.typeLabel || 'Master Preview'}</Text>
+        <Text style={s.navTitle} numberOfLines={1}>{data?.typeLabel || t('screens.mastersPreview.title')}</Text>
         <TouchableOpacity onPress={fetchPreview} style={s.navBack} hitSlop={8}>
           <Ionicons name="refresh" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
@@ -97,14 +117,14 @@ export default function MasterPreviewScreen() {
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color={COLORS.brandPrimary} />
-          <Text style={s.muted}>Loading preview…</Text>
+          <Text style={s.muted}>{t('screens.mastersPreview.loading')}</Text>
         </View>
       ) : error ? (
         <View style={s.center}>
           <Ionicons name="alert-circle-outline" size={40} color={COLORS.negative} />
           <Text style={s.errorTxt}>{error}</Text>
           <TouchableOpacity style={s.retryBtn} onPress={fetchPreview}>
-            <Text style={s.retryTxt}>Retry</Text>
+            <Text style={s.retryTxt}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -116,67 +136,67 @@ export default function MasterPreviewScreen() {
 
             <View style={s.companyBlock}>
               {!!companyName && <Text style={s.companyName}>{companyName}</Text>}
-              {!!companyGstin && <Text style={s.companyMeta}>GSTIN: {companyGstin}</Text>}
+              {!!companyGstin && <Text style={s.companyMeta}>{t('screens.mastersPreview.gstinValue', { gstin: companyGstin })}</Text>}
             </View>
 
             <View style={s.nameBlock}>
               <Text style={s.name}>{data?.name || '—'}</Text>
-              {!!data?.parent && <Text style={s.under}>Under: {data.parent}</Text>}
+              {!!data?.parent && <Text style={s.under}>{t('screens.mastersPreview.underValue', { parent: data.parent })}</Text>}
               <Text style={s.status}>{statusLabel}</Text>
             </View>
 
             <View style={s.fields}>
-              <Field label="Type" value={data?.typeLabel} />
-              <Field label="Group / Parent" value={data?.parent} />
-              <Field label="GSTIN" value={p.gstin} />
-              <Field label="GST Reg. Type" value={p.gstRegType} />
-              <Field label="PAN" value={p.pan} />
-              <Field label="Phone" value={p.phone} />
-              <Field label="Email" value={p.email} />
-              <Field label="Address" value={p.address} />
-              <Field label="State" value={p.state} />
-              <Field label="Pincode" value={p.pincode} />
+              <Field label={t('screens.mastersPreview.type')} value={data?.typeLabel} />
+              <Field label={t('screens.mastersPreview.groupParent')} value={data?.parent} />
+              <Field label={t('company.gstin')} value={p.gstin} />
+              <Field label={t('screens.mastersPreview.gstRegType')} value={p.gstRegType} />
+              <Field label={t('company.pan')} value={p.pan} />
+              <Field label={t('company.phone')} value={p.phone} />
+              <Field label={t('company.email')} value={p.email} />
+              <Field label={t('screens.mastersPreview.address')} value={p.address} />
+              <Field label={t('company.state')} value={p.state} />
+              <Field label={t('screens.mastersPreview.pincode')} value={p.pincode} />
               {(p.openingBalance != null && Number(p.openingBalance) !== 0) && (
                 <Field
-                  label="Opening Balance"
+                  label={t('ledger.opening')}
                   value={`₹${Number(p.openingBalance).toLocaleString('en-IN')} ${p.isCr ? 'Cr' : 'Dr'}`}
                 />
               )}
-              <Field label="Duty Category" value={p.dutyCategory} />
-              <Field label="Tax Type" value={p.taxType} />
+              <Field label={t('screens.mastersPreview.dutyCategory')} value={p.dutyCategory} />
+              <Field label={t('screens.mastersPreview.taxType')} value={p.taxType} />
               {p.percentage != null && Number(p.percentage) !== 0 && (
-                <Field label="Rate %" value={`${p.percentage}%`} />
+                <Field label={t('screens.mastersPreview.ratePercent')} value={`${p.percentage}%`} />
               )}
-              <Field label="GST Applicable" value={p.gstApplicable} />
-              <Field label="HSN" value={p.hsnCode} />
+              <Field label={t('screens.mastersPreview.gstApplicable')} value={p.gstApplicable} />
+              <Field label={t('pdf.hsn')} value={p.hsnCode} />
               {p.igstRate != null && Number(p.igstRate) !== 0 && (
-                <Field label="GST Rate" value={`${p.igstRate}%`} />
+                <Field label={t('screens.mastersPreview.gstRate')} value={`${p.igstRate}%`} />
               )}
-              <Field label="Unit" value={p.unit} />
+              <Field label={t('screens.mastersPreview.unit')} value={p.unit} />
               {p.openingQty != null && Number(p.openingQty) !== 0 && (
-                <Field label="Opening Qty" value={String(p.openingQty)} />
+                <Field label={t('screens.mastersPreview.openingQty')} value={String(p.openingQty)} />
               )}
               {p.openingRate != null && Number(p.openingRate) !== 0 && (
-                <Field label="Opening Rate" value={`₹${p.openingRate}`} />
+                <Field label={t('screens.mastersPreview.openingRate')} value={`₹${p.openingRate}`} />
               )}
-              <Field label="Warehouse" value={p.warehouse} />
-              <Field label="A/c Number" value={p.accountNumber || p.bankDetails?.accountNo} />
-              <Field label="IFSC" value={p.ifsc || p.bankDetails?.ifsc} />
-              <Field label="Account Type" value={p.accountType} />
+              <Field label={t('screens.mastersPreview.warehouse')} value={p.warehouse} />
+              <Field label={t('screens.mastersPreview.acNumber')} value={p.accountNumber || p.bankDetails?.accountNo} />
+              <Field label={t('screens.mastersPreview.ifsc')} value={p.ifsc || p.bankDetails?.ifsc} />
+              <Field label={t('screens.mastersPreview.accountType')} value={p.accountType} />
               {!!data?.tallyGuid && (
-                <Field label="Tally GUID" value={String(data.tallyGuid).slice(0, 28) + '…'} />
+                <Field label={t('screens.mastersPreview.tallyGuid')} value={String(data.tallyGuid).slice(0, 28) + '…'} />
               )}
             </View>
 
             {!!data?.errorMessage && (
               <View style={s.errorBlock}>
-                <Text style={s.errorTitle}>Error</Text>
+                <Text style={s.errorTitle}>{t('common.error')}</Text>
                 <Text style={s.errorBody}>{data.errorMessage}</Text>
               </View>
             )}
 
             <View style={s.hintBar}>
-              <Text style={s.hint}>Preview only — PDF sharing not available</Text>
+              <Text style={s.hint}>{t('screens.mastersPreview.previewOnly')}</Text>
             </View>
           </View>
         </ScrollView>

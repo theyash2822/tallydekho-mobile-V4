@@ -3,36 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-
-const TERMS_CONTENT = `Welcome to Tallydekho! By using our app, you agree to the following terms and conditions. Please read them carefully.
-
-Acceptance of Terms
-By accessing or using Tallydekho, you agree to be bound by these Terms and Conditions and our Privacy Policy. If you do not agree, please do not use our app.
-
-Use of the App
-• You must be at least 18 years old to use Tallydekho.
-• You agree to use the app for lawful purposes only.
-• You are responsible for maintaining the confidentiality of your account credentials.
-
-User Accounts
-• You must provide accurate and complete information during registration.
-• You are solely responsible for all activities under your account.
-• Notify us immediately of any unauthorized use of your account.
-
-Intellectual Property
-All content, trademarks, and intellectual property within Tallydekho are owned by us or our licensors.
-
-Privacy Policy
-At Tallydekho, your privacy is important to us. We collect personal information such as name, email, and phone number during registration. We use this data to provide and improve our services.
-
-Limitation of Liability
-Tallydekho shall not be liable for any indirect or consequential damages arising from use of the app.
-
-Effective Date: 23 January 2025`;
 
 export default function TermsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   return (
     <SafeAreaView testID="terms-screen" style={styles.safe}>
       {/* Header */}
@@ -40,12 +16,12 @@ export default function TermsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Terms and conditions</Text>
+        <Text style={styles.headerTitle}>{t('screens.authTerms.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.body}>{TERMS_CONTENT}</Text>
+        <Text style={styles.body}>{t('screens.authTerms.body')}</Text>
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -56,7 +32,7 @@ export default function TermsScreen() {
           onPress={() => router.back()}
           activeOpacity={0.8}
         >
-          <Text style={styles.acceptBtnText}>I Accept</Text>
+          <Text style={styles.acceptBtnText}>{t('screens.authTerms.iAccept')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

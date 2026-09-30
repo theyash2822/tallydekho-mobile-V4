@@ -5,7 +5,7 @@
  * Emits `synced` event → onSynced callback → screens auto-refresh.
  */
 import { io, Socket } from 'socket.io-client';
-import { getActiveWorkspaceId } from './api';
+import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefreshed, tryRefreshSession } from './api';
 import { isEventForWorkspace, workspaceIdFromPayload } from './workspaceEventScope';
 
 type SyncedCallback = (companyGuid: string) => void;
@@ -30,6 +30,21 @@ let _lastConnectErrorAt = 0;
 export function isEventForActiveWorkspace(event: string, payload?: any): boolean {
   return isEventForWorkspace(event, payload, getActiveWorkspaceId());
 }
+
+/**
+ * The access token expires every 15 minutes, so the one passed to connect() goes
+ * stale. Every (re)connect registers with whatever token is stored right now.
+ */
+async function registerWithCurrentToken() {
+  const token = (await getStoredAccessToken()) || currentToken;
+  if (!socket?.connected || !token) return;
+  currentToken = token;
+  socket.emit('register', { token, type: 'mobile' });
+}
+
+subscribeAccessTokenRefreshed(() => {
+  if (socket?.connected) void registerWithCurrentToken();
+});
 
 function emitWorkspaceEvent(event: string, payload?: any) {
   if (!isEventForActiveWorkspace(event, payload)) {
@@ -71,8 +86,12 @@ export const socketService = {
 
     socket.on('connect', () => {
       if (__DEV__) console.log('[Socket] connected:', socket?.id);
-      // Register as mobile client with JWT token
-      socket?.emit('register', { token, type: 'mobile' });
+      void registerWithCurrentToken();
+    });
+
+    // Token expired between refreshes: renew it; the refresh listener re-registers.
+    socket.on('error', (payload?: any) => {
+      if (/invalid token/i.test(String(payload?.message || ''))) void tryRefreshSession();
     });
 
     socket.on('registered', ({ status }: { status: boolean }) => {

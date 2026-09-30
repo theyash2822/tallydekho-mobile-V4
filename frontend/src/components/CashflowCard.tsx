@@ -23,9 +23,14 @@ function SegmentedBar({ value, maxValue, color, delay = 0 }: {
   const target = Math.round(pct * SEG_COUNT);
   const [filled, setFilled] = useState(0);
 
+  const [prevAnim, setPrevAnim] = useState<{ target: number; delay: number } | null>(null);
+  if (prevAnim === null || prevAnim.target !== target || prevAnim.delay !== delay) {
+    setPrevAnim({ target, delay });
+    setFilled(Platform.OS === 'web' ? target : 0);
+  }
+
   useEffect(() => {
-    if (Platform.OS === 'web') { setFilled(target); return; }
-    setFilled(0);
+    if (Platform.OS === 'web') return;
     if (target === 0) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < target; i++) {

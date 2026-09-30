@@ -7,6 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { EINVOICE_DOC_TYPE_LABEL, einvoiceDateToFormDate, type EinvoiceQrSummary } from '../../utils/einvoiceQr';
 
@@ -47,6 +48,7 @@ export default function EinvoiceQrPreviewSheet({
   visible, summary, companyGstin, resolve, current, preferredVendor,
   onCancel, onApply, onAddVendor, onRetryResolve,
 }: Props) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   /** undefined = auto (preferred vendor, or the only match); null = user cleared it. */
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
@@ -79,9 +81,9 @@ export default function EinvoiceQrPreviewSheet({
 
   const formDate = einvoiceDateToFormDate(summary.docDate);
   const replaces: string[] = [];
-  if (current.vendorInvNo && current.vendorInvNo !== summary.docNo) replaces.push(`Vendor Invoice No. "${current.vendorInvNo}"`);
-  if (current.vendorInvDate && current.vendorInvDate !== formDate) replaces.push(`Vendor Inv. Date ${current.vendorInvDate}`);
-  if (pickedMatch && current.vendor && current.vendor !== pickedMatch.name) replaces.push(`Vendor "${current.vendor}"`);
+  if (current.vendorInvNo && current.vendorInvNo !== summary.docNo) replaces.push(t('screens.componentsFormsEinvoiceQrPreviewSheet.replaceInvNo', { value: current.vendorInvNo }));
+  if (current.vendorInvDate && current.vendorInvDate !== formDate) replaces.push(t('screens.componentsFormsEinvoiceQrPreviewSheet.replaceInvDate', { value: current.vendorInvDate }));
+  if (pickedMatch && current.vendor && current.vendor !== pickedMatch.name) replaces.push(t('screens.componentsFormsEinvoiceQrPreviewSheet.replaceVendor', { value: current.vendor }));
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onCancel}>
@@ -91,61 +93,61 @@ export default function EinvoiceQrPreviewSheet({
           <View style={st.handle} />
           <View style={st.titleRow}>
             <Ionicons name="qr-code-outline" size={20} color={COLORS.brandPrimary} />
-            <Text style={st.title}>e-Invoice QR details</Text>
+            <Text style={st.title}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.title')}</Text>
             <View style={st.unverifiedChip}>
               <Ionicons name="shield-outline" size={11} color={COLORS.warning} />
-              <Text style={st.unverifiedTxt}>Not verified</Text>
+              <Text style={st.unverifiedTxt}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.notVerified')}</Text>
             </View>
           </View>
-          <Text style={st.sub}>Check the details, then Apply. You can still edit every field before saving.</Text>
+          <Text style={st.sub}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.sub')}</Text>
 
           <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 10, paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             {unsupportedDoc ? (
               <Banner tone="negative" icon="close-circle-outline"
-                text={`This QR is a ${EINVOICE_DOC_TYPE_LABEL[summary.docType]}, not a purchase invoice. Use the matching note screen instead.`} />
+                text={t('screens.componentsFormsEinvoiceQrPreviewSheet.unsupportedDoc', { docType: EINVOICE_DOC_TYPE_LABEL[summary.docType] })} />
             ) : null}
             {duplicate ? (
               <Banner tone="negative" icon="copy-outline"
-                text={`This e-Invoice is already booked as ${duplicate.tally_voucher_no || duplicate.tdk_reference_no}${duplicate.party_name ? ` (${duplicate.party_name})` : ''}.`} />
+                text={t('screens.componentsFormsEinvoiceQrPreviewSheet.duplicate', { ref: duplicate.tally_voucher_no || duplicate.tdk_reference_no, party: duplicate.party_name ? ` (${duplicate.party_name})` : '' })} />
             ) : null}
             {buyerStatus === 'mismatch' ? (
               <Banner tone="warning" icon="warning-outline"
-                text={`This bill is addressed to GSTIN ${summary.buyerGstin}, but the selected company's GSTIN is ${companyG}. Make sure you are in the right company.`} />
+                text={t('screens.componentsFormsEinvoiceQrPreviewSheet.buyerMismatch', { buyer: summary.buyerGstin, company: companyG })} />
             ) : buyerStatus === 'unknown' ? (
               <Banner tone="warning" icon="help-circle-outline"
-                text="The selected company has no GSTIN saved, so we cannot confirm this bill is addressed to it." />
+                text={t('screens.componentsFormsEinvoiceQrPreviewSheet.buyerUnknown')} />
             ) : null}
 
             <View style={st.card}>
-              <Row label="Vendor Invoice No." value={summary.docNo} />
-              <Row label="Vendor Invoice Date" value={formDate} />
-              <Row label="Document" value={EINVOICE_DOC_TYPE_LABEL[summary.docType]} />
-              <Row label="Invoice total (on QR)" value={fmtMoney(summary.totalInvoiceValue)} />
-              <Row label="Seller GSTIN" value={summary.sellerGstin} />
-              <Row label="Buyer GSTIN" value={summary.buyerGstin}
-                badge={buyerStatus === 'match' ? { text: 'Matches company', tone: 'positive' } : undefined} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.vendorInvNo')} value={summary.docNo} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.vendorInvDate')} value={formDate} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.document')} value={EINVOICE_DOC_TYPE_LABEL[summary.docType]} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.invoiceTotal')} value={fmtMoney(summary.totalInvoiceValue)} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.sellerGstin')} value={summary.sellerGstin} />
+              <Row label={t('screens.componentsFormsEinvoiceQrPreviewSheet.buyerGstin')} value={summary.buyerGstin}
+                badge={buyerStatus === 'match' ? { text: t('screens.componentsFormsEinvoiceQrPreviewSheet.matchesCompany'), tone: 'positive' } : undefined} />
             </View>
 
             <View style={st.card}>
-              <Text style={st.sectionLbl}>Vendor</Text>
+              <Text style={st.sectionLbl}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.vendor')}</Text>
               {resolve.status === 'loading' ? (
-                <View style={st.inline}><ActivityIndicator size="small" color={COLORS.brandPrimary} /><Text style={st.muted}>Finding vendor by GSTIN…</Text></View>
+                <View style={st.inline}><ActivityIndicator size="small" color={COLORS.brandPrimary} /><Text style={st.muted}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.finding')}</Text></View>
               ) : resolve.status === 'error' ? (
                 <View style={{ gap: 6 }}>
-                  <Text style={st.muted}>Could not look up the vendor right now. The vendor may still exist.</Text>
-                  <TouchableOpacity onPress={onRetryResolve} style={st.linkBtn}><Ionicons name="refresh" size={14} color={COLORS.brandPrimary} /><Text style={st.linkTxt}>Retry</Text></TouchableOpacity>
+                  <Text style={st.muted}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.lookupFailed')}</Text>
+                  <TouchableOpacity onPress={onRetryResolve} style={st.linkBtn}><Ionicons name="refresh" size={14} color={COLORS.brandPrimary} /><Text style={st.linkTxt}>{t('common.retry')}</Text></TouchableOpacity>
                 </View>
               ) : selectable.length === 0 ? (
                 <View style={{ gap: 6 }}>
-                  <Text style={st.muted}>No vendor with GSTIN {summary.sellerGstin} in your vendor list.</Text>
+                  <Text style={st.muted}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.noVendor', { gstin: summary.sellerGstin })}</Text>
                   {notSelectable.map(m => (
-                    <Text key={m.name} style={st.mutedSmall}>{`Found "${m.name}" under ${m.parent || 'another group'}, which is not in your vendor list.`}</Text>
+                    <Text key={m.name} style={st.mutedSmall}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.foundElsewhere', { name: m.name, group: m.parent || t('screens.componentsFormsEinvoiceQrPreviewSheet.anotherGroup') })}</Text>
                   ))}
-                  <TouchableOpacity onPress={onAddVendor} style={st.linkBtn}><Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} /><Text style={st.linkTxt}>Add Vendor (GSTIN pre-filled)</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={onAddVendor} style={st.linkBtn}><Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} /><Text style={st.linkTxt}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.addVendor')}</Text></TouchableOpacity>
                 </View>
               ) : (
                 <View style={{ gap: 6 }}>
-                  {selectable.length > 1 ? <Text style={st.mutedSmall}>More than one vendor has this GSTIN. Pick the right one.</Text> : null}
+                  {selectable.length > 1 ? <Text style={st.mutedSmall}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.multipleVendors')}</Text> : null}
                   {selectable.map(m => {
                     const on = effectivePick === m.name;
                     return (
@@ -163,16 +165,16 @@ export default function EinvoiceQrPreviewSheet({
             </View>
 
             <Banner tone="info" icon="list-outline"
-              text={`The QR says this bill has ${summary.itemCount} item${summary.itemCount === 1 ? '' : 's'}${summary.mainHsnCode ? ` (main HSN ${summary.mainHsnCode})` : ''}. Item names, quantities and rates are not in the QR. Please add items in the next step.`} />
+              text={t(summary.itemCount === 1 ? 'screens.componentsFormsEinvoiceQrPreviewSheet.qrItemsOne' : 'screens.componentsFormsEinvoiceQrPreviewSheet.qrItemsMany', { count: summary.itemCount, hsn: summary.mainHsnCode ? t('screens.componentsFormsEinvoiceQrPreviewSheet.mainHsn', { code: summary.mainHsnCode }) : '' })} />
 
             {replaces.length > 0 && !blocked ? (
-              <Banner tone="warning" icon="swap-horizontal-outline" text={`Apply will replace: ${replaces.join(', ')}.`} />
+              <Banner tone="warning" icon="swap-horizontal-outline" text={t('screens.componentsFormsEinvoiceQrPreviewSheet.willReplace', { list: replaces.join(', ') })} />
             ) : null}
           </ScrollView>
 
           <View style={st.btnRow}>
             <TouchableOpacity style={st.cancelBtn} onPress={onCancel} activeOpacity={0.7}>
-              <Text style={st.cancelTxt}>Cancel</Text>
+              <Text style={st.cancelTxt}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[st.applyBtn, blocked && { opacity: 0.45 }]}
@@ -181,7 +183,7 @@ export default function EinvoiceQrPreviewSheet({
               activeOpacity={0.8}
             >
               <Ionicons name="checkmark" size={16} color={COLORS.white} />
-              <Text style={st.applyTxt}>Apply to form</Text>
+              <Text style={st.applyTxt}>{t('screens.componentsFormsEinvoiceQrPreviewSheet.applyToForm')}</Text>
             </TouchableOpacity>
           </View>
         </View>

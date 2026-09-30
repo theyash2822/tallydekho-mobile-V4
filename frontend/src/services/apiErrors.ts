@@ -162,3 +162,30 @@ export function subscribeDeviceOnline(cb: OnlineListener): () => void {
     onlineListeners.delete(cb);
   };
 }
+
+// ── Server reachability (backend down / gateway errors / refresh blips) ────
+/** null = reachable; otherwise the time the current outage started. */
+type ServerListener = (unreachableSince: number | null) => void;
+const serverListeners = new Set<ServerListener>();
+let serverUnreachableSince: number | null = null;
+
+export function markServerReachable(reachable: boolean) {
+  const next = reachable ? null : (serverUnreachableSince ?? Date.now());
+  if (next === serverUnreachableSince) return;
+  serverUnreachableSince = next;
+  serverListeners.forEach((cb) => {
+    try {
+      cb(next);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
+export function subscribeServerReachability(cb: ServerListener): () => void {
+  serverListeners.add(cb);
+  cb(serverUnreachableSince);
+  return () => {
+    serverListeners.delete(cb);
+  };
+}

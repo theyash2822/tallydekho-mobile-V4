@@ -43,11 +43,18 @@ export default function ValuationSummaryScreen() {
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
   const [isSelMode,     setIsSelMode]     = useState(false);
   const [isSharing,     setIsSharing]     = useState(false);
+  const [loadedFor,     setLoadedFor]     = useState<{ guid: string | undefined; fy: typeof selectedFY } | null>(null);
+
+  if (!loadedFor || loadedFor.guid !== companyGuid || loadedFor.fy !== selectedFY) {
+    setLoadedFor({ guid: companyGuid, fy: selectedFY });
+    if (companyGuid) {
+      setIsLoading(true);
+      setApiError(null);
+    }
+  }
 
   useEffect(() => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
     getStocks(companyGuid, { limit: '500', ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         const rows: any[] = res?.data?.items ?? [];
@@ -55,7 +62,7 @@ export default function ValuationSummaryScreen() {
         const map = new Map<string, { value: number; skus: number }>();
         let tot = 0;
         for (const r of rows) {
-          const grp = r.group_name ?? 'Ungrouped';
+          const grp = r.group_name ?? t('screens.stocksValuationSummary.ungrouped');
           const val = Number(r.closing_value ?? 0);
           if (!map.has(grp)) map.set(grp, { value: 0, skus: 0 });
           const entry = map.get(grp)!;
@@ -76,7 +83,7 @@ export default function ValuationSummaryScreen() {
         setGroups(sorted);
         setTotalValue(tot);
       })
-      .catch((err: any) => setApiError(err?.message ?? 'Failed to load stock data'))
+      .catch((err: any) => setApiError(err?.message ?? t('stocks.loadFailed')))
       .finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY]);
 
@@ -112,14 +119,14 @@ export default function ValuationSummaryScreen() {
     try {
       await shareSummaryTablePdf({
         company: companyFromAuth(company),
-        title: 'Valuation Summary',
-        metrics: [{ label: 'Total Value', value: formatAmountCompact(totalValue) }],
-        columns: ['Group', 'SKUs', 'Value'],
+        title: t('stocks.valuation'),
+        metrics: [{ label: t('screens.stocksValuationSummary.totalValue'), value: formatAmountCompact(totalValue) }],
+        columns: [t('screens.stocksValuationSummary.colGroup'), t('screens.stocksValuationSummary.colSkus'), t('screens.stocksValuationSummary.colValue')],
         rows: selected.map(g => [g.name, g.skus, formatAmountCompact(g.value)]),
       }, { onBeforeShare: () => setIsSharing(false) });
       cancelSelection();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not share PDF.');
+      Alert.alert(t('common.error'), err?.message || t('screens.stocksValuationSummary.shareFailed'));
     } finally {
       setIsSharing(false);
     }
@@ -145,11 +152,11 @@ export default function ValuationSummaryScreen() {
         <View style={s.selBanner}>
           <TouchableOpacity onPress={cancelSelection} activeOpacity={0.7} style={s.selBannerBtn}>
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
-            <Text style={s.selBannerCancel}>Cancel</Text>
+            <Text style={s.selBannerCancel}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <Text style={s.selBannerCount}>{t('common.selected', { count: selectedIds.size })}</Text>
           <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
-            <Text style={s.selBannerAll}>All</Text>
+            <Text style={s.selBannerAll}>{t('common.all')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -168,9 +175,9 @@ export default function ValuationSummaryScreen() {
 
           {/* Total Value Summary Card */}
           <View style={s.totalCard}>
-            <Text style={s.totalLbl}>Total Stock Value</Text>
+            <Text style={s.totalLbl}>{t('stocks.totalStockValue')}</Text>
             <Text style={s.totalVal}>{fmtValue(totalValue)}</Text>
-            <Text style={s.totalSub}>{groups.reduce((sum, g) => sum + g.skus, 0)} SKUs · {groups.length} groups</Text>
+            <Text style={s.totalSub}>{t('screens.stocksValuationSummary.skusGroups', { skus: groups.reduce((sum, g) => sum + g.skus, 0), groups: groups.length })}</Text>
           </View>
 
           {/* Donut Chart */}
@@ -201,12 +208,12 @@ export default function ValuationSummaryScreen() {
                   return (
                     <View style={s.chartCenter}>
                       <Ionicons name="layers-outline" size={20} color={COLORS.textSecondary} />
-                      <Text style={s.chartCenterTxt}>By Group</Text>
+                      <Text style={s.chartCenterTxt}>{t('screens.stocksValuationSummary.byGroup')}</Text>
                     </View>
                   );
                 }}
               />
-              <Text style={s.chartHint}>Tap a segment to see details</Text>
+              <Text style={s.chartHint}>{t('screens.stocksValuationSummary.tapSegment')}</Text>
               <View style={s.legend}>
                 {pieData.map((d, idx) => (
                   <TouchableOpacity
@@ -227,11 +234,11 @@ export default function ValuationSummaryScreen() {
           {/* Group Breakdown Cards */}
           {groups.length > 0 && (
             <>
-              <Text style={s.sectionLabel}>Group Breakdown</Text>
+              <Text style={s.sectionLabel}>{t('screens.stocksValuationSummary.groupBreakdown')}</Text>
               {!isSelMode && (
                 <View style={s.hintRow}>
                   <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={s.hintTxt}>Long press a card to select</Text>
+                  <Text style={s.hintTxt}>{t('screens.stocksValuationSummary.longPressHint')}</Text>
                 </View>
               )}
               {groups.map((g, idx) => {
@@ -255,23 +262,23 @@ export default function ValuationSummaryScreen() {
                       </View>
                       <View style={s.whCardInfo}>
                         <Text style={s.whName}>{g.name}</Text>
-                        <Text style={s.whSub}>{g.skus} SKUs</Text>
+                        <Text style={s.whSub}>{t('screens.stocksValuationSummary.skusCount', { count: g.skus })}</Text>
                       </View>
                     </View>
                     <View style={s.whDivider} />
                     <View style={s.whStats}>
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>Stock Value</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksValuationSummary.stockValue')}</Text>
                         <Text style={s.statVal}>{fmtValue(g.value)}</Text>
                       </View>
                       <View style={s.statDivider} />
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>SKUs</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksValuationSummary.colSkus')}</Text>
                         <Text style={s.statVal}>{g.skus.toLocaleString()}</Text>
                       </View>
                       <View style={s.statDivider} />
                       <View style={s.statItem}>
-                        <Text style={s.statLbl}>% of Total</Text>
+                        <Text style={s.statLbl}>{t('screens.stocksValuationSummary.pctOfTotal')}</Text>
                         <Text style={s.statVal}>{pct}%</Text>
                       </View>
                     </View>
@@ -285,7 +292,7 @@ export default function ValuationSummaryScreen() {
           {groups.length === 0 && !apiError && (
             <View style={s.empty}>
               <Ionicons name="layers-outline" size={48} color={COLORS.borderDefault} />
-              <Text style={s.emptyTxt}>No stock data available</Text>
+              <Text style={s.emptyTxt}>{t('screens.stocksValuationSummary.noData')}</Text>
             </View>
           )}
 
@@ -298,9 +305,9 @@ export default function ValuationSummaryScreen() {
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
             <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
-            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+            <Text style={s.cancelSelFooterTxt}>{t('screens.stocksValuationSummary.deselect')}</Text>
           </TouchableOpacity>
-          <Text style={s.shareBarCount}>{selectedIds.size} group{selectedIds.size !== 1 ? 's' : ''}</Text>
+          <Text style={s.shareBarCount}>{t(selectedIds.size !== 1 ? 'screens.stocksValuationSummary.groupsCount' : 'screens.stocksValuationSummary.groupCount', { count: selectedIds.size })}</Text>
           <TouchableOpacity
             style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
             activeOpacity={0.8}
@@ -311,7 +318,7 @@ export default function ValuationSummaryScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Ionicons name="share-social-outline" size={18} color="#fff" />
             }
-            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            <Text style={s.shareTxt}>{isSharing ? t('screens.stocksValuationSummary.preparing') : t('pdf.sharePdf')}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -68,7 +68,7 @@ export async function openLedgerDetail(
       return;
     }
 
-    safePush(router, `/ledger/${guid}` as any);
+    safePush(router, `/ledger/${encodeURIComponent(String(guid))}` as any);
   } finally {
     openInFlight = false;
   }
