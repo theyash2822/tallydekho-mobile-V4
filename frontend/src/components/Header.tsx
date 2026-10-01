@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, ScrollView,
+  Pressable, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -50,6 +51,9 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // Dropdown backdrops take the window size directly: sized via flex/absoluteFill they
+  // did not catch taps outside the card on device.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { t } = useTranslation();
   const { company, setCompany, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
   const { pairingStatus, filterScoped, demoMode } = useWorkspace();
@@ -301,13 +305,15 @@ const Header: React.FC<HeaderProps> = ({
           animationType="none"
           onRequestClose={() => setShowCompanyModal(false)}
         >
-          <View style={{ flex: 1 }}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFillObject}
-              onPress={() => setShowCompanyModal(false)}
-              activeOpacity={1}
-            />
-            <View style={[styles.dropdown, { top: dropdownTop, left: SPACING.md }]}>
+          <Pressable
+            testID="company-dropdown-backdrop"
+            style={[styles.backdrop, { width: windowWidth, height: windowHeight }]}
+            onPress={() => setShowCompanyModal(false)}
+          >
+            <View
+              style={[styles.dropdown, { top: dropdownTop, left: SPACING.md }]}
+              onStartShouldSetResponder={() => true}
+            >
               <View style={styles.dropdownArrowLeft} />
               <Text style={styles.dropdownTitle}>{t('screens.switchCompany.title')}</Text>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
@@ -345,7 +351,7 @@ const Header: React.FC<HeaderProps> = ({
                 })}
               </ScrollView>
             </View>
-          </View>
+          </Pressable>
         </Modal>
       ) : null}
 
@@ -357,13 +363,15 @@ const Header: React.FC<HeaderProps> = ({
           animationType="none"
           onRequestClose={() => setShowFYModal(false)}
         >
-          <View style={{ flex: 1 }}>
-            <TouchableOpacity
-              style={StyleSheet.absoluteFillObject}
-              onPress={() => setShowFYModal(false)}
-              activeOpacity={1}
-            />
-            <View style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}>
+          <Pressable
+            testID="fy-dropdown-backdrop"
+            style={[styles.backdrop, { width: windowWidth, height: windowHeight }]}
+            onPress={() => setShowFYModal(false)}
+          >
+            <View
+              style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}
+              onStartShouldSetResponder={() => true}
+            >
               <View style={styles.dropdownArrowRight} />
               <Text style={styles.dropdownTitle}>{t('screens.componentsHeader.financialYear')}</Text>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 320 }}>
@@ -384,7 +392,7 @@ const Header: React.FC<HeaderProps> = ({
                 })}
               </ScrollView>
             </View>
-          </View>
+          </Pressable>
         </Modal>
       ) : null}
     </>
@@ -423,6 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E53935', alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { fontSize: 8, color: COLORS.white, fontWeight: '700' },
+  backdrop: { position: 'absolute', top: 0, left: 0 },
   dropdown: {
     position: 'absolute', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     minWidth: 220, maxWidth: 280, borderWidth: 1, borderColor: COLORS.borderDefault,

@@ -3,6 +3,7 @@
 - `Header.tsx` follows the reference repo's header (`tallydekho-mobile-emergent-code`): two RN `Modal` dropdowns under the header (company: letter icon, name, GSTIN, check; FY: year list with tick), wired to real data (`getCompanies` scoped for CONNECTED/RECONNECTING, `getCompanyYears`, `AuthContext.setCompany` / `setSelectedFY`). Demo mode and single-company toast unchanged.
 - Freeze safeguards: each Modal mounts only while open; the company / FY change is applied in an effect after its Modal has unmounted. `statusBarTranslucent` so `insets.top + 58` lines up on Android.
 - `app/switch-company.tsx` stays but nothing links to it.
+- Follow-up (device feedback): dropdowns only closed on selection. The backdrop is now a `Pressable` sized from `useWindowDimensions` (the flex / absoluteFill version did not catch taps), so tapping outside the card, or on the company name / FY pill / chevrons under it, closes the dropdown. The card claims the responder, so taps on its title or empty space don't close it.
 - Tested: tsc clean, eslint (1 pre-existing intentional warning), `npm test` pass; QA YELLOW pending device test on Android + iPhone.
 
 ---
