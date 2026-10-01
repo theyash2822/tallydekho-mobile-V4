@@ -1,3 +1,12 @@
+## 2026-10-01 — Header company + FY dropdowns (local branch `cursor-header-dropdown`, not pushed)
+
+- `Header.tsx` follows the reference repo's header (`tallydekho-mobile-emergent-code`): two RN `Modal` dropdowns under the header (company: letter icon, name, GSTIN, check; FY: year list with tick), wired to real data (`getCompanies` scoped for CONNECTED/RECONNECTING, `getCompanyYears`, `AuthContext.setCompany` / `setSelectedFY`). Demo mode and single-company toast unchanged.
+- Freeze safeguards: each Modal mounts only while open; the company / FY change is applied in an effect after its Modal has unmounted. `statusBarTranslucent` so `insets.top + 58` lines up on Android.
+- `app/switch-company.tsx` stays but nothing links to it.
+- Tested: tsc clean, eslint (1 pre-existing intentional warning), `npm test` pass; QA YELLOW pending device test on Android + iPhone.
+
+---
+
 ## 2026-09-30 — Rolled back header dropdown change
 
 - Reverted `6e318c11` (company + FY dropdowns via `@gorhom/portal`) at Yash's request: dropdowns did not work on device. Header is back to `6ce51ef0` behaviour (company → `/switch-company` screen, FY in-header overlay). The FY tap issue is still open.

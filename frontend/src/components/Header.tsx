@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  ScrollView, Pressable, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +14,7 @@ import { getCompanies, getCompanyYears } from '../services/api';
 import { safePush } from '../utils/safeNavigation';
 import { filterCompaniesForPairing } from '../utils/isDemoCompany';
 import { fyEquals, normalizeFy } from '../utils/fyIdentity';
+import { toAuthCompany, companyExternalId } from '../utils/companyIdentity';
 
 type FyObj = { label: string; startDate: string; endDate: string; finYear?: string };
 
@@ -31,10 +31,11 @@ interface HeaderProps {
 }
 
 /**
- * Home header.
+ * Home header with company + FY dropdowns.
  * - Demo Mode: company switch disabled (Demo Company only).
- * - CONNECTED: company switch via dedicated screen (avoids Android Modal hang).
- * - FY: compact overlay (same chrome as before; not RN Modal — hangs under bottom-sheet).
+ * - Each Modal is mounted only while open, and a company / FY change is applied only
+ *   after its Modal has unmounted: either re-renders the whole app, and doing that while
+ *   a Modal is closing is what froze Android under bottom-sheet.
  */
 const Header: React.FC<HeaderProps> = ({
   companyName = 'YK Industries Pvt. Ltd.',
@@ -45,18 +46,22 @@ const Header: React.FC<HeaderProps> = ({
   onNotificationPress,
   onFYChange,
   onSettingsPress,
+  onCompanyChange,
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { company, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
+  const { company, setCompany, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
   const { pairingStatus, filterScoped, demoMode } = useWorkspace();
   const [selectedFY, setSelectedFY] = useState(contextFY?.label || fyYear);
   const [selectedCompany, setSelectedCompany] = useState(company?.name || companyName);
-  const [companyCount, setCompanyCount] = useState(0);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const companyCount = companies.length;
   const [fyLoading, setFyLoading] = useState(false);
   const [showFYModal, setShowFYModal] = useState(false);
-  const [liveFYObjects, setLiveFYObjects] = useState<FyObj[]>([]);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const pendingCompanyRef = useRef<any | null>(null);
+  const pendingFyRef = useRef<FyObj | null>(null);
   const contextFyStartRef = useRef<string | undefined>(contextFY?.startDate);
   useEffect(() => {
     contextFyStartRef.current = contextFY?.startDate;
@@ -77,7 +82,10 @@ const Header: React.FC<HeaderProps> = ({
   const [prevDemoMode, setPrevDemoMode] = useState(demoMode);
   if (prevDemoMode !== demoMode) {
     setPrevDemoMode(demoMode);
-    if (demoMode) setCompanyCount(0);
+    if (demoMode) {
+      setCompanies([]);
+      setShowCompanyModal(false);
+    }
   }
 
   const fyLoadDeps = [company?.guid, lastSyncAt, demoMode, pairingStatus, setContextFY];
@@ -87,7 +95,7 @@ const Header: React.FC<HeaderProps> = ({
     if (company?.guid) setFyLoading(true);
   }
 
-  // Count switchable live companies (Demo = never switchable)
+  // Switchable live companies (Demo = never switchable)
   useEffect(() => {
     let cancelled = false;
     if (demoMode) return;
@@ -95,18 +103,17 @@ const Header: React.FC<HeaderProps> = ({
       .then((res: any) => {
         if (cancelled) return;
         const paired = filterCompaniesForPairing(res?.data ?? [], pairingStatus);
-        const cos = String(pairingStatus).toUpperCase() === 'CONNECTED'
-          ? filterScoped(paired, 'companies')
-          : paired;
-        setCompanyCount(cos.length);
+        const live = ['CONNECTED', 'RECONNECTING'].includes(String(pairingStatus || '').toUpperCase());
+        setCompanies(live ? filterScoped(paired, 'companies') : paired);
       })
       .catch(() => {
-        if (!cancelled) setCompanyCount(0);
+        if (!cancelled) setCompanies([]);
       });
     return () => { cancelled = true; };
   }, [pairingStatus, lastSyncAt, filterScoped, demoMode]);
 
   // Load FY years into Auth + local dropdown list
+  const [liveFYObjects, setLiveFYObjects] = useState<FyObj[]>([]);
   useEffect(() => {
     let cancelled = false;
     if (!company?.guid) return;
@@ -145,11 +152,30 @@ const Header: React.FC<HeaderProps> = ({
     // filterScoped omitted on purpose — identity churn caused loops
   }, [company?.guid, lastSyncAt, demoMode, pairingStatus, setContextFY]);
 
+  // Runs after the commit that unmounted the company Modal.
+  useEffect(() => {
+    const co = pendingCompanyRef.current;
+    if (!co || showCompanyModal) return;
+    pendingCompanyRef.current = null;
+    const guid = companyExternalId(co);
+    setCompany(toAuthCompany({ ...co, guid }) || { guid, name: co.name, gstin: co.gstin || null })
+      .then(() => onCompanyChange?.(co.name))
+      .catch(() => {});
+  }, [showCompanyModal, setCompany, onCompanyChange]);
+
+  // Same for FY: Home refetches on FY change, so apply it once the FY Modal is gone.
+  useEffect(() => {
+    const fy = pendingFyRef.current;
+    if (!fy || showFYModal) return;
+    pendingFyRef.current = null;
+    setContextFY(fy);
+    onFYChange?.(fy.label);
+  }, [showFYModal, setContextFY, onFYChange]);
+
   const canSwitchCompany = !demoMode && companyCount > 1;
   const dropdownTop = insets.top + 58;
 
   const openCompanySwitcher = useCallback(() => {
-    // Demo Company: never open switcher
     if (demoMode) return;
     if (companyCount <= 1) {
       Toast.show({
@@ -160,8 +186,15 @@ const Header: React.FC<HeaderProps> = ({
       });
       return;
     }
-    safePush(router, '/switch-company' as any);
-  }, [demoMode, companyCount, router, t]);
+    setShowFYModal(false);
+    setShowCompanyModal(true);
+  }, [demoMode, companyCount, t]);
+
+  const handleCompanySelect = useCallback((co: any) => {
+    const guid = companyExternalId(co);
+    if (guid && guid !== companyExternalId(company) && !demoMode) pendingCompanyRef.current = co;
+    setShowCompanyModal(false);
+  }, [company, demoMode]);
 
   const openFySwitcher = useCallback(() => {
     if (!company?.guid) {
@@ -172,15 +205,15 @@ const Header: React.FC<HeaderProps> = ({
       Toast.show({ type: 'info', text1: t('screens.componentsHeader.noFinancialYears') });
       return;
     }
+    setShowCompanyModal(false);
     setShowFYModal(true);
   }, [company?.guid, liveFYObjects.length, fyLoading, t]);
 
   const handleFYSelect = useCallback((fy: FyObj) => {
+    pendingFyRef.current = fy;
     setSelectedFY(fy.label);
-    setContextFY(fy);
-    onFYChange?.(fy.label);
     setShowFYModal(false);
-  }, [setContextFY, onFYChange]);
+  }, []);
 
   const handleNotification = () => {
     onNotificationPress?.();
@@ -195,9 +228,10 @@ const Header: React.FC<HeaderProps> = ({
   const shortCompany = selectedCompany.length > 24
     ? `${selectedCompany.substring(0, 22)}\u2026`
     : selectedCompany;
+  const activeGuid = companyExternalId(company);
 
   return (
-    <View style={{ zIndex: 20, overflow: 'visible' }}>
+    <>
       <View testID="app-header" style={styles.container}>
         <TouchableOpacity
           testID="company-selector"
@@ -259,52 +293,105 @@ const Header: React.FC<HeaderProps> = ({
         </View>
       </View>
 
-      {showFYModal ? (
-        <View
-          pointerEvents="box-none"
-          style={[styles.fyHost, { height: Dimensions.get('window').height }]}
+      {showCompanyModal ? (
+        <Modal
+          visible
+          transparent
+          statusBarTranslucent
+          animationType="none"
+          onRequestClose={() => setShowCompanyModal(false)}
         >
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setShowFYModal(false)}
-          />
-          <View style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}>
-            <View style={styles.dropdownArrowRight} />
-            <Text style={styles.dropdownTitle}>{t('screens.componentsHeader.financialYear')}</Text>
-            <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }}>
-              {liveFYObjects.map((fy) => {
-                const active = selectedFY === fy.label;
-                return (
-                  <TouchableOpacity
-                    key={fy.startDate || fy.label}
-                    style={[styles.optionRow, active && styles.optionRowActive]}
-                    onPress={() => handleFYSelect(fy)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                      {fy.label}
-                    </Text>
-                    {active && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              onPress={() => setShowCompanyModal(false)}
+              activeOpacity={1}
+            />
+            <View style={[styles.dropdown, { top: dropdownTop, left: SPACING.md }]}>
+              <View style={styles.dropdownArrowLeft} />
+              <Text style={styles.dropdownTitle}>{t('screens.switchCompany.title')}</Text>
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
+                {companies.map((co) => {
+                  const guid = companyExternalId(co);
+                  const active = !!guid && guid === activeGuid;
+                  return (
+                    <TouchableOpacity
+                      key={guid || co.name}
+                      testID={`company-option-${guid}`}
+                      style={[styles.optionRow, active && styles.optionRowActive]}
+                      onPress={() => handleCompanySelect(co)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.optionLeft}>
+                        <View style={[styles.coIcon, active && styles.coIconActive]}>
+                          <Text style={[styles.coIconText, active && { color: COLORS.white }]}>
+                            {co.name?.[0]?.toUpperCase() || '?'}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.optionText, active && styles.optionTextActive]} numberOfLines={1}>
+                            {co.name}
+                          </Text>
+                          {!!co.gstin && (
+                            <Text style={styles.optionSub} numberOfLines={1}>{co.gstin}</Text>
+                          )}
+                        </View>
+                      </View>
+                      {active && (
+                        <Ionicons name="checkmark-circle" size={18} color={COLORS.brandPrimary} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </Modal>
       ) : null}
-    </View>
+
+      {showFYModal ? (
+        <Modal
+          visible
+          transparent
+          statusBarTranslucent
+          animationType="none"
+          onRequestClose={() => setShowFYModal(false)}
+        >
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              onPress={() => setShowFYModal(false)}
+              activeOpacity={1}
+            />
+            <View style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}>
+              <View style={styles.dropdownArrowRight} />
+              <Text style={styles.dropdownTitle}>{t('screens.componentsHeader.financialYear')}</Text>
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 320 }}>
+                {liveFYObjects.map((fy) => {
+                  const active = contextFY ? fyEquals(fy, contextFY) : selectedFY === fy.label;
+                  return (
+                    <TouchableOpacity
+                      key={fy.startDate || fy.label}
+                      testID={`fy-option-${fy.startDate || fy.label}`}
+                      style={[styles.optionRow, active && styles.optionRowActive]}
+                      onPress={() => handleFYSelect(fy)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.optionText, active && styles.optionTextActive]}>{fy.label}</Text>
+                      {active && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  fyHost: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 999,
-    elevation: 24,
-  },
   container: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 10,
@@ -338,8 +425,15 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 8, color: COLORS.white, fontWeight: '700' },
   dropdown: {
     position: 'absolute', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    minWidth: 180, maxWidth: 240, borderWidth: 1, borderColor: COLORS.borderDefault,
+    minWidth: 220, maxWidth: 280, borderWidth: 1, borderColor: COLORS.borderDefault,
     overflow: 'hidden', elevation: 16,
+    boxShadow: '0 6px 14px rgba(0, 0, 0, 0.18)',
+  },
+  dropdownArrowLeft: {
+    width: 10, height: 10, backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderLeftWidth: 1, borderColor: COLORS.borderDefault,
+    alignSelf: 'flex-start', marginLeft: 20, marginTop: -5,
+    transform: [{ rotate: '45deg' }],
   },
   dropdownArrowRight: {
     width: 10, height: 10, backgroundColor: COLORS.cardBg,
@@ -359,8 +453,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   optionRowActive: { backgroundColor: COLORS.activeBg },
+  optionLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  coIcon: {
+    width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.borderDefault,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  coIconActive: { backgroundColor: COLORS.brandPrimary },
+  coIconText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   optionText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
   optionTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  optionSub: { fontSize: 10, color: COLORS.textTertiary, marginTop: 1 },
 });
 
 export default Header;
