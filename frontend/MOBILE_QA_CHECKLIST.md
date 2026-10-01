@@ -2,14 +2,14 @@
 
 Physical Android / Expo device. Automated tests cannot prove native touch.
 
-## Company switcher (keep `/switch-company` FlatList)
+## Company switcher (Header dropdown, RN Modal — since 2026-10-01)
 
 - Open Company switcher repeatedly
-- Close repeatedly
+- Close repeatedly (tap outside, tap company name / chevron again, Android back)
 - Switch companies rapidly
-- No freeze, no stuck spinner, no duplicate push
+- No freeze, no stuck spinner
 
-## FY selector (Header overlay — not RN Modal)
+## FY selector (Header dropdown, RN Modal — since 2026-10-01)
 
 - Open FY selector repeatedly
 - Close repeatedly
