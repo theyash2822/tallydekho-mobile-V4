@@ -330,6 +330,57 @@ await check('production ATS arbitrary loads disabled', () => {
   assert.match(app, /"NSAllowsLocalNetworking":\s*true/);
 });
 
+// ── TD-FIX-2026-10-08 P6 ────────────────────────────────────────────────────
+const { fyInList } = await import(path.join(root, 'src/utils/fyIdentity.ts'));
+const { isPostingEventForDocument, POSTING_EVENTS } =
+  await import(path.join(root, 'src/services/workspaceEventScope.ts'));
+const { retryWithOutcomeConfirm, isOutcomeUnknownError } =
+  await import(path.join(root, 'src/utils/writeRetry.ts'));
+
+await check('W2: a refetched year list keeps the chosen FY (heartbeat must not reset it)', () => {
+  const years = [
+    { label: '2026-27', startDate: '2026-04-01', endDate: '2027-03-31' },
+    { label: '2025-26', startDate: '2025-04-01', endDate: '2026-03-31' },
+  ];
+  assert.equal(fyInList({ label: '2025-26', startDate: '2025-04-01', endDate: '2026-03-31' }, years), true);
+  assert.equal(fyInList({ label: '2019-20', startDate: '2019-04-01', endDate: '2020-03-31' }, years), false);
+  const header = strip(read('src/components/Header.tsx'));
+  assert.match(header, /fyInList\(contextFyRef\.current, fyObjs\)/, 'Header must compare the whole chosen FY');
+  assert.doesNotMatch(header, /label:\s*''\s*\}\)\)/, 'the start-date-only comparison is back');
+});
+
+await check('W1: posting events refresh only the document on screen', () => {
+  assert.deepEqual([...POSTING_EVENTS], ['voucher:tallySynced', 'invoice_posting_updated', 'voucher:regularized']);
+  const doc = { activeWorkspaceId: 'ws-A', companyGuid: 'c-1', ref: 'TDK-1' };
+  assert.equal(isPostingEventForDocument('invoice_posting_updated', { workspaceId: 'ws-A', companyGuid: 'c-1', referenceNumber: 'TDK-1' }, doc), true);
+  assert.equal(isPostingEventForDocument('voucher:regularized', { workspaceId: 'ws-A', companyGuid: 'c-1', tdkRef: 'TDK-1' }, doc), true);
+  assert.equal(isPostingEventForDocument('voucher:tallySynced', { workspaceId: 'ws-B', companyGuid: 'c-1', tdkRef: 'TDK-1' }, doc), false);
+  assert.equal(isPostingEventForDocument('voucher:tallySynced', { workspaceId: 'ws-A', companyGuid: 'c-2', tdkRef: 'TDK-1' }, doc), false);
+  assert.equal(isPostingEventForDocument('voucher:tallySynced', { workspaceId: 'ws-A', tdkRef: 'TDK-2' }, doc), false);
+  assert.equal(isPostingEventForDocument('synced', { workspaceId: 'ws-A', tdkRef: 'TDK-1' }, doc), false);
+  for (const rel of ['src/components/document/VoucherPreviewScreen.tsx', 'app/sales/invoice-preview.tsx', 'app/sales/order-preview.tsx']) {
+    assert.match(strip(read(rel)), /subscribePostingEvents\(/, `${rel} must use the reconnect-safe subscription`);
+  }
+});
+
+await check('X9: an unknown Tally outcome is re-sent only after confirmation', async () => {
+  const unknown = Object.assign(new Error('unknown'), { status: 409, code: 'OUTCOME_UNKNOWN', raw: { outcomeUnknown: true } });
+  const calls = [];
+  const declined = await retryWithOutcomeConfirm(async (opts) => { calls.push(opts); throw unknown; }, async () => false);
+  assert.deepEqual(declined, { status: 'cancelled' });
+  assert.deepEqual(calls, [{}]);
+  let n = 0;
+  const confirmed = await retryWithOutcomeConfirm(async (opts) => {
+    n++;
+    if (!opts.confirmOutcomeUnknown) throw unknown;
+    return { success: true };
+  }, async () => true);
+  assert.equal(confirmed.status, 'retried');
+  assert.equal(n, 2);
+  assert.equal(isOutcomeUnknownError({ code: 'OTHER' }), false);
+  await assert.rejects(retryWithOutcomeConfirm(async () => { throw new Error('boom'); }, async () => true), /boom/);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} FAILED`);
   process.exit(1);

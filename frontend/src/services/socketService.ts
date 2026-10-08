@@ -6,7 +6,7 @@
  */
 import { io, Socket } from 'socket.io-client';
 import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefreshed, tryRefreshSession } from './api';
-import { isEventForWorkspace, workspaceIdFromPayload } from './workspaceEventScope';
+import { isEventForWorkspace, workspaceIdFromPayload, POSTING_EVENTS } from './workspaceEventScope';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -20,6 +20,13 @@ let currentBaseUrl: string = '';
 let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
 let _lastConnectErrorAt = 0;
+// Survive reconnects: screens subscribe once, whether or not the socket exists yet.
+const postingListeners = new Set<(event: string, payload: any) => void>();
+
+export function subscribePostingEvents(cb: (event: string, payload: any) => void): () => void {
+  postingListeners.add(cb);
+  return () => { postingListeners.delete(cb); };
+}
 
 /**
  * True when this event may be applied to the workspace the user currently has
@@ -157,12 +164,17 @@ export const socketService = {
     });
 
     // 🧾 Voucher number reconciled: backend fires after ingestProcessor matches TDK ref
-    socket.on('voucher:tallySynced', (payload: any) => {
-      if (!isEventForActiveWorkspace('voucher:tallySynced', payload)) return;
-      const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
-      const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
-      onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });
-    });
+    for (const evt of POSTING_EVENTS) {
+      socket.on(evt, (payload: any) => {
+        if (!isEventForActiveWorkspace(evt, payload)) return;
+        if (evt === 'voucher:tallySynced') {
+          const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
+          const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
+          onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });
+        }
+        postingListeners.forEach((cb) => cb(evt, payload));
+      });
+    }
 
     socket.on('disconnect', (reason) => {
       if (__DEV__) console.log('[Socket] disconnected:', reason);

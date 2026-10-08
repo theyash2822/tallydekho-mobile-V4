@@ -14,7 +14,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { getCompanies, getCompanyYears } from '../services/api';
 import { safePush } from '../utils/safeNavigation';
 import { filterCompaniesForPairing } from '../utils/isDemoCompany';
-import { fyEquals, normalizeFy } from '../utils/fyIdentity';
+import { fyEquals, fyInList, normalizeFy } from '../utils/fyIdentity';
 import { toAuthCompany, companyExternalId } from '../utils/companyIdentity';
 
 type FyObj = { label: string; startDate: string; endDate: string; finYear?: string };
@@ -66,9 +66,9 @@ const Header: React.FC<HeaderProps> = ({
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const pendingCompanyRef = useRef<any | null>(null);
   const pendingFyRef = useRef<FyObj | null>(null);
-  const contextFyStartRef = useRef<string | undefined>(contextFY?.startDate);
+  const contextFyRef = useRef<FyObj | null>(contextFY ?? null);
   useEffect(() => {
-    contextFyStartRef.current = contextFY?.startDate;
+    contextFyRef.current = contextFY ?? null;
   });
 
   const [prevCompanyName, setPrevCompanyName] = useState(company?.name);
@@ -145,8 +145,8 @@ const Header: React.FC<HeaderProps> = ({
         setLiveFYObjects(fyObjs);
         const labels = fyObjs.map((f) => f.label);
         setSelectedFY((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
-        const keep = fyObjs.some((f) => fyEquals(f, { startDate: contextFyStartRef.current, label: '' }));
-        if (!keep) setContextFY(fyObjs[0]);
+        // A sync or heartbeat refetches the years; the chosen FY stays while it still exists.
+        if (!fyInList(contextFyRef.current, fyObjs)) setContextFY(fyObjs[0]);
       })
       .catch(() => {})
       .finally(() => {

@@ -4494,7 +4494,10 @@
       "loadMore": "Load More",
       "allEntriesLoaded": "All {{count}} entries loaded",
       "push": "Push",
-      "preparing": "Preparing…"
+      "preparing": "Preparing…",
+      "outcomeUnknownTitle": "Was this saved in Tally?",
+      "outcomeUnknownBody": "TallyDekho could not confirm whether Tally saved this entry. Check the Day Book in Tally first — retrying an entry that was already saved creates a duplicate.",
+      "retryAnyway": "Retry anyway"
     },
     "purchaseCreateOrder": {
       "orderDetails": "Order Details",

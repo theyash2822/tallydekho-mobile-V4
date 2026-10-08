@@ -1,3 +1,11 @@
+## 2026-10-08 — P6 FY kept across heartbeats, posting events, unknown-outcome retry (branch `8-10-2026`, TD-FIX-2026-10-08)
+
+- **W2:** the Header re-checked the chosen FY after every `lastSyncAt` bump (each desktop heartbeat) by comparing only its start date; `fyEquals` also compares the end date, so the check always failed and the FY reset to the first year. It now uses `fyInList` with the full chosen FY.
+- **W1:** posting events go through `socketService.subscribePostingEvents`, which survives reconnects and a socket created after the screen mounted. `voucher:regularized` is handled and workspace-scoped. Previews (shared voucher preview, sales invoice, sales order) refresh only for the workspace, company and reference on screen (`isPostingEventForDocument`).
+- **X9 (UI):** Audit Trail retry of an unknown-outcome entry shows a confirmation and only then sends `confirmOutcomeUnknown`; bulk retry never re-sends those (counted as skipped). New English strings; other languages fall back to English.
+- **W4:** mobile lists already refetch on `lastSyncAt`; no change.
+- **Tested:** `npm test` (all verify scripts incl. 3 new checks) pass; `tsc --noEmit` 0 errors; eslint on touched files at the branch baseline. Not run on a device.
+
 ## 2026-10-01 — Header company + FY dropdowns (local branch `cursor-header-dropdown`, not pushed)
 
 - `Header.tsx` follows the reference repo's header (`tallydekho-mobile-emergent-code`): two RN `Modal` dropdowns under the header (company: letter icon, name, GSTIN, check; FY: year list with tick), wired to real data (`getCompanies` scoped for CONNECTED/RECONNECTING, `getCompanyYears`, `AuthContext.setCompany` / `setSelectedFY`). Demo mode and single-company toast unchanged.
