@@ -220,7 +220,7 @@ export default function TallySyncScreen() {
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
     workspacePaired ? 'paired' : 'idle'
   );
-  const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string; lastSeen: string } | null>(null);
 
   // Keep pairState in sync if pairing changes externally (e.g. desktop unpairs)
   const [prevWorkspacePaired, setPrevWorkspacePaired] = useState(workspacePaired);
@@ -236,10 +236,11 @@ export default function TallySyncScreen() {
       .then((res: any) => {
         const d = res?.data ?? res;
         if (d?.device) {
-          const lastSeen = d.device.last_seen
-            ? new Date(Number(d.device.last_seen) * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          // last_seen is the desktop heartbeat; last_sync_at is the last verified sync.
+          const fmt = (secs: any) => secs
+            ? new Date(Number(secs) * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
             : i18n.t('screens.settingsTallySync.never');
-          setDeviceInfo({ name: d.device.name || 'TallyDekho Desktop', lastSync: lastSeen });
+          setDeviceInfo({ name: d.device.name || 'TallyDekho Desktop', lastSync: fmt(d.device.last_sync_at), lastSeen: fmt(d.device.last_seen) });
         }
       })
       .catch(() => {});
@@ -361,7 +362,7 @@ export default function TallySyncScreen() {
                 </View>
                 <View style={s.deviceInfo}>
                   <Text style={s.deviceName}>{deviceInfo?.name || 'TallyDekho Desktop'}</Text>
-                  <Text style={s.deviceSub}>{t('screens.settingsTallySync.lastSeen', { time: deviceInfo?.lastSync || t('screens.settingsTallySync.unknown') })}</Text>
+                  <Text style={s.deviceSub}>{t('screens.settingsTallySync.lastSeen', { time: deviceInfo?.lastSeen || t('screens.settingsTallySync.unknown') })}</Text>
                   <View style={s.onlineRow}>
                     <View style={s.onlineDot} />
                     <Text style={s.onlineTxt}>{t('common.online')}</Text>
