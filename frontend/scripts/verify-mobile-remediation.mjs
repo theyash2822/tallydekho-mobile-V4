@@ -334,7 +334,7 @@ await check('production ATS arbitrary loads disabled', () => {
 const { fyInList } = await import(path.join(root, 'src/utils/fyIdentity.ts'));
 const { isPostingEventForDocument, POSTING_EVENTS } =
   await import(path.join(root, 'src/services/workspaceEventScope.ts'));
-const { retryWithOutcomeConfirm, isOutcomeUnknownError } =
+const { retryOrReviewUnknown, isOutcomeUnknownError } =
   await import(path.join(root, 'src/utils/writeRetry.ts'));
 
 await check('W2: a refetched year list keeps the chosen FY (heartbeat must not reset it)', () => {
@@ -363,22 +363,27 @@ await check('W1: posting events refresh only the document on screen', () => {
   }
 });
 
-await check('X9: an unknown Tally outcome is re-sent only after confirmation', async () => {
+await check('X9: an unknown Tally outcome is never re-sent; the user reviews it instead', async () => {
   const unknown = Object.assign(new Error('unknown'), { status: 409, code: 'OUTCOME_UNKNOWN', raw: { outcomeUnknown: true } });
-  const calls = [];
-  const declined = await retryWithOutcomeConfirm(async (opts) => { calls.push(opts); throw unknown; }, async () => false);
-  assert.deepEqual(declined, { status: 'cancelled' });
-  assert.deepEqual(calls, [{}]);
-  let n = 0;
-  const confirmed = await retryWithOutcomeConfirm(async (opts) => {
-    n++;
-    if (!opts.confirmOutcomeUnknown) throw unknown;
-    return { success: true };
-  }, async () => true);
-  assert.equal(confirmed.status, 'retried');
-  assert.equal(n, 2);
+  for (const [choice, expected] of [[null, 'cancelled'], ['found_in_tally', 'found_in_tally'], ['discard', 'discarded']]) {
+    let sends = 0;
+    const resolved = [];
+    const out = await retryOrReviewUnknown(
+      async () => { sends++; throw unknown; },
+      async () => choice,
+      async (r) => { resolved.push(r); },
+    );
+    assert.equal(out.status, expected);
+    assert.equal(sends, 1, 'an unknown outcome must not be sent again');
+    assert.deepEqual(resolved, choice ? [choice] : []);
+  }
+  const ok = await retryOrReviewUnknown(async () => ({ success: true }), async () => { throw new Error('no review'); }, async () => {});
+  assert.equal(ok.status, 'retried');
   assert.equal(isOutcomeUnknownError({ code: 'OTHER' }), false);
-  await assert.rejects(retryWithOutcomeConfirm(async () => { throw new Error('boom'); }, async () => true), /boom/);
+  await assert.rejects(retryOrReviewUnknown(async () => { throw new Error('boom'); }, async () => 'discard', async () => {}), /boom/);
+  const api = strip(read('src/services/api.ts'));
+  assert.doesNotMatch(api, /confirmOutcomeUnknown/, 'the client must not be able to override an unknown outcome');
+  assert.match(api, /\/vouchers\/my-entries\/\$\{id\}\/resolve-unknown/);
 });
 
 if (failures.length) {

@@ -4496,8 +4496,12 @@
       "push": "Push",
       "preparing": "Preparing…",
       "outcomeUnknownTitle": "Was this saved in Tally?",
-      "outcomeUnknownBody": "TallyDekho could not confirm whether Tally saved this entry. Check the Day Book in Tally first — retrying an entry that was already saved creates a duplicate.",
-      "retryAnyway": "Retry anyway"
+      "outcomeUnknownBody": "TallyDekho could not confirm whether Tally saved this entry, so it will not be sent again. Check the Day Book in Tally. If the entry is there, mark it as found. If it is not, discard this attempt and create the entry again.",
+      "notNow": "Not now",
+      "foundInTally": "It's in Tally",
+      "discardAttempt": "Discard this attempt",
+      "attemptDiscarded": "Attempt discarded — it will not be sent to Tally",
+      "markedFoundInTally": "Marked as saved in Tally"
     },
     "purchaseCreateOrder": {
       "orderDetails": "Order Details",

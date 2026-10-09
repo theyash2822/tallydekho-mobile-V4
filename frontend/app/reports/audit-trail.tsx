@@ -22,8 +22,8 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
-import { retryWithOutcomeConfirm, isOutcomeUnknownError } from '../../src/utils/writeRetry';
+import { getVouchers, getMyEntries, retryMyEntry, resolveUnknownEntry } from '../../src/services/api';
+import { retryOrReviewUnknown, isOutcomeUnknownError, type UnknownResolution } from '../../src/utils/writeRetry';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
@@ -855,19 +855,33 @@ export default function AuditTrailScreen() {
     markRetrying(rawId, true);
     Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.retrying'), text2: `${entry.ref || entry.tdkRef || ''} — ${entry.party}`, visibilityTime: 1400 });
     try {
-      const confirmUnknown = () => new Promise<boolean>((resolve) => {
+      const reviewUnknown = () => new Promise<UnknownResolution | null>((resolve) => {
         Alert.alert(
           t('screens.reportsAuditTrail.outcomeUnknownTitle'),
           t('screens.reportsAuditTrail.outcomeUnknownBody'),
           [
-            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-            { text: t('screens.reportsAuditTrail.retryAnyway'), style: 'destructive', onPress: () => resolve(true) },
+            { text: t('screens.reportsAuditTrail.notNow'), style: 'cancel', onPress: () => resolve(null) },
+            { text: t('screens.reportsAuditTrail.foundInTally'), onPress: () => resolve('found_in_tally') },
+            { text: t('screens.reportsAuditTrail.discardAttempt'), style: 'destructive', onPress: () => resolve('discard') },
           ],
-          { cancelable: true, onDismiss: () => resolve(false) },
+          { cancelable: true, onDismiss: () => resolve(null) },
         );
       });
-      const attempt = await retryWithOutcomeConfirm<any>((opts) => retryMyEntry(rawId, opts), confirmUnknown);
+      const attempt = await retryOrReviewUnknown<any>(
+        () => retryMyEntry(rawId),
+        reviewUnknown,
+        (resolution) => resolveUnknownEntry(rawId, resolution),
+      );
       if (attempt.status === 'cancelled') return;
+      if (attempt.status !== 'retried') {
+        Toast.show({
+          type: 'success',
+          text1: attempt.status === 'discarded' ? t('screens.reportsAuditTrail.attemptDiscarded') : t('screens.reportsAuditTrail.markedFoundInTally'),
+          visibilityTime: 2500,
+        });
+        loadEntries('soft');
+        return;
+      }
       const result: any = attempt.result;
       if (result?.alreadySuccess) {
         Toast.show({ type: 'success', text1: t('screens.reportsAuditTrail.alreadyInTally'), text2: result?.message || t('screens.reportsAuditTrail.noNeedRetry'), visibilityTime: 2500 });
