@@ -7,6 +7,7 @@
 import { io, Socket } from 'socket.io-client';
 import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefreshed, tryRefreshSession } from './api';
 import { isEventForWorkspace, workspaceIdFromPayload, POSTING_EVENTS } from './workspaceEventScope';
+import { isRemovalSync, notifyScopeRemoved } from './scopeRefresh';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -138,13 +139,14 @@ export const socketService = {
     });
 
     // 🔄 Key event: backend fires this after every sync
-    socket.on('synced', (payload: { companyGuid: string; syncedAt: string; workspaceId?: string }) => {
+    socket.on('synced', (payload: { companyGuid: string; syncedAt: string; workspaceId?: string; reason?: string; removedGuids?: string[] }) => {
       // Gated here as well as in emitWorkspaceEvent: onSyncedCallback bumps
       // lastSyncAt, which makes every open screen refetch.
       if (!isEventForActiveWorkspace('synced', payload)) return;
       if (__DEV__) console.log('[Socket] synced event for company:', payload?.companyGuid);
       onSyncedCallback?.(payload?.companyGuid);
       emitWorkspaceEvent('synced', payload);
+      if (isRemovalSync(payload)) notifyScopeRemoved(payload);
     });
 
     socket.on('tally_connection', (payload?: any) => {

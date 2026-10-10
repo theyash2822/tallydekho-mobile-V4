@@ -1,3 +1,9 @@
+## 2026-10-10 — Desktop removal refresh (branch `10-10-2026`, TD-DESKTOP-CORE-2026-10-10-v1)
+
+- `socketService` forwards removal syncs (`reason: companies_removed`) to `src/services/scopeRefresh.ts`. The root layout dismisses bottom sheets and stacked screens, clears the workspace's `*_draft` keys (again after 1 s), opens Home, reloads companies and shows "Data has been refreshed" / "No data available" plus the queued-entry deadline.
+- An ordinary sync is unchanged.
+- **Tested:** `npm test` incl. new `verify:scope-refresh` (6 behavioural checks); `tsc --noEmit` 0 errors. Not run on a device.
+
 ## 2026-10-08 — P6 FY kept across heartbeats, posting events, unknown-outcome retry (branch `8-10-2026`, TD-FIX-2026-10-08)
 
 - **W2:** the Header re-checked the chosen FY after every `lastSyncAt` bump (each desktop heartbeat) by comparing only its start date; `fyEquals` also compares the end date, so the check always failed and the FY reset to the first year. It now uses `fyInList` with the full chosen FY.

@@ -11,8 +11,9 @@
     "verify:config": "node --experimental-strip-types --no-warnings scripts/verify-backend-config.mjs",
     "verify:isolation": "node --experimental-strip-types --no-warnings scripts/verify-workspace-isolation.mjs",
     "verify:remediation": "node --experimental-strip-types --no-warnings scripts/verify-mobile-remediation.mjs",
+    "verify:scope-refresh": "node --experimental-strip-types --no-warnings scripts/verify-scope-refresh.mjs",
     "verify:einvoice": "node --experimental-strip-types --no-warnings scripts/verify-einvoice-qr.mjs",
-    "test": "npm run verify:config && npm run verify:isolation && npm run verify:remediation && npm run verify:einvoice"
+    "test": "npm run verify:config && npm run verify:isolation && npm run verify:remediation && npm run verify:scope-refresh && npm run verify:einvoice"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",
