@@ -386,6 +386,19 @@ await check('X9: an unknown Tally outcome is never re-sent; the user reviews it 
   assert.match(api, /\/vouchers\/my-entries\/\$\{id\}\/resolve-unknown/);
 });
 
+const { nextDataRevision } = await import(path.join(root, 'src/utils/dataRevision.ts'));
+
+await check('W2: a desktop heartbeat never moves the data revision; a verified sync does', () => {
+  const t0 = 1_700_000_000_000;
+  assert.equal(nextDataRevision(t0, { device: { last_seen: 1_800_000_000 } }), t0, 'heartbeat alone');
+  assert.equal(nextDataRevision(t0, { device: { last_seen: 1_800_000_000, last_sync_at: 1_700_000_100 } }), 1_700_000_100_000);
+  assert.equal(nextDataRevision(1_800_000_000_000, { device: { last_sync_at: 1_700_000_100 } }), 1_800_000_000_000, 'older sync does not move it back');
+  assert.equal(nextDataRevision(t0, { device: { last_sync_at: 'garbage' } }), t0);
+  const ctx = strip(read('src/context/AuthContext.tsx'));
+  assert.doesNotMatch(ctx, /last_seen[^\n]*\n[^\n]*setLastSyncAt|deviceLastSeen/, 'the heartbeat must not feed lastSyncAt');
+  assert.match(ctx, /setLastSyncAt\(\(prev\) => nextDataRevision\(prev, json\.data\)\)/);
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} FAILED`);
   process.exit(1);

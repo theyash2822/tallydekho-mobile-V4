@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { nextDataRevision } from '../utils/dataRevision';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
@@ -407,13 +408,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch { /* keep cached */ }
         }
 
-        // Track last_seen changes — when desktop syncs, last_seen advances.
-        // pg bigint / JSON may arrive as string — coerce with Number().
-        const deviceLastSeen = Number(json.data?.device?.last_seen);
-        if (Number.isFinite(deviceLastSeen) && deviceLastSeen > 0) {
-          const ms = deviceLastSeen * 1000;
-          setLastSyncAt(prev => (ms > prev ? ms : prev));
-        }
+        // A verified sync moves the data revision; the heartbeat (last_seen) does not.
+        setLastSyncAt((prev) => nextDataRevision(prev, json.data));
       } catch {
         // Network error — don't change state, keep showing cached
       }
