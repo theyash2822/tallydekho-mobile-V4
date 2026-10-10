@@ -1,5 +1,11 @@
 ## 2026-10-08 — P6 FY kept across heartbeats, posting events, unknown-outcome retry (branch `8-10-2026`, TD-FIX-2026-10-08)
 
+## 2026-10-09 — TDV01 remediation RM01 (branch `tdv01-remediation`)
+
+- Audit Trail: an unknown Tally outcome is reviewed (It's in Tally / Discard this attempt / Not now) instead of re-sent; discarded attempts cannot be retried.
+- Settings → Tally Sync shows "Last seen" (heartbeat) and "Last synced" (verified sync) separately; the heartbeat no longer refetches every screen (`src/utils/dataRevision.ts`).
+- Tests: `npm test` and `tsc --noEmit` clean.
+
 - **W2:** the Header re-checked the chosen FY after every `lastSyncAt` bump (each desktop heartbeat) by comparing only its start date; `fyEquals` also compares the end date, so the check always failed and the FY reset to the first year. It now uses `fyInList` with the full chosen FY.
 - **W1:** posting events go through `socketService.subscribePostingEvents`, which survives reconnects and a socket created after the screen mounted. `voucher:regularized` is handled and workspace-scoped. Previews (shared voucher preview, sales invoice, sales order) refresh only for the workspace, company and reference on screen (`isPostingEventForDocument`).
 - **X9 (UI):** Audit Trail retry of an unknown-outcome entry shows a confirmation and only then sends `confirmOutcomeUnknown`; bulk retry never re-sends those (counted as skipped). New English strings; other languages fall back to English.
