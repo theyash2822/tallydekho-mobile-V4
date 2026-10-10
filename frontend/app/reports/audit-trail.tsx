@@ -66,6 +66,9 @@ const LIFECYCLE_FILTERS: { key: LifecycleFilter; labelKey: string }[] = [
 
 interface VoucherEntry {
   id: string;
+  /** The Tally outcome of the last write is unknown; set once it was found or discarded. */
+  outcomeUnknown?: boolean;
+  unknownResolution?: string | null;
   guid?: string;
   ref: string;
   date: string;
@@ -569,6 +572,8 @@ export default function AuditTrailScreen() {
     isMine: true,
     isMaster: !!(p._is_master || isMasterEntryType(p.voucher_type)),
     queueId: p._queue_id ?? null,
+    outcomeUnknown: !!p._outcome_unknown,
+    unknownResolution: p._unknown_resolution ?? null,
     tdkRef: p.tdk_reference_no || '',
     tallyVoucherNo: p.av_tally_voucher_no || p.voucher_number || '',
     originalEntryType: p.original_entry_type,
@@ -827,8 +832,9 @@ export default function AuditTrailScreen() {
 
   // Queued/failed can be retried once. Synced and in-flight must not re-push —
   // re-forwarding the same XML creates duplicate vouchers in Tally.
+  // A discarded unknown-outcome attempt is closed for good (no retry or review).
   const canRetryEntry = (entry: VoucherEntry) =>
-    entry.syncStatus === 'pending' || entry.syncStatus === 'failed';
+    (entry.syncStatus === 'pending' || entry.syncStatus === 'failed') && !entry.unknownResolution;
 
   const markRetrying = (id: string, on: boolean) => {
     if (on) retryingRef.current.add(id);
