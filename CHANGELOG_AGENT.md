@@ -1,3 +1,8 @@
+## 2026-10-12 (evening) — Cancelled vouchers in registers (branch `10-10-2026`)
+
+- Sales and Purchase registers request `includeCancelled: '1'`, so the "Cancelled" chip and filter now have rows. Total, Average and Docs cards skip cancelled vouchers. Home screens, pickers, audit trail unchanged.
+- **Tested:** `npm test` (`verify:data-revision` 7 checks); `tsc --noEmit` 0 errors.
+
 ## 2026-10-12 — Revision-aware refresh, Cancelled label, approval scope (branch `10-10-2026`)
 
 - `src/services/dataRevision.ts`: GETs read `X-Data-Revision`; an older response is fetched again once; a newer revision triggers the same refresh as `synced`.

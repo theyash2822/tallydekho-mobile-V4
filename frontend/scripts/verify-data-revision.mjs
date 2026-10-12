@@ -81,6 +81,18 @@ await check('cancelled vouchers are labelled Cancelled, not Unpaid', () => {
   assert.match(read('src/components/document/VoucherPreviewScreen.tsx'), /raw\?\.is_cancelled === true/);
 });
 
+await check('registers request cancelled vouchers but leave them out of totals and counts', () => {
+  for (const p of ['app/sales/register.tsx', 'app/purchase/register.tsx']) {
+    const src = read(p);
+    assert.equal((src.match(/includeCancelled: '1'/g) || []).length, 2, p);
+    assert.match(src, /const counted = allFiltered\.filter\(\(inv\) => inv\.status !== 'cancelled'\)/, p);
+    assert.match(src, /value: String\(counted\.length\)/, p);
+  }
+  for (const p of ['app/sales/index.tsx', 'app/purchase/index.tsx']) {
+    assert.doesNotMatch(read(p), /includeCancelled/, p);
+  }
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} failing`);
   process.exit(1);
