@@ -156,6 +156,12 @@ export default function VoucherPreviewScreen({
       <View style={{ flex: 1 }}>
         <DocumentPreviewPage document={doc} isProvisional={isProvisional} />
       </View>
+      {raw?.is_cancelled === true || raw?.isCancelled === true ? (
+        <View style={s.cancelledBar}>
+          <Ionicons name="close-circle-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={s.cancelledTxt}>{t('screens.componentsDocumentVoucherPreviewScreen.cancelled', 'Cancelled in Tally')}</Text>
+        </View>
+      ) : null}
       {renderFooter?.(raw, doc)}
     </View>
   );
@@ -176,4 +182,10 @@ const s = StyleSheet.create({
   errorTxt: { fontSize: 14, color: COLORS.negative, textAlign: 'center' },
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md },
   retryTxt: { fontSize: 14, color: COLORS.white, fontWeight: '600' },
+  cancelledBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, backgroundColor: '#F3F4F6',
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  cancelledTxt: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
 });

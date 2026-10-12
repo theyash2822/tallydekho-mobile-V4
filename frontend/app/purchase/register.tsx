@@ -48,6 +48,7 @@ const STATUS_FILTER_LABEL_KEYS: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   paid:       'Paid',
   unpaid:     'Unpaid',
+  cancelled:  'Cancelled',
   irm:        'IRM',
   debit_note: 'Debit Note',
 };
@@ -109,7 +110,7 @@ export default function PurchaseRegisterScreen() {
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
-    status: r.is_cancelled ? 'unpaid' : 'paid',
+    status: r.is_cancelled ? 'cancelled' : 'paid',
     docType: r.doc_type || 'invoice',
     voucherType: r.voucher_type,
     isOptional: !!r.is_optional,
@@ -319,7 +320,7 @@ export default function PurchaseRegisterScreen() {
           label={t(STATUS_FILTER_LABEL_KEYS[statusFilter] ?? statusFilter)}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
-          options={['All', 'Paid', 'Unpaid', 'IRM']}
+          options={['All', 'Paid', 'Cancelled', 'IRM']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
           placeholder={t('screens.purchaseRegister.status')}

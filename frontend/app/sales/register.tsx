@@ -41,6 +41,7 @@ const { width: SW } = Dimensions.get('window');
 const STATUS_LABEL: Record<string, string> = {
   paid:        'Paid',
   unpaid:      'Unpaid',
+  cancelled:   'Cancelled',
   irm:         'IRM',
   credit_note: 'Credit Note',
 };
@@ -109,7 +110,7 @@ export default function SalesRegisterScreen() {
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
-    status: r.is_cancelled ? 'unpaid' : 'paid',
+    status: r.is_cancelled ? 'cancelled' : 'paid',
     docType: r.doc_type || 'invoice',
     voucherType: r.voucher_type,
     isOptional: !!r.is_optional,
@@ -327,7 +328,7 @@ export default function SalesRegisterScreen() {
           label={STATUS_FILTER_LABEL_KEYS[statusFilter] ? t(STATUS_FILTER_LABEL_KEYS[statusFilter]) : statusFilter}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
-          options={['All', 'Paid', 'Unpaid']}
+          options={['All', 'Paid', 'Cancelled']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
           placeholder={t('screens.salesRegister.status')}

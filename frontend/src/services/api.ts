@@ -20,6 +20,7 @@ import { toastRbasError } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
 import { beginSingleFlight } from '../utils/singleFlight';
 import { reportError } from './monitoring';
+import { DATA_REVISION_HEADER, companyGuidOf, noteRevision } from './dataRevision';
 
 export {
   ApiError,
@@ -243,6 +244,8 @@ async function request<T>(
   allowRefresh = true,
   responseType: 'json' | 'text' = 'json',
   timeoutMs: number = REQUEST_TIMEOUT_MS,
+  /** Internal: false on the replay of a response older than one already shown. */
+  allowRevisionRetry = true,
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
@@ -332,6 +335,15 @@ async function request<T>(
         reportError(err, { method, endpoint: endpoint.split('?')[0], status: res.status, code });
       }
       throw err;
+    }
+
+    const revisionCompany = method === 'GET' ? companyGuidOf(endpoint) : null;
+    if (revisionCompany) {
+      const outcome = noteRevision(_activeWorkspaceId, revisionCompany, res.headers?.get?.(DATA_REVISION_HEADER));
+      if (outcome === 'older' && allowRevisionRetry) {
+        clearTimeout(timer);
+        return await request<T>(method, endpoint, body, requiresAuth, basePrefix, allowRefresh, responseType, timeoutMs, false);
+      }
     }
 
     return data as T;

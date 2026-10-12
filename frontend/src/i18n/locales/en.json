@@ -1563,6 +1563,7 @@
       "missingReference": "Missing document reference",
       "couldNotLoad": "Could not load {{title}}.",
       "failedToLoad": "Failed to load {{title}}.",
+      "cancelled": "Cancelled in Tally",
       "loadingTitle": "Loading {{title}}…",
       "documentNotFound": "Document not found."
     },
@@ -1626,6 +1627,8 @@
     },
     "settingsApprovals": {
       "title": "Approvals",
+      "years": "Years",
+      "replacesIdentity": "Replaces company identity",
       "ownerOnly": "Only Owner or Admin can approve Hard Sync and Restore.",
       "workspace": "Workspace",
       "hardSyncRequests": "Hard Sync requests",

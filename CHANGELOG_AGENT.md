@@ -1,3 +1,10 @@
+## 2026-10-12 — Revision-aware refresh, Cancelled label, approval scope (branch `10-10-2026`)
+
+- `src/services/dataRevision.ts`: GETs read `X-Data-Revision`; an older response is fetched again once; a newer revision triggers the same refresh as `synced`.
+- Cancelled vouchers show a grey "Cancelled" chip (was "Unpaid") in Sales/Purchase home and registers; the register filter option is "Cancelled". Voucher preview shows "Cancelled in Tally".
+- Approvals screen shows companies, years and any old → new company identity.
+- **Tested:** `npm test` incl. new `verify:data-revision` (6 checks); `tsc --noEmit` 0 errors. Expo device testing pending; no APK built.
+
 ## 2026-10-10 — Desktop removal refresh (branch `10-10-2026`, TD-DESKTOP-CORE-2026-10-10-v1)
 
 - `socketService` forwards removal syncs (`reason: companies_removed`) to `src/services/scopeRefresh.ts`. The root layout dismisses bottom sheets and stacked screens, clears the workspace's `*_draft` keys (again after 1 s), opens Home, reloads companies and shows "Data has been refreshed" / "No data available" plus the queued-entry deadline.
