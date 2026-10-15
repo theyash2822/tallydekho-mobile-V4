@@ -512,7 +512,7 @@ export default function CreateDebitNoteScreen() {
   const fyEnd = selectedFY?.endDate || `${new Date().getFullYear() + 1}-03-31`;
 
   const [step, setStep] = useState<1 | 2>(1);
-  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate('debit-note');
   const [date, setDate] = useState(todayDMY());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [party, setParty] = useState('');

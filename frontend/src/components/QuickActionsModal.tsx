@@ -9,7 +9,13 @@ import { safePush } from '../utils/safeNavigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import Toast from 'react-native-toast-message';
+import {
+  BACKDATED_ENTRY_MESSAGE,
+  canOpenQuickActionCreate,
+} from '../utils/voucherCreateGuard';
 
 const SECTION_COLORS: Record<string, { color: string; bg: string }> = {
   sales:     { color: COLORS.positive,     bg: COLORS.positiveBg },
@@ -114,6 +120,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const { selectedFY } = useAuth();
   const { hasCapability, entryMode } = useWorkspace();
 
   const sections = useMemo(() => {
@@ -150,6 +157,11 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
   };
 
   const handleItemPress = (item: { id: string; label: string; route: string }) => {
+    if (!canOpenQuickActionCreate(selectedFY, item.id)) {
+      Toast.show({ type: 'error', text1: BACKDATED_ENTRY_MESSAGE });
+      onClose();
+      return;
+    }
     onItemPress?.({ id: item.id, label: item.label, route: item.route });
     onClose();
     safePush(router, item.route as any);

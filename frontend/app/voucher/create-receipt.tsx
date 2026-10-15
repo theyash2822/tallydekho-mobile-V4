@@ -102,7 +102,7 @@ export default function CreateReceiptVoucher() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Header state ──────────────────────────────────────────────────────────
-  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate('receipt');
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 

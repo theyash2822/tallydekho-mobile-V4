@@ -461,7 +461,7 @@ export default function CreateSalesOrderScreen() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate('sales-order');
   const [orderNo] = useState('');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);

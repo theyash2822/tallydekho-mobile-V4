@@ -785,10 +785,10 @@ export default function CreateSalesInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const { assertCanCreate } = useRbasCreate();
-  const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const pathname = usePathname();
   const isProforma = (pathname || '').includes('create-proforma');
+  const { assertCanCreate } = useRbasCreate(isProforma ? undefined : 'sales-invoice');
+  const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const draftKey = () => currentTenantKey(company?.guid, draftFeature(isProforma ? 'proforma' : 'invoice'));
   const legacyDraftKey = () => `${isProforma ? 'tdproforma_draft' : 'tdinvoice_draft'}_${company?.guid || ''}`;
 

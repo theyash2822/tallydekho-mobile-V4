@@ -55,7 +55,7 @@ export default function CreateJournalVoucher() {
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
-  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate('journal');
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
   const [date, setDate] = useState(todayStr());

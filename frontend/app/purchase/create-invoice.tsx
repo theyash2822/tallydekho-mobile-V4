@@ -730,7 +730,7 @@ export default function CreatePurchaseInvoiceScreen() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate('purchase-invoice');
   const [purchaseLedger, setPurchaseLedger] = useState('');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
