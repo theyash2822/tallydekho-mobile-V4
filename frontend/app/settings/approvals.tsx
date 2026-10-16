@@ -26,7 +26,19 @@ export default function ApprovalsScreen() {
   const [backups, setBackups] = useState<any[]>([]);
   const [restoreCode, setRestoreCode] = useState('');
   const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
+  const [pickedFolders, setPickedFolders] = useState<string[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const foldersFor = (backup: any): string[] => {
+    let manifest = backup?.company_manifest_json;
+    if (typeof manifest === 'string') {
+      try { manifest = JSON.parse(manifest); } catch { manifest = []; }
+    }
+    if (!Array.isArray(manifest)) return [];
+    return manifest
+      .map((c) => String(c?.folder || c?.folder_name || '').trim())
+      .filter(Boolean);
+  };
 
   const load = useCallback(async () => {
     if (!workspaceId || !isOwnerOrAdmin) {
@@ -170,7 +182,10 @@ export default function ApprovalsScreen() {
             <TouchableOpacity
               key={b.id}
               style={[s.backupRow, selectedBackupId === b.id && s.backupSelected]}
-              onPress={() => setSelectedBackupId(b.id)}
+              onPress={() => {
+                setSelectedBackupId(b.id);
+                setPickedFolders(foldersFor(b));
+              }}
             >
               <Text style={s.cardMeta}>
                 {b.completed_at || b.created_at
@@ -179,6 +194,26 @@ export default function ApprovalsScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          {foldersFor(backups.find((b) => b.id === selectedBackupId) || {}).length > 0 && (
+            <View>
+              <Text style={s.label}>Companies (all years in each folder)</Text>
+              {foldersFor(backups.find((b) => b.id === selectedBackupId) || {}).map((folder) => {
+                const on = (pickedFolders || []).includes(folder);
+                return (
+                  <TouchableOpacity
+                    key={folder}
+                    onPress={() => {
+                      const all = foldersFor(backups.find((b) => b.id === selectedBackupId) || {});
+                      const cur = pickedFolders || all;
+                      setPickedFolders(on ? cur.filter((f) => f !== folder) : [...cur, folder]);
+                    }}
+                  >
+                    <Text style={s.cardMeta}>{on ? '☑' : '☐'} {folder}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
           <View style={s.row}>
             <TouchableOpacity
               style={[s.btn, s.reject, { flex: 1 }]}
@@ -205,9 +240,12 @@ export default function ApprovalsScreen() {
               onPress={async () => {
                 setBusy('restore');
                 try {
+                  const allFolders = foldersFor(backups.find((b) => b.id === selectedBackupId) || {});
+                  const chosen = pickedFolders || allFolders;
                   await approveWorkspaceRestoreByCode({
                     code: restoreCode.trim().toUpperCase(),
                     backupId: selectedBackupId!,
+                    companyFolders: chosen.length && chosen.length < allFolders.length ? chosen : null,
                   });
                   Alert.alert(t('screens.settingsApprovals.approved'), t('screens.settingsApprovals.restoreApproved'));
                   setRestoreCode('');

@@ -1084,7 +1084,7 @@ export const rejectHardSyncRequest = (requestId: string) =>
   post<any>(`/hard-sync-requests/${encodeURIComponent(requestId)}/reject`);
 export const approveRestoreSession = (sessionId: string, body: { code: string; backupId: string }) =>
   post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/approve`, body);
-export const approveWorkspaceRestoreByCode = (body: { code: string; backupId: string }) =>
+export const approveWorkspaceRestoreByCode = (body: { code: string; backupId: string; companyFolders?: string[] | null }) =>
   post<any>('/workspace/restore/approve', body);
 export const rejectRestoreSession = (sessionId: string) =>
   post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/reject`);
