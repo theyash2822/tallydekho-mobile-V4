@@ -179,7 +179,7 @@ export default function CreateStockTransferScreen() {
   const { company } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
-  const { scopeGodowns, assertCanCreate } = useRbasCreate();
+  const { scopeGodowns, assertCanCreate } = useRbasCreate('stock-transfer');
   const companyGuid = company?.guid;
 
   const [stocks, setStocks] = useState<StockItem[]>([]);

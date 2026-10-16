@@ -210,7 +210,7 @@ export default function CreateStockAdjustmentScreen() {
   const { company } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
-  const { assertCanCreate } = useRbasCreate();
+  const { assertCanCreate } = useRbasCreate('stock-adjustment');
   const companyGuid = company?.guid;
 
   const [stocks, setStocks] = useState<StockItem[]>([]);
