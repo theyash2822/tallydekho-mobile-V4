@@ -456,7 +456,7 @@ export default function CreateDeliveryNoteScreen() {
 
   // ── Core state ───────────────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate('delivery-note');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [ledger, setLedger] = useState('');

@@ -15,6 +15,9 @@ export const VOUCHER_ENTRY_CREATE_KINDS = new Set([
   'journal',
   'credit-note',
   'debit-note',
+  'delivery-note',
+  'contra',
+  'expense',
 ]);
 
 /** QuickActionsModal item id → web create kind. */
@@ -28,6 +31,8 @@ const QUICK_ACTION_KIND: Record<string, string> = {
   'vou-receipt': 'receipt',
   'vou-payment': 'payment',
   'vou-journal': 'journal',
+  'vou-contra': 'contra',
+  'vou-expense': 'expense',
 };
 
 export function canOpenVoucherCreate(selectedFY: FYInfo | null | undefined, kind: string) {

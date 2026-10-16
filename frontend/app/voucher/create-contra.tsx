@@ -68,7 +68,7 @@ export default function CreateContraVoucher() {
   const { company } = useAuth();
   const { settings, formatAmount, currencySymbol } = useSettings();
 
-  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate('contra');
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
   const narrationY = useRef(0);
 

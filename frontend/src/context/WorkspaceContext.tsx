@@ -624,6 +624,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       if (event === 'tally_connection' || event === 'synced' || event === 'unpaired' || event === 'paired') {
         refreshContext();
+        if (event === 'synced') {
+          Toast.show({
+            type: 'success',
+            text1: 'Tally data synced',
+            text2: 'Lists will refresh with the latest books.',
+          });
+        }
         return;
       }
       if (event === 'restore_status' || event === 'restore_request') {

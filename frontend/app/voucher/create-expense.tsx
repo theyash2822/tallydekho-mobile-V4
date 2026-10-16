@@ -60,7 +60,7 @@ export default function CreateExpenseVoucher() {
   const { currencySymbol } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
-  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate('expense');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [prevEntryType, setPrevEntryType] = useState(entryType);
