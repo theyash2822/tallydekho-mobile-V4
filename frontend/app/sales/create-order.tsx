@@ -25,6 +25,7 @@ import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { parseDMY } from '../../src/components/forms/DatePickerModal';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { useTranslation } from 'react-i18next';
@@ -464,6 +465,8 @@ export default function CreateSalesOrderScreen() {
   const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate('sales-order');
   const [orderNo] = useState('');
   const [date, setDate] = useState(todayStr());
+  // A regular entry is dated today; only an optional one may be back-dated (current FY).
+  useEffect(() => { if (entryType === 'regular') setDate(todayStr()); }, [entryType]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dueDate, setDueDate] = useState('');
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
@@ -909,9 +912,16 @@ export default function CreateSalesOrderScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.star}>*</Text></Text>
-                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || t('screens.salesCreateOrder.selectDate')}</Text>
-                    </TouchableOpacity>
+                    {entryType === 'regular' ? (
+                      <View style={[s.autoBox, { opacity: 0.55 }]}>
+                        <Text style={s.autoTxt}>{date}</Text>
+                        <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
+                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || t('screens.salesCreateOrder.selectDate')}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
                 <View style={s.row2}>
@@ -1139,7 +1149,7 @@ export default function CreateSalesOrderScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title={t('screens.salesCreateOrder.orderDate')} />
+      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={todayLocalISO()} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title={t('screens.salesCreateOrder.orderDate')} />
       <DatePickerModal visible={showDueDatePicker} value={dueDate || date} onSelect={(d) => { setDueDate(d); setShowDueDatePicker(false); }} onClose={() => setShowDueDatePicker(false)} title={t('pdf.dueDate')} />
 
       {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}

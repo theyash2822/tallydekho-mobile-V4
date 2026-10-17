@@ -8,7 +8,7 @@ import { io, Socket } from 'socket.io-client';
 import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefreshed, tryRefreshSession } from './api';
 import { isEventForWorkspace, workspaceIdFromPayload, POSTING_EVENTS } from './workspaceEventScope';
 import { isRemovalSync, notifyScopeRemoved } from './scopeRefresh';
-import { noteRevision, onNewerRevision } from './dataRevision';
+import { noteRevision, onNewerRevision, isFreshSync } from './dataRevision';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -22,6 +22,7 @@ let currentBaseUrl: string = '';
 let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
 let _lastConnectErrorAt = 0;
+let _lastTallyStatus = '';
 // Survive reconnects: screens subscribe once, whether or not the socket exists yet.
 const postingListeners = new Set<(event: string, payload: any) => void>();
 
@@ -151,17 +152,23 @@ export const socketService = {
       // Gated here as well as in emitWorkspaceEvent: onSyncedCallback bumps
       // lastSyncAt, which makes every open screen refetch.
       if (!isEventForActiveWorkspace('synced', payload)) return;
-      noteRevision(getActiveWorkspaceId(), payload?.companyGuid, payload?.revision, { silent: true });
-      if (__DEV__) console.log('[Socket] synced event for company:', payload?.companyGuid);
-      onSyncedCallback?.(payload?.companyGuid);
-      emitWorkspaceEvent('synced', payload);
+      const outcome = noteRevision(getActiveWorkspaceId(), payload?.companyGuid, payload?.revision, { silent: true });
+      const fresh = isFreshSync(payload, outcome);
+      if (__DEV__) console.log('[Socket] synced event for company:', payload?.companyGuid, fresh ? 'new data' : 'no change');
+      if (fresh) onSyncedCallback?.(payload?.companyGuid);
+      emitWorkspaceEvent('synced', { ...payload, fresh });
       if (isRemovalSync(payload)) notifyScopeRemoved(payload);
     });
 
     socket.on('tally_connection', (payload?: any) => {
       if (!isEventForActiveWorkspace('tally_connection', payload)) return;
       emitWorkspaceEvent('tally_connection', payload);
-      if (String(payload?.status || '').toUpperCase() === 'CONNECTED') {
+      // Every sync also reports CONNECTED; data refreshes come from `synced`, so only a real
+      // transition (desktop came back) refreshes here.
+      const status = String(payload?.status || '').toUpperCase();
+      const previous = _lastTallyStatus;
+      _lastTallyStatus = status;
+      if (status === 'CONNECTED' && previous !== 'CONNECTED') {
         onSyncedCallback?.(payload?.companyGuid || '');
       }
     });
@@ -211,9 +218,11 @@ export const socketService = {
     currentBaseUrl = '';
     currentToken = '';
     _pendingWorkspaceId = null;
+    _lastTallyStatus = '';
   },
 
   setWorkspaceContext(workspaceId: string | null) {
+    if (workspaceId !== _pendingWorkspaceId) _lastTallyStatus = '';
     _pendingWorkspaceId = workspaceId;
     if (socket?.connected && workspaceId) {
       socket.emit('workspace:register', { workspaceId });

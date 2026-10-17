@@ -17,6 +17,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
 import {
@@ -551,6 +552,7 @@ export default function CreateJournalVoucher() {
         value={date}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         minDate={fyStart}
+        maxDate={todayLocalISO()}
       />
 
       {/* Rate picker modal */}

@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  noteRevision, onNewerRevision, companyGuidOf, parseRevision, resetDataRevisions,
+  noteRevision, onNewerRevision, companyGuidOf, parseRevision, resetDataRevisions, isFreshSync,
 } from '../src/services/dataRevision.ts';
 
 const failures = [];
@@ -91,6 +91,26 @@ await check('registers request cancelled vouchers but leave them out of totals a
   for (const p of ['app/sales/index.tsx', 'app/purchase/index.tsx']) {
     assert.doesNotMatch(read(p), /includeCancelled/, p);
   }
+});
+
+await check('a synced event refreshes once per new revision and never for a no-change sync', () => {
+  resetDataRevisions();
+  noteRevision('w', 'g', 4);
+  assert.equal(isFreshSync({ revision: 5 }, noteRevision('w', 'g', 5, { silent: true })), true);
+  assert.equal(isFreshSync({ revision: 5 }, noteRevision('w', 'g', 5, { silent: true })), false);
+  assert.equal(isFreshSync({ revision: 5, changed: false }, 'same'), false);
+  assert.equal(isFreshSync({}, 'same'), true, 'older servers without a revision still refresh');
+  assert.equal(isFreshSync({ reason: 'companies_removed', changed: false }, 'same'), true);
+});
+
+await check('heartbeats (device last_seen) no longer refresh screens; the revision probe does', () => {
+  const auth = read('src/context/AuthContext.tsx');
+  assert.doesNotMatch(auth, /deviceLastSeen/);
+  assert.match(auth, /getCompanyYears\(guid\)/);
+  assert.match(auth, /AppState\.addEventListener\('change'/);
+  const socket = read('src/services/socketService.ts');
+  assert.match(socket, /if \(fresh\) onSyncedCallback\?\.\(payload\?\.companyGuid\)/);
+  assert.match(socket, /status === 'CONNECTED' && previous !== 'CONNECTED'/);
 });
 
 if (failures.length) {

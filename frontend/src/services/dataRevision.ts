@@ -51,6 +51,18 @@ export function onNewerRevision(fn: (e: NewerRevision) => void): () => void {
   return () => { listeners.delete(fn); };
 }
 
+/**
+ * A `synced` carries data the screens have not shown yet. No-change syncs (`changed: false`) and
+ * repeats of a revision already seen do not refresh; older servers without a revision always do.
+ * A company removal always refreshes.
+ */
+export function isFreshSync(payload: any, outcome: RevisionOutcome): boolean {
+  if (payload?.reason === 'companies_removed') return true;
+  if (payload?.changed === false) return false;
+  if (parseRevision(payload?.revision) == null) return true;
+  return outcome === 'newer' || outcome === 'first';
+}
+
 export function companyGuidOf(endpoint: string): string | null {
   const q = String(endpoint || '').split('?')[1];
   if (!q) return null;

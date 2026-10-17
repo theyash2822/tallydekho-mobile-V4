@@ -76,6 +76,9 @@ interface VoucherEntry {
   amount: string;
   isCredit: boolean;
   syncStatus?: SyncStatus;
+  /** Server-derived write lifecycle (queued, waiting_for_tally, held, sending, outcome_unknown, posted, failed). */
+  queueState?: string;
+  queueStateLabel?: string;
   action?: 'Created' | 'Edited' | 'Deleted';
   isMine: boolean;
   /** Master writes (ledger/bank/warehouse/item) — no Regular/Optional badges */
@@ -565,6 +568,8 @@ export default function AuditTrailScreen() {
     syncStatus: p._queue_status === 'success' ? 'synced'
       : p._queue_status === 'failed' ? 'failed'
       : p._queue_status === 'processing' ? 'processing' : 'pending',
+    queueState: p.queue_state || undefined,
+    queueStateLabel: p.queue_state_label || undefined,
     action: 'Created',
     isMine: true,
     isMaster: !!(p._is_master || isMasterEntryType(p.voucher_type)),
@@ -1310,6 +1315,11 @@ export default function AuditTrailScreen() {
                                   <Text style={s.drCrSuffix}> {drCr}</Text>
                                 </Text>
                               </View>
+                              {activeTab === 'myentries' && entry.queueStateLabel && entry.queueState !== 'posted' ? (
+                                <Text style={[s.queueStateTxt, sInfo ? { color: sInfo.color } : null]} numberOfLines={2}>
+                                  {entry.queueStateLabel}
+                                </Text>
+                              ) : null}
                             </View>
                           </View>
                         </TouchableOpacity>
@@ -1551,6 +1561,9 @@ const s = StyleSheet.create({
   },
   drCrSuffix: {
     fontSize: 10, fontWeight: '700', color: COLORS.textSecondary,
+  },
+  queueStateTxt: {
+    fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, marginTop: 4,
   },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },

@@ -623,6 +623,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return;
       }
       if (event === 'tally_connection' || event === 'synced' || event === 'unpaired' || event === 'paired') {
+        // A sync that changed nothing leaves the screen and its open forms alone.
+        if (event === 'synced' && payload?.fresh === false) return;
         refreshContext();
         if (event === 'synced') {
           Toast.show({

@@ -1,3 +1,11 @@
+## 2026-10-17 — Bring `10-10-2026` work to `cursor` + sync refresh, entry dates (branch `cursor`)
+
+- **Merged (owner-approved):** commits `2758cdad`, `d4783e8d`, `ea5404d1`, `3696c919` from `10-10-2026` (FY kept across refreshes, Cancelled chips, approvals scope, close forms on company removal, missed-sync recovery, outcome-unknown retry confirmation).
+- **Refresh:** `synced` refreshes only for a new revision (`isFreshSync`); `tally_connection` refreshes only on a real transition; device `last_seen` heartbeats no longer refetch every screen; selected-company revision probe every 30 s and on returning to the foreground; "Tally data synced" toast only for fresh data.
+- **Entry dates (owner rule):** date pickers capped at today (credit/debit/delivery notes, journal, contra, expense, orders); regular sales/purchase orders locked to today like the other forms.
+- **Audit trail:** server queue state shown under each My Entries row.
+- **Tested:** `tsc --noEmit` 0 errors; `npm test` all verify scripts pass (new data-revision checks). Expo device testing pending.
+
 ## 2026-10-12 (evening) — Cancelled vouchers in registers (branch `10-10-2026`)
 
 - Sales and Purchase registers request `includeCancelled: '1'`, so the "Cancelled" chip and filter now have rows. Total, Average and Docs cards skip cancelled vouchers. Home screens, pickers, audit trail unchanged.

@@ -15,6 +15,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import CashCountSheet, { CashCountResult } from '../../src/components/forms/CashCountSheet';
 import { useAuth } from '../../src/context/AuthContext';
@@ -65,7 +66,7 @@ export default function CreateContraVoucher() {
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const { settings, formatAmount, currencySymbol } = useSettings();
 
   const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate('contra');
@@ -486,6 +487,8 @@ export default function CreateContraVoucher() {
       <DatePickerModal
         visible={showDatePicker}
         value={date}
+        minDate={selectedFY?.startDate}
+        maxDate={todayLocalISO()}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { clearStockListCache } from '../utils/stockCache';
@@ -14,6 +14,7 @@ import {
   setAuthFailureHandler,
   getActiveWorkspaceId,
   getCompanies,
+  getCompanyYears,
   setRefreshToken,
   clearRefreshToken,
   tryRefreshSession,
@@ -125,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const selectedFYRef = useRef<FYInfo | null>(null);
   const userRef = useRef<UserInfo | null>(null);
   const lastWsStatusRef = useRef('');
+  const lastRevisionProbeRef = useRef(0);
   /** Workspace the status poll last reported on — resets derived state on switch. */
   const polledWsRef = useRef<string | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
@@ -311,6 +313,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => socketService.disconnect();
   }, [isAuthenticated, BASE_URL]);
 
+  // The response's X-Data-Revision goes through dataRevision: a newer one refreshes the screens
+  // exactly like a `synced` event, an equal one does nothing.
+  const probeRevision = useCallback((foreground = false) => {
+    const cur = companyRef.current;
+    const guid = companyGuid(cur);
+    if (!guid || companyIsDemo(cur) || !getActiveWorkspaceId()) return;
+    const now = Date.now();
+    if (now - lastRevisionProbeRef.current < (foreground ? 5_000 : 30_000)) return;
+    lastRevisionProbeRef.current = now;
+    getCompanyYears(guid).catch(() => {});
+  }, []);
+
   // ── Poll desktop presence + live company every 10s ────────────────────────
   // Pairing truth itself is per-workspace and belongs to WorkspaceContext; this
   // poll only keeps isDesktopOnline and the adopted company fresh, and every
@@ -407,13 +421,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch { /* keep cached */ }
         }
 
-        // Track last_seen changes — when desktop syncs, last_seen advances.
-        // pg bigint / JSON may arrive as string — coerce with Number().
-        const deviceLastSeen = Number(json.data?.device?.last_seen);
-        if (Number.isFinite(deviceLastSeen) && deviceLastSeen > 0) {
-          const ms = deviceLastSeen * 1000;
-          setLastSyncAt(prev => (ms > prev ? ms : prev));
-        }
+        // A missed `synced` (socket down): the selected company's published revision decides.
+        // Desktop heartbeats move last_seen without new data, so it never refreshes screens.
+        probeRevision();
       } catch {
         // Network error — don't change state, keep showing cached
       }
@@ -421,8 +431,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     poll(); // immediate check on mount / auth change
     const interval = setInterval(poll, 10_000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated, BASE_URL, signOut, setCompany]);
+    // Back from background: catch a sync that happened while the app was suspended.
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') probeRevision(true);
+    });
+    return () => {
+      clearInterval(interval);
+      appState.remove();
+    };
+  }, [isAuthenticated, BASE_URL, signOut, setCompany, probeRevision]);
 
   const value = useMemo<AuthContextType>(() => ({
     isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,

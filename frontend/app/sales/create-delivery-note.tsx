@@ -32,6 +32,7 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
@@ -1447,7 +1448,7 @@ export default function CreateDeliveryNoteScreen() {
         visible={showDatePicker}
         value={date}
         minDate={fyStart}
-        maxDate={fyEnd}
+        maxDate={todayLocalISO()}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
         title={t('screens.salesCreateDeliveryNote.dateTitle')}

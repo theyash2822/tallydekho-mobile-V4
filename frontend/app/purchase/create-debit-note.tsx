@@ -21,6 +21,7 @@ import Toast from 'react-native-toast-message';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -1245,7 +1246,7 @@ export default function CreateDebitNoteScreen() {
         visible={showDatePicker}
         value={date}
         minDate={fyStart}
-        maxDate={fyEnd}
+        maxDate={todayLocalISO()}
         onSelect={value => { setDate(value); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
         title={t('screens.purchaseCreateDebitNote.dateTitle')}
