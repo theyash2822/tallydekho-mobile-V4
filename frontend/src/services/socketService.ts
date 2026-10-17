@@ -6,7 +6,9 @@
  */
 import { io, Socket } from 'socket.io-client';
 import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefreshed, tryRefreshSession } from './api';
-import { isEventForWorkspace, workspaceIdFromPayload } from './workspaceEventScope';
+import { isEventForWorkspace, workspaceIdFromPayload, POSTING_EVENTS } from './workspaceEventScope';
+import { isRemovalSync, notifyScopeRemoved } from './scopeRefresh';
+import { noteRevision, onNewerRevision } from './dataRevision';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -20,6 +22,13 @@ let currentBaseUrl: string = '';
 let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
 let _lastConnectErrorAt = 0;
+// Survive reconnects: screens subscribe once, whether or not the socket exists yet.
+const postingListeners = new Set<(event: string, payload: any) => void>();
+
+export function subscribePostingEvents(cb: (event: string, payload: any) => void): () => void {
+  postingListeners.add(cb);
+  return () => { postingListeners.delete(cb); };
+}
 
 /**
  * True when this event may be applied to the workspace the user currently has
@@ -44,6 +53,13 @@ async function registerWithCurrentToken() {
 
 subscribeAccessTokenRefreshed(() => {
   if (socket?.connected) void registerWithCurrentToken();
+});
+
+// A response revealed newer published data than the screens were built from (e.g. a missed
+// `synced` while the socket was down): refresh the same way a `synced` event does.
+onNewerRevision(({ workspaceId, companyGuid }) => {
+  if (String(workspaceId || '') !== String(getActiveWorkspaceId() || '')) return;
+  onSyncedCallback?.(companyGuid);
 });
 
 function emitWorkspaceEvent(event: string, payload?: any) {
@@ -131,13 +147,15 @@ export const socketService = {
     });
 
     // 🔄 Key event: backend fires this after every sync
-    socket.on('synced', (payload: { companyGuid: string; syncedAt: string; workspaceId?: string }) => {
+    socket.on('synced', (payload: { companyGuid: string; syncedAt: string; workspaceId?: string; reason?: string; removedGuids?: string[]; revision?: number }) => {
       // Gated here as well as in emitWorkspaceEvent: onSyncedCallback bumps
       // lastSyncAt, which makes every open screen refetch.
       if (!isEventForActiveWorkspace('synced', payload)) return;
+      noteRevision(getActiveWorkspaceId(), payload?.companyGuid, payload?.revision, { silent: true });
       if (__DEV__) console.log('[Socket] synced event for company:', payload?.companyGuid);
       onSyncedCallback?.(payload?.companyGuid);
       emitWorkspaceEvent('synced', payload);
+      if (isRemovalSync(payload)) notifyScopeRemoved(payload);
     });
 
     socket.on('tally_connection', (payload?: any) => {
@@ -157,12 +175,17 @@ export const socketService = {
     });
 
     // 🧾 Voucher number reconciled: backend fires after ingestProcessor matches TDK ref
-    socket.on('voucher:tallySynced', (payload: any) => {
-      if (!isEventForActiveWorkspace('voucher:tallySynced', payload)) return;
-      const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
-      const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
-      onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });
-    });
+    for (const evt of POSTING_EVENTS) {
+      socket.on(evt, (payload: any) => {
+        if (!isEventForActiveWorkspace(evt, payload)) return;
+        if (evt === 'voucher:tallySynced') {
+          const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
+          const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
+          onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });
+        }
+        postingListeners.forEach((cb) => cb(evt, payload));
+      });
+    }
 
     socket.on('disconnect', (reason) => {
       if (__DEV__) console.log('[Socket] disconnected:', reason);

@@ -1,3 +1,29 @@
+## 2026-10-12 (evening) — Cancelled vouchers in registers (branch `10-10-2026`)
+
+- Sales and Purchase registers request `includeCancelled: '1'`, so the "Cancelled" chip and filter now have rows. Total, Average and Docs cards skip cancelled vouchers. Home screens, pickers, audit trail unchanged.
+- **Tested:** `npm test` (`verify:data-revision` 7 checks); `tsc --noEmit` 0 errors.
+
+## 2026-10-12 — Revision-aware refresh, Cancelled label, approval scope (branch `10-10-2026`)
+
+- `src/services/dataRevision.ts`: GETs read `X-Data-Revision`; an older response is fetched again once; a newer revision triggers the same refresh as `synced`.
+- Cancelled vouchers show a grey "Cancelled" chip (was "Unpaid") in Sales/Purchase home and registers; the register filter option is "Cancelled". Voucher preview shows "Cancelled in Tally".
+- Approvals screen shows companies, years and any old → new company identity.
+- **Tested:** `npm test` incl. new `verify:data-revision` (6 checks); `tsc --noEmit` 0 errors. Expo device testing pending; no APK built.
+
+## 2026-10-10 — Desktop removal refresh (branch `10-10-2026`, TD-DESKTOP-CORE-2026-10-10-v1)
+
+- `socketService` forwards removal syncs (`reason: companies_removed`) to `src/services/scopeRefresh.ts`. The root layout dismisses bottom sheets and stacked screens, clears the workspace's `*_draft` keys (again after 1 s), opens Home, reloads companies and shows "Data has been refreshed" / "No data available" plus the queued-entry deadline.
+- An ordinary sync is unchanged.
+- **Tested:** `npm test` incl. new `verify:scope-refresh` (6 behavioural checks); `tsc --noEmit` 0 errors. Not run on a device.
+
+## 2026-10-08 — P6 FY kept across heartbeats, posting events, unknown-outcome retry (branch `8-10-2026`, TD-FIX-2026-10-08)
+
+- **W2:** the Header re-checked the chosen FY after every `lastSyncAt` bump (each desktop heartbeat) by comparing only its start date; `fyEquals` also compares the end date, so the check always failed and the FY reset to the first year. It now uses `fyInList` with the full chosen FY.
+- **W1:** posting events go through `socketService.subscribePostingEvents`, which survives reconnects and a socket created after the screen mounted. `voucher:regularized` is handled and workspace-scoped. Previews (shared voucher preview, sales invoice, sales order) refresh only for the workspace, company and reference on screen (`isPostingEventForDocument`).
+- **X9 (UI):** Audit Trail retry of an unknown-outcome entry shows a confirmation and only then sends `confirmOutcomeUnknown`; bulk retry never re-sends those (counted as skipped). New English strings; other languages fall back to English.
+- **W4:** mobile lists already refetch on `lastSyncAt`; no change.
+- **Tested:** `npm test` (all verify scripts incl. 3 new checks) pass; `tsc --noEmit` 0 errors; eslint on touched files at the branch baseline. Not run on a device.
+
 ## 2026-10-01 — Header company + FY dropdowns (local branch `cursor-header-dropdown`, not pushed)
 
 - `Header.tsx` follows the reference repo's header (`tallydekho-mobile-emergent-code`): two RN `Modal` dropdowns under the header (company: letter icon, name, GSTIN, check; FY: year list with tick), wired to real data (`getCompanies` scoped for CONNECTED/RECONNECTING, `getCompanyYears`, `AuthContext.setCompany` / `setSelectedFY`). Demo mode and single-company toast unchanged.

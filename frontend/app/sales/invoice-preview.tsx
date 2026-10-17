@@ -21,10 +21,11 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
 import { COLORS, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getInvoicePreview } from '../../src/services/api';
+import { getInvoicePreview, getActiveWorkspaceId } from '../../src/services/api';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
-import { getSocket, isEventForActiveWorkspace } from '../../src/services/socketService';
+import { subscribePostingEvents } from '../../src/services/socketService';
+import { isPostingEventForDocument } from '../../src/services/workspaceEventScope';
 import {
   buildProformaToInvoicePrefillFromPreview,
   proformaPrefillStorageKey,
@@ -110,17 +111,16 @@ export default function InvoicePreviewScreen() {
 
   // WebSocket: auto-refresh when Tally posts the invoice
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket || !tdkRef) return;
-    const handler = (payload: any) => {
-      if (!isEventForActiveWorkspace('invoice_posting_updated', payload)) return;
-      if (payload?.referenceNumber === tdkRef && payload?.postingTag === 'Posted') {
-        fetchPreview();
-      }
-    };
-    socket.on('invoice_posting_updated', handler);
-    return () => { socket.off('invoice_posting_updated', handler); };
-  }, [tdkRef, fetchPreview]);
+    if (!tdkRef) return;
+    return subscribePostingEvents((event, payload) => {
+      if (!isPostingEventForDocument(event, payload, {
+        activeWorkspaceId: getActiveWorkspaceId(),
+        companyGuid: company?.guid,
+        ref: String(tdkRef),
+      })) return;
+      fetchPreview();
+    });
+  }, [tdkRef, company?.guid, fetchPreview]);
 
   if (loading) {
     return (

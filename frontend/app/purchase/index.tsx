@@ -124,7 +124,7 @@ export default function PurchaseScreen() {
             date: r.date || '',
             time: '',
             amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
-            status: r.is_cancelled ? 'unpaid' : 'paid',
+            status: r.is_cancelled ? 'cancelled' : 'paid',
             docType: r.doc_type || classifyVoucherDocType('purchase', r),
             voucherType: r.voucher_type,
             isOptional: !!r.is_optional,

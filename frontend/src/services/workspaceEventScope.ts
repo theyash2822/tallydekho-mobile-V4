@@ -29,6 +29,7 @@ export const WORKSPACE_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   'restore_status',
   'voucher:tallySynced',
   'invoice_posting_updated',
+  'voucher:regularized',
 ]);
 
 /** Accepts the camelCase the backend emits plus the snake_case variants. */
@@ -53,4 +54,26 @@ export function isEventForWorkspace(
   const eventWorkspaceId = workspaceIdFromPayload(payload);
   if (!activeWorkspaceId || !eventWorkspaceId) return false;
   return eventWorkspaceId === activeWorkspaceId;
+}
+
+/** Events that mean a TallyDekho document was posted to (or converted in) Tally. */
+export const POSTING_EVENTS: readonly string[] = ['voucher:tallySynced', 'invoice_posting_updated', 'voucher:regularized'];
+
+export function postingEventRef(payload: any): string | null {
+  const ref = payload?.tdkRef ?? payload?.tdkReferenceNo ?? payload?.tdk_ref
+    ?? payload?.referenceNumber ?? payload?.reference;
+  return ref == null || ref === '' ? null : String(ref);
+}
+
+/** A posting event refreshes a document only for the workspace, company and reference on screen. */
+export function isPostingEventForDocument(
+  event: string,
+  payload: any,
+  doc: { activeWorkspaceId: string | null; companyGuid?: string | null; ref?: string | null },
+): boolean {
+  if (!POSTING_EVENTS.includes(event)) return false;
+  if (!isEventForWorkspace(event, payload, doc.activeWorkspaceId)) return false;
+  if (payload?.companyGuid && doc.companyGuid && String(payload.companyGuid) !== String(doc.companyGuid)) return false;
+  const ref = postingEventRef(payload);
+  return !!ref && !!doc.ref && ref === String(doc.ref);
 }

@@ -23,6 +23,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
+import { retryWithOutcomeConfirm, isOutcomeUnknownError } from '../../src/utils/writeRetry';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
@@ -854,7 +855,20 @@ export default function AuditTrailScreen() {
     markRetrying(rawId, true);
     Toast.show({ type: 'info', text1: t('screens.reportsAuditTrail.retrying'), text2: `${entry.ref || entry.tdkRef || ''} — ${entry.party}`, visibilityTime: 1400 });
     try {
-      const result: any = await retryMyEntry(rawId);
+      const confirmUnknown = () => new Promise<boolean>((resolve) => {
+        Alert.alert(
+          t('screens.reportsAuditTrail.outcomeUnknownTitle'),
+          t('screens.reportsAuditTrail.outcomeUnknownBody'),
+          [
+            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('screens.reportsAuditTrail.retryAnyway'), style: 'destructive', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        );
+      });
+      const attempt = await retryWithOutcomeConfirm<any>((opts) => retryMyEntry(rawId, opts), confirmUnknown);
+      if (attempt.status === 'cancelled') return;
+      const result: any = attempt.result;
       if (result?.alreadySuccess) {
         Toast.show({ type: 'success', text1: t('screens.reportsAuditTrail.alreadyInTally'), text2: result?.message || t('screens.reportsAuditTrail.noNeedRetry'), visibilityTime: 2500 });
       } else if (result?.alreadyProcessing) {
@@ -899,8 +913,10 @@ export default function AuditTrailScreen() {
         const result: any = await retryMyEntry(id);
         if (result?.alreadyProcessing || result?.alreadySuccess) skipped++;
         else if (result?.success === false) failed++;
-      } catch {
-        failed++;
+      } catch (err) {
+        // Bulk retry never re-sends an unknown outcome; those need a per-entry confirmation.
+        if (isOutcomeUnknownError(err)) skipped++;
+        else failed++;
       } finally {
         markRetrying(id, false);
       }

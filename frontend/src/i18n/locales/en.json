@@ -1563,6 +1563,7 @@
       "missingReference": "Missing document reference",
       "couldNotLoad": "Could not load {{title}}.",
       "failedToLoad": "Failed to load {{title}}.",
+      "cancelled": "Cancelled in Tally",
       "loadingTitle": "Loading {{title}}…",
       "documentNotFound": "Document not found."
     },
@@ -1626,6 +1627,8 @@
     },
     "settingsApprovals": {
       "title": "Approvals",
+      "years": "Years",
+      "replacesIdentity": "Replaces company identity",
       "ownerOnly": "Only Owner or Admin can approve Hard Sync and Restore.",
       "workspace": "Workspace",
       "hardSyncRequests": "Hard Sync requests",
@@ -4494,7 +4497,10 @@
       "loadMore": "Load More",
       "allEntriesLoaded": "All {{count}} entries loaded",
       "push": "Push",
-      "preparing": "Preparing…"
+      "preparing": "Preparing…",
+      "outcomeUnknownTitle": "Was this saved in Tally?",
+      "outcomeUnknownBody": "TallyDekho could not confirm whether Tally saved this entry. Check the Day Book in Tally first — retrying an entry that was already saved creates a duplicate.",
+      "retryAnyway": "Retry anyway"
     },
     "purchaseCreateOrder": {
       "orderDetails": "Order Details",

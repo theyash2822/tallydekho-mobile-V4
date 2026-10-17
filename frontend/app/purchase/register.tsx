@@ -48,6 +48,7 @@ const STATUS_FILTER_LABEL_KEYS: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   paid:       'Paid',
   unpaid:     'Unpaid',
+  cancelled:  'Cancelled',
   irm:        'IRM',
   debit_note: 'Debit Note',
 };
@@ -109,7 +110,7 @@ export default function PurchaseRegisterScreen() {
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
-    status: r.is_cancelled ? 'unpaid' : 'paid',
+    status: r.is_cancelled ? 'cancelled' : 'paid',
     docType: r.doc_type || 'invoice',
     voucherType: r.voucher_type,
     isOptional: !!r.is_optional,
@@ -127,7 +128,7 @@ export default function PurchaseRegisterScreen() {
     const fyParams = from && to ? { from, to } : {};
     Promise.all([
       getPurchaseVouchers(companyGuid, {
-        ...fyParams, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, search,
+        ...fyParams, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, search, includeCancelled: '1',
         ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
       }),
       getPurchaseVoucherCounts(companyGuid, fyParams),
@@ -173,7 +174,7 @@ export default function PurchaseRegisterScreen() {
     const to   = toDate   || fyTo;
     const fyParams = from && to ? { from, to } : {};
     getPurchaseVouchers(companyGuid, {
-      ...fyParams, limit: PAGE_SIZE, page: nextPage, docTypes: docTypesParam, search,
+      ...fyParams, limit: PAGE_SIZE, page: nextPage, docTypes: docTypesParam, search, includeCancelled: '1',
       ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
     }).then((res: any) => {
       const rows = res?.data ?? [];
@@ -319,7 +320,7 @@ export default function PurchaseRegisterScreen() {
           label={t(STATUS_FILTER_LABEL_KEYS[statusFilter] ?? statusFilter)}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
-          options={['All', 'Paid', 'Unpaid', 'IRM']}
+          options={['All', 'Paid', 'Cancelled', 'IRM']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
           placeholder={t('screens.purchaseRegister.status')}
@@ -352,14 +353,15 @@ export default function PurchaseRegisterScreen() {
         <View style={s.statsGrid}>
           {(() => {
             const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
-            const totalAmt = allFiltered.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
-            const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
+            const counted = allFiltered.filter((inv) => inv.status !== 'cancelled');
+            const totalAmt = counted.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
+            const avgAmt = counted.length > 0 ? totalAmt / counted.length : 0;
             const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [
               { label: t('purchase.total'), value: fmtAmt(totalAmt) },
               { label: t('pdf.tax'),        value: '—' },
               { label: t('screens.purchaseRegister.avg'),   value: fmtAmt(avgAmt) },
-              { label: t('screens.purchaseRegister.docs'),  value: String(allFiltered.length) },
+              { label: t('screens.purchaseRegister.docs'),  value: String(counted.length) },
             ];
           })().map(stat => (
             <View key={stat.label} style={s.statCell}>

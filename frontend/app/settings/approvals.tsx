@@ -109,6 +109,21 @@ export default function ApprovalsScreen() {
             <View key={r.id} style={s.card}>
               <Text style={s.cardTitle}>{r.operation || 'REBUILD'}</Text>
               <Text style={s.cardMeta}>{t('screens.settingsApprovals.device', { id: r.device_id || r.deviceId || '—' })}</Text>
+              {(Array.isArray(r.scope?.companies) ? r.scope.companies : []).map((c: any) => (
+                <Text key={c.guid} style={s.scopeLine}>
+                  {c.name || shortGuid(c.guid)}
+                  {Array.isArray(c.years) && c.years.length > 0
+                    ? ` · ${t('screens.settingsApprovals.years', 'Years')}: ${c.years.join(', ')}`
+                    : ''}
+                </Text>
+              ))}
+              {r.scope?.replacement ? (
+                <Text style={s.replacementLine}>
+                  {t('screens.settingsApprovals.replacesIdentity', 'Replaces company identity')}:{' '}
+                  {r.scope.replacement.oldName || '—'} ({shortGuid(r.scope.replacement.oldGuid)}) →{' '}
+                  {r.scope.replacement.newName || '—'} ({shortGuid(r.scope.replacement.newGuid)})
+                </Text>
+              ) : null}
               <View style={s.row}>
                 <TouchableOpacity
                   style={[s.btn, s.reject]}
@@ -267,6 +282,8 @@ export default function ApprovalsScreen() {
   );
 }
 
+const shortGuid = (g?: string) => (g ? `${String(g).slice(0, 8)}…` : '—');
+
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
   header: {
@@ -285,6 +302,8 @@ const s = StyleSheet.create({
   },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   cardMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
+  scopeLine: { fontSize: 12, color: COLORS.textPrimary, marginTop: 4 },
+  replacementLine: { fontSize: 12, color: COLORS.warning, marginTop: 6, fontWeight: '600' },
   row: { flexDirection: 'row', gap: 10, marginTop: 12 },
   btn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   reject: { backgroundColor: '#FEF2F2' },

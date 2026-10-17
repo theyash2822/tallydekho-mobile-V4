@@ -9,14 +9,16 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { SettingsProvider } from '../src/context/SettingsContext';
 import { WorkspaceProvider } from '../src/context/WorkspaceContext';
-import { getMe, getActiveWorkspaceId } from '../src/services/api';
+import { getMe, getActiveWorkspaceId, getCompanies } from '../src/services/api';
+import { onScopeRemoved, handleScopeRemoved, isWorkspaceDraftKey } from '../src/services/scopeRefresh';
+import { isDemoCompany } from '../src/utils/isDemoCompany';
 import { captureWorkspaceGeneration, isCurrentWorkspaceGeneration } from '../src/utils/workspaceGeneration';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { BottomSheetModalProvider, useBottomSheetModal } from '@gorhom/bottom-sheet';
 import { toastConfig } from '../src/utils/toastConfig';
 import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
 import { ONBOARDING_COMPLETED_KEY } from '../src/utils/onboardingNav';
@@ -81,6 +83,38 @@ function RootNavigation() {
   const { isAuthenticated, isLoading, setUser } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+
+  const { dismissAll: dismissSheets } = useBottomSheetModal();
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return onScopeRemoved((payload) => {
+      handleScopeRemoved({
+        held: payload?.held,
+        closeForms: () => {
+          dismissSheets();
+          if (router.canDismiss()) router.dismissAll();
+        },
+        clearDrafts: async () => {
+          const ws = payload?.workspaceId || getActiveWorkspaceId();
+          const clear = async () => {
+            const keys = await AsyncStorage.getAllKeys();
+            const drafts = keys.filter((k) => isWorkspaceDraftKey(k, ws));
+            if (drafts.length) await AsyncStorage.multiRemove(drafts);
+          };
+          await clear();
+          // A debounced (800 ms) draft save already in flight must not bring the form back.
+          setTimeout(() => { clear().catch(() => {}); }, 1000);
+        },
+        goHome: () => router.replace('/(tabs)'),
+        loadCompanies: async () => {
+          const res: any = await getCompanies();
+          const list = Array.isArray(res?.data) ? res.data : [];
+          return list.filter((c: any) => !isDemoCompany(c) && c?.is_active !== false);
+        },
+        toast: (message) => Toast.show({ type: 'info', text1: message }),
+      });
+    });
+  }, [isAuthenticated, dismissSheets]);
 
   // Register push notifications when user logs in
   useEffect(() => {

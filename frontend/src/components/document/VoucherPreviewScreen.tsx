@@ -17,8 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING, RADIUS } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
-import { getInvoicePreview } from '../../services/api';
-import { getSocket, isEventForActiveWorkspace } from '../../services/socketService';
+import { getInvoicePreview, getActiveWorkspaceId } from '../../services/api';
+import { subscribePostingEvents } from '../../services/socketService';
+import { isPostingEventForDocument } from '../../services/workspaceEventScope';
 import { VoucherDocument, DocumentType } from '../../types/document';
 import { toVoucherDocument } from '../../utils/voucherDocumentAdapter';
 import DocumentPreviewPage from './DocumentPreviewPage';
@@ -107,21 +108,16 @@ export default function VoucherPreviewScreen({
 
   // Refresh once Tally assigns the real voucher number.
   useEffect(() => {
-    const socket: any = getSocket();
-    if (!socket || !tdkRef) return;
-    const onSynced = (payload: any) => {
-      if (!isEventForActiveWorkspace('voucher:tallySynced', payload)
-        && !isEventForActiveWorkspace('invoice_posting_updated', payload)) return;
-      const ref = payload?.tdkRef || payload?.tdk_ref || payload?.referenceNumber;
-      if (ref === tdkRef) fetchPreview();
-    };
-    socket.on('voucher:tallySynced', onSynced);
-    socket.on('invoice_posting_updated', onSynced);
-    return () => {
-      socket.off('voucher:tallySynced', onSynced);
-      socket.off('invoice_posting_updated', onSynced);
-    };
-  }, [tdkRef, fetchPreview]);
+    if (!docRef) return;
+    return subscribePostingEvents((event, payload) => {
+      if (!isPostingEventForDocument(event, payload, {
+        activeWorkspaceId: getActiveWorkspaceId(),
+        companyGuid,
+        ref: String(docRef),
+      })) return;
+      fetchPreview();
+    });
+  }, [docRef, companyGuid, fetchPreview]);
 
   if (loading || error || !doc) {
     return (
@@ -160,6 +156,12 @@ export default function VoucherPreviewScreen({
       <View style={{ flex: 1 }}>
         <DocumentPreviewPage document={doc} isProvisional={isProvisional} />
       </View>
+      {raw?.is_cancelled === true || raw?.isCancelled === true ? (
+        <View style={s.cancelledBar}>
+          <Ionicons name="close-circle-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={s.cancelledTxt}>{t('screens.componentsDocumentVoucherPreviewScreen.cancelled', 'Cancelled in Tally')}</Text>
+        </View>
+      ) : null}
       {renderFooter?.(raw, doc)}
     </View>
   );
@@ -180,4 +182,10 @@ const s = StyleSheet.create({
   errorTxt: { fontSize: 14, color: COLORS.negative, textAlign: 'center' },
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md },
   retryTxt: { fontSize: 14, color: COLORS.white, fontWeight: '600' },
+  cancelledBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, backgroundColor: '#F3F4F6',
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  cancelledTxt: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
 });

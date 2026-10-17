@@ -33,14 +33,17 @@ export function formatPartyLabel(raw?: string | null): string {
 export const PAYMENT_STATUS_COLOR: Record<string, string> = {
   paid:   '#2D7D46',
   unpaid: '#DC2626',
+  cancelled: '#6B7280',
 };
 export const PAYMENT_STATUS_BG: Record<string, string> = {
   paid:   '#F0FBF4',
   unpaid: '#FFF0F0',
+  cancelled: '#F3F4F6',
 };
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid:   'Paid',
   unpaid: 'Unpaid',
+  cancelled: 'Cancelled',
 };
 
 /** Paid (green) / Unpaid (red) chip. */

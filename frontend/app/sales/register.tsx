@@ -41,6 +41,7 @@ const { width: SW } = Dimensions.get('window');
 const STATUS_LABEL: Record<string, string> = {
   paid:        'Paid',
   unpaid:      'Unpaid',
+  cancelled:   'Cancelled',
   irm:         'IRM',
   credit_note: 'Credit Note',
 };
@@ -109,7 +110,7 @@ export default function SalesRegisterScreen() {
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
-    status: r.is_cancelled ? 'unpaid' : 'paid',
+    status: r.is_cancelled ? 'cancelled' : 'paid',
     docType: r.doc_type || 'invoice',
     voucherType: r.voucher_type,
     isOptional: !!r.is_optional,
@@ -127,7 +128,7 @@ export default function SalesRegisterScreen() {
     const range = from && to ? { from, to } : {};
     Promise.all([
       getSalesVouchers(companyGuid, {
-        search, ...range, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam,
+        search, ...range, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, includeCancelled: '1',
         ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
       }),
       getSalesVoucherCounts(companyGuid, range),
@@ -179,6 +180,7 @@ export default function SalesRegisterScreen() {
       limit: PAGE_SIZE,
       page: nextPage,
       docTypes: docTypesParam,
+      includeCancelled: '1',
       ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
     }).then((res: any) => {
       const rows = res?.data ?? [];
@@ -327,7 +329,7 @@ export default function SalesRegisterScreen() {
           label={STATUS_FILTER_LABEL_KEYS[statusFilter] ? t(STATUS_FILTER_LABEL_KEYS[statusFilter]) : statusFilter}
           open={dropdown}
           onToggle={() => setDropdown(v => !v)}
-          options={['All', 'Paid', 'Unpaid']}
+          options={['All', 'Paid', 'Cancelled']}
           selected={statusFilter}
           onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
           placeholder={t('screens.salesRegister.status')}
@@ -360,14 +362,15 @@ export default function SalesRegisterScreen() {
         <View style={s.statsGrid}>
           {(() => {
             const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
-            const totalAmt = allFiltered.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
-            const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
+            const counted = allFiltered.filter((inv) => inv.status !== 'cancelled');
+            const totalAmt = counted.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
+            const avgAmt = counted.length > 0 ? totalAmt / counted.length : 0;
             const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [
               { label: t('screens.salesRegister.statTotal'), value: fmtAmt(totalAmt) },
               { label: t('screens.salesRegister.statTax'),   value: '—' },
               { label: t('screens.salesRegister.statAvg'),   value: fmtAmt(avgAmt) },
-              { label: t('screens.salesRegister.statDocs'),  value: String(allFiltered.length) },
+              { label: t('screens.salesRegister.statDocs'),  value: String(counted.length) },
             ];
           })().map(stat => (
             <View key={stat.label} style={s.statCell}>
