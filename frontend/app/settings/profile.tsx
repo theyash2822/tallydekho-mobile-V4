@@ -14,6 +14,9 @@ import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useTranslation } from 'react-i18next';
 import { setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
+import {
+  PHONE_COUNTRIES, phoneCountryOf, nationalNumberOf, type PhoneCountry,
+} from '../../src/constants/phoneCountries';
 
 /** One-time codes are 6 digits; the security PIN stays 4 (PinBoxes default). */
 const OTP_LENGTH = 6;
@@ -22,11 +25,10 @@ const OTP_LENGTH = 6;
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function maskPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const local  = digits.length >= 10 ? digits.slice(-10) : digits;
+  const local  = nationalNumberOf(phone);
   const first2 = local.slice(0, 2);
   const last2  = local.slice(-2);
-  return `+91 ${first2}** **** ${last2}`;
+  return `${phoneCountryOf(phone).code} ${first2}** **** ${last2}`;
 }
 
 function maskEmail(email: string): string {
@@ -347,6 +349,7 @@ function OTPVerifySheet({
   inputKeyboard,
   sendLabel,
   getSubtitle,
+  phoneCountry = PHONE_COUNTRIES[0],
 }: {
   visible:          boolean;
   onClose:          () => void;
@@ -357,9 +360,12 @@ function OTPVerifySheet({
   inputKeyboard:    'phone-pad' | 'email-address';
   sendLabel:        string;
   getSubtitle:      (val: string) => string;
+  /** Numbers are typed without the code, in the account's own country. */
+  phoneCountry?:    PhoneCountry;
 }) {
   const { t } = useTranslation();
   const isPhone      = inputKeyboard === 'phone-pad';
+  const withCode     = (val: string) => `${phoneCountry.code}${val}`;
   const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : t('profile.email');
 
   const [step,       setStep]       = useState<1|2|3|4>(1);
@@ -401,7 +407,7 @@ function OTPVerifySheet({
     setLoading(true);
     try {
       if (isPhone) {
-        await changePhone({ step: 1, currentPhone: currentVal });
+        await changePhone({ step: 1, currentPhone: withCode(currentVal) });
       } else {
         await changeEmail({ step: 1, currentEmail: currentVal });
       }
@@ -424,7 +430,9 @@ function OTPVerifySheet({
     try {
       if (isPhone) {
         // Backend step 2: verify current OTP + send OTP to new phone
-        await changePhone({ step: 2, currentPhone: currentVal, otp: verifiedCurrentOtpRef.current, newPhone: newVal });
+        await changePhone({
+          step: 2, currentPhone: withCode(currentVal), otp: verifiedCurrentOtpRef.current, newPhone: withCode(newVal),
+        });
       } else {
         // Email: step 1 already sent OTP to currentEmail; now send OTP to newEmail for verification
         await changeEmail({ step: 1, currentEmail: newVal });
@@ -443,11 +451,14 @@ function OTPVerifySheet({
     setLoading(true);
     try {
       if (isPhone) {
-        await changePhone({ step: 3, otp });
+        // Keep the number exactly as the account stores it (full international digits outside India).
+        const res: any = await changePhone({ step: 3, otp });
+        onSuccess(String(res?.data?.newPhone || newVal).trim());
       } else {
         await changeEmail({ step: 2, otp, newEmail: newVal });
+        onSuccess(newVal.trim());
       }
-      onSuccess(newVal.trim()); onClose();
+      onClose();
     } catch (err: any) {
       Alert.alert(err?.status === 429 ? t('screens.settingsProfile.tooManyAttempts') : t('screens.settingsProfile.invalidOtp'), err?.message || t('screens.settingsProfile.otpNoMatch'));
     } finally { setLoading(false); }
@@ -464,8 +475,9 @@ function OTPVerifySheet({
     else if (otp.length < OTP_LENGTH) setOtp(p => p + key);
   };
 
-  const isCurrentValid = isPhone ? currentVal.length === 10 : currentVal.includes('@') && currentVal.length > 5;
-  const isNewValid     = isPhone ? newVal.length === 10     : newVal.includes('@')     && newVal.length > 5;
+  const phoneOk = (val: string) => val.length >= phoneCountry.minDigits && val.length <= phoneCountry.maxDigits;
+  const isCurrentValid = isPhone ? phoneOk(currentVal) : currentVal.includes('@') && currentVal.length > 5;
+  const isNewValid     = isPhone ? phoneOk(newVal)     : newVal.includes('@')     && newVal.length > 5;
 
   const channelIcon: React.ReactNode =
     channel === 'whatsapp'
@@ -479,8 +491,8 @@ function OTPVerifySheet({
     4: t('screens.settingsProfile.confirmNewOtp'),
   };
 
-  const displayCurrent = isPhone ? `+91 ${currentVal}` : currentVal;
-  const displayNew     = isPhone ? `+91 ${newVal}`     : newVal;
+  const displayCurrent = isPhone ? `${phoneCountry.code} ${currentVal}` : currentVal;
+  const displayNew     = isPhone ? `${phoneCountry.code} ${newVal}`     : newVal;
 
   /* ── Input step (1 & 3) ──────────────────────────────── */
   const renderInput = (isCurrentStep: boolean) => {
@@ -500,21 +512,21 @@ function OTPVerifySheet({
         <View style={ps.editInputWrap}>
           {isPhone && (
             <View style={ps.phonePre}>
-              <Text style={ps.phonePreText}>+91</Text>
+              <Text style={ps.phonePreText}>{phoneCountry.code}</Text>
             </View>
           )}
           <TextInput
             style={ps.editInput}
             value={val}
             onChangeText={text =>
-              isPhone ? setter(text.replace(/[^0-9]/g, '').slice(0, 10)) : setter(text)
+              isPhone ? setter(text.replace(/[^0-9]/g, '').slice(0, phoneCountry.maxDigits)) : setter(text)
             }
             placeholder={inputPlaceholder}
             placeholderTextColor={COLORS.textTertiary}
             keyboardType={inputKeyboard}
             autoCapitalize="none"
             autoFocus
-            maxLength={isPhone ? 10 : 80}
+            maxLength={isPhone ? phoneCountry.maxDigits : 80}
             selectionColor={COLORS.brandPrimary}
           />
         </View>
@@ -638,6 +650,7 @@ export default function ProfileScreen() {
   const [name,  setName]  = useState(user?.name || 'Your Name');
   const [role,  setRole]  = useState('Admin');
   const [phone, setPhone] = useState(user?.phone || '');
+  const ownPhoneCountry = phoneCountryOf(phone);
   const [email, setEmail] = useState(user?.email || 'your@email.com');
 
   // Sync when user data loads
@@ -1001,10 +1014,13 @@ export default function ProfileScreen() {
         }}
         channel="whatsapp"
         title={t('profile.editPhone')}
-        inputPlaceholder={t('screens.settingsProfile.tenDigitMobile')}
+        inputPlaceholder={
+          ownPhoneCountry === PHONE_COUNTRIES[0] ? t('screens.settingsProfile.tenDigitMobile') : ownPhoneCountry.placeholder
+        }
         inputKeyboard="phone-pad"
         sendLabel={t('auth.sendOtp')}
         getSubtitle={(val) => t('auth.codeSentTo', { phone: val })}
+        phoneCountry={ownPhoneCountry}
       />
 
       {/* ── Edit Email — Email OTP ──────────────────────────────────────── */}

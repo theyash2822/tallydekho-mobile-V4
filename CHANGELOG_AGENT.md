@@ -1,3 +1,10 @@
+## 2026-10-21 — 6-digit codes, sign-up email verification, change phone in any supported country (branch `21-10-2026`)
+
+- Login, Forgot PIN and Settings OTPs take 6 digits in boxes that share the row width (PIN screens keep their 4 boxes); resend shows the server's limit message.
+- Sign-up: Continue sends a 6-digit code to the email, then Verify & Continue or Skip for now.
+- Settings → change phone follows the account's own country (code prefix, digit length, saved number); India behaves as before. The phone country list moves unchanged to `src/constants/phoneCountries.ts`.
+- **Tested:** `tsc --noEmit` 0 errors; `npm test` all verify scripts pass. Expo device testing pending.
+
 ## 2026-10-17 — Bring `10-10-2026` work to `cursor` + sync refresh, entry dates (branch `cursor`)
 
 - **Merged (owner-approved):** commits `2758cdad`, `d4783e8d`, `ea5404d1`, `3696c919` from `10-10-2026` (FY kept across refreshes, Cancelled chips, approvals scope, close forms on company removal, missed-sync recovery, outcome-unknown retry confirmation).
