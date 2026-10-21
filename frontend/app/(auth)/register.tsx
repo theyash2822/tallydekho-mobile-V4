@@ -12,10 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { registerUser, setRefreshToken } from '../../src/services/api';
+import { registerUser, setRefreshToken, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 
 const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 'Italian', 'Japanese', 'Korean'];
+const CODE_LENGTH = 6;
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -29,6 +30,11 @@ export default function RegisterScreen() {
   const [langModal, setLangModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Email verification: a 6-digit code to the email; "Skip for now" registers without it.
+  const [stage, setStage] = useState<'form' | 'verify'>('form');
+  const [code, setCode] = useState('');
+  const [resendIn, setResendIn] = useState(0);
+  const [sendFailed, setSendFailed] = useState(false);
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
   const canProceed = name.trim().length > 1 && isValidEmail(email) && termsAccepted;
@@ -39,6 +45,48 @@ export default function RegisterScreen() {
       AsyncStorage.setItem('auth_token', token);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setTimeout(() => setResendIn(s => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendIn]);
+
+  const sendCode = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await sendSignupEmailCode(email.trim());
+      setCode('');
+      setSendFailed(false);
+      setStage('verify');
+      setResendIn(30);
+    } catch (err: any) {
+      setSendFailed(true);
+      setError(err?.message || t('screens.authRegister.somethingWentWrong'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContinue = async () => {
+    if (!canProceed) return;
+    await sendCode();
+  };
+
+  const handleVerify = async () => {
+    if (code.length < CODE_LENGTH) { setError(t('auth.enterCompleteOtp')); return; }
+    setLoading(true);
+    setError('');
+    try {
+      await verifySignupEmailCode(email.trim(), code);
+    } catch (err: any) {
+      setError(err?.message || t('screens.authRegister.somethingWentWrong'));
+      setLoading(false);
+      return;
+    }
+    await handleLogin();
+  };
 
   const handleLogin = async () => {
     if (!canProceed) return;
@@ -86,6 +134,8 @@ export default function RegisterScreen() {
 
           {/* Card */}
           <View style={styles.card}>
+            {stage === 'form' ? (
+            <>
             <Text style={styles.heading}>{t('onboarding.getStarted')}</Text>
             <Text style={styles.subHeading}>{t('screens.authRegister.subHeading')}</Text>
 
@@ -110,7 +160,7 @@ export default function RegisterScreen() {
               placeholder="yourname@example.com"
               placeholderTextColor={COLORS.textTertiary}
               value={email}
-              onChangeText={v => setEmail(v.toLowerCase())}
+              onChangeText={v => { setEmail(v.toLowerCase()); setSendFailed(false); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -149,18 +199,85 @@ export default function RegisterScreen() {
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            {/* Login Button */}
+            {/* Continue: sends a code to the email */}
             <TouchableOpacity
               testID="register-login-btn"
               style={[styles.primaryBtn, !canProceed && styles.primaryBtnDisabled]}
-              onPress={handleLogin}
+              onPress={handleContinue}
               disabled={!canProceed || loading}
               activeOpacity={0.8}
             >
               {loading ? <ActivityIndicator color={COLORS.white} size="small" /> : (
-                <Text style={styles.primaryBtnText}>{t('auth.login')}</Text>
+                <Text style={styles.primaryBtnText}>{t('common.continue')}</Text>
               )}
             </TouchableOpacity>
+            {sendFailed ? (
+              <TouchableOpacity
+                testID="register-skip-btn"
+                style={styles.secondaryBtn}
+                onPress={handleLogin}
+                disabled={!canProceed || loading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.secondaryBtnText}>{t('auth.skipForNow')}</Text>
+              </TouchableOpacity>
+            ) : null}
+            </>
+            ) : (
+            <>
+            <Text style={styles.heading}>{t('auth.verifyEmailHeading')}</Text>
+            <Text style={styles.subHeading}>{t('auth.verifyEmailSub', { email: email.trim() })}</Text>
+
+            <TextInput
+              testID="email-code-input"
+              style={[styles.input, styles.codeInput]}
+              value={code}
+              onChangeText={v => { setCode(v.replace(/\D/g, '').slice(0, CODE_LENGTH)); setError(''); }}
+              keyboardType="number-pad"
+              maxLength={CODE_LENGTH}
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              placeholder="••••••"
+              placeholderTextColor={COLORS.textTertiary}
+              autoFocus
+            />
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              testID="verify-email-btn"
+              style={[styles.primaryBtn, code.length < CODE_LENGTH && styles.primaryBtnDisabled]}
+              onPress={handleVerify}
+              disabled={code.length < CODE_LENGTH || loading}
+              activeOpacity={0.8}
+            >
+              {loading ? <ActivityIndicator color={COLORS.white} size="small" /> : (
+                <Text style={styles.primaryBtnText}>{t('screens.settingsProfile.verifyContinue')}</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.codeLinks}>
+              <TouchableOpacity testID="resend-email-code-btn" onPress={sendCode} disabled={resendIn > 0 || loading}>
+                <Text style={[styles.link, (resendIn > 0 || loading) && styles.linkDisabled]}>
+                  {resendIn > 0 ? t('auth.resendOtpTimer', { countdown: resendIn }) : t('auth.resendOtp')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="change-email-btn" onPress={() => { setStage('form'); setError(''); }} disabled={loading}>
+                <Text style={styles.link}>{t('auth.changeEmail')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              testID="register-skip-btn"
+              style={styles.secondaryBtn}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryBtnText}>{t('auth.skipForNow')}</Text>
+            </TouchableOpacity>
+            </>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -237,6 +354,11 @@ const styles = StyleSheet.create({
   primaryBtn: { height: 52, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', marginTop: SPACING.sm },
   primaryBtnDisabled: { backgroundColor: COLORS.borderStrong },
   primaryBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  codeInput: { textAlign: 'center', fontSize: TYPOGRAPHY.xl, letterSpacing: 8, fontWeight: '700' },
+  codeLinks: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACING.md },
+  linkDisabled: { color: COLORS.textTertiary },
+  secondaryBtn: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: SPACING.sm },
+  secondaryBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.overlay },
   modalSheet: {
     backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20,

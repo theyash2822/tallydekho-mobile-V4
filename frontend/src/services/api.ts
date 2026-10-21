@@ -464,6 +464,9 @@ export const sendOTP    = (phone: string): Promise<SendOTPResponse> => post<Send
 export const verifyOTP  = (phone: string, otp: string, opts?: { reset_pin?: boolean }): Promise<VerifyOTPResponse> =>
   post<VerifyOTPResponse>('/auth/verify-otp', { phone, otp, ...opts }, false);
 export const registerUser = (data: Partial<{ name: string; email: string; language: string; phone: string }>): Promise<RegisterResponse> => post<RegisterResponse>('/auth/register', data);
+/** Sign-up email verification: a 6-digit code to the email, then confirm it. */
+export const sendSignupEmailCode   = (email: string) => post<any>('/auth/email/send-code', { email });
+export const verifySignupEmailCode = (email: string, otp: string) => post<any>('/auth/email/verify-code', { email, otp });
 export const getMe       = () => get<any>('/auth/me');
 export const updateMe    = (data: Partial<{ name: string; email: string; language: string }>) => patch<any>('/auth/me', data);
 export const logout      = (pushToken?: string) => post<any>('/auth/logout', pushToken ? { pushToken } : {});
