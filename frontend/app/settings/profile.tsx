@@ -15,6 +15,9 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useTranslation } from 'react-i18next';
 import { setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
 
+/** One-time codes are 6 digits; the security PIN stays 4 (PinBoxes default). */
+const OTP_LENGTH = 6;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,12 +123,14 @@ function CustomToggle({
 }
 // ─────────────────────────────────────────────────────────────────────────────
 function PinBoxes({ value, length = 4 }: { value: string; length?: number }) {
+  // Six boxes share the row width; the 4-digit PIN keeps its fixed boxes.
+  const compact = length > 4;
   return (
-    <View style={ps.pinRow}>
+    <View style={[ps.pinRow, compact && ps.otpRow]}>
       {Array.from({ length }).map((_, i) => (
         <View
           key={i}
-          style={[ps.pinBox, i < value.length && ps.pinBoxFilled]}
+          style={[compact ? ps.otpBox : ps.pinBox, i < value.length && ps.pinBoxFilled]}
         >
           {i < value.length && <View style={ps.pinDot} />}
         </View>
@@ -186,11 +191,11 @@ function DeleteAccountModal({
 
   const handleKey = (key: string) => {
     if (key === 'back') setOtp(p => p.slice(0, -1));
-    else if (otp.length < 4) setOtp(p => p + key);
+    else if (otp.length < OTP_LENGTH) setOtp(p => p + key);
   };
 
   const handleDelete = () => {
-    if (otp.length < 4) return;
+    if (otp.length < OTP_LENGTH) return;
     onClose();
     setTimeout(() =>
       Alert.alert(t('screens.settingsProfile.accountDeleted'), t('screens.settingsProfile.accountDeletedMsg')),
@@ -227,14 +232,14 @@ function DeleteAccountModal({
           </Text>
 
           {/* OTP boxes */}
-          <PinBoxes value={otp} />
+          <PinBoxes value={otp} length={OTP_LENGTH} />
 
           {/* Delete button */}
           <TouchableOpacity
-            style={[ps.modalBtn, ps.deleteBtnColor, otp.length < 4 && ps.btnDisabled]}
+            style={[ps.modalBtn, ps.deleteBtnColor, otp.length < OTP_LENGTH && ps.btnDisabled]}
             onPress={handleDelete}
             activeOpacity={0.85}
-            disabled={otp.length < 4}
+            disabled={otp.length < OTP_LENGTH}
           >
             <Text style={ps.modalBtnText}>{t('profile.deleteAccount')}</Text>
           </TouchableOpacity>
@@ -408,7 +413,7 @@ function OTPVerifySheet({
 
   const handleVerifyCurrentOTP = () => {
     // Just move to step 3 — actual verification happens in handleSendNewOTP
-    if (otp.length < 4) return;
+    if (otp.length < OTP_LENGTH) return;
     verifiedCurrentOtpRef.current = otp;
     setOtp(''); setStep(3);
   };
@@ -434,7 +439,7 @@ function OTPVerifySheet({
   };
 
   const handleVerifyNewOTP = async () => {
-    if (otp.length < 4 || loading) return;
+    if (otp.length < OTP_LENGTH || loading) return;
     setLoading(true);
     try {
       if (isPhone) {
@@ -456,7 +461,7 @@ function OTPVerifySheet({
 
   const handleKey = (key: string) => {
     if (key === 'back') setOtp(p => p.slice(0, -1));
-    else if (otp.length < 4) setOtp(p => p + key);
+    else if (otp.length < OTP_LENGTH) setOtp(p => p + key);
   };
 
   const isCurrentValid = isPhone ? currentVal.length === 10 : currentVal.includes('@') && currentVal.length > 5;
@@ -540,7 +545,7 @@ function OTPVerifySheet({
     const display   = isCurrentStep ? displayCurrent : displayNew;
     const onVerify  = isCurrentStep ? handleVerifyCurrentOTP : handleVerifyNewOTP;
     const btnLabel  = isCurrentStep ? t('screens.settingsProfile.verifyContinue') : t('screens.settingsProfile.verifyUpdate');
-    const canVerify = otp.length === 4;
+    const canVerify = otp.length === OTP_LENGTH;
 
     return (
       <View>
@@ -551,8 +556,8 @@ function OTPVerifySheet({
           </Text>
         </Text>
 
-        {/* 4-digit OTP boxes */}
-        <PinBoxes value={otp} length={4} />
+        {/* OTP boxes */}
+        <PinBoxes value={otp} length={OTP_LENGTH} />
 
         {/* Verify button */}
         <TouchableOpacity
@@ -1161,6 +1166,12 @@ const ps = StyleSheet.create({
   },
   pinBox: {
     width: 62, height: 62, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  otpRow: { gap: 8 },
+  otpBox: {
+    flex: 1, maxWidth: 52, aspectRatio: 1, borderRadius: RADIUS.md,
     borderWidth: 1.5, borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
   },

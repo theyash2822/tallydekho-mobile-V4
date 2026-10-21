@@ -13,13 +13,14 @@ import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 
-const BOX_LENGTH = 4;
+const OTP_LENGTH = 6;
+const PIN_LENGTH = 4;
 
 function CodeBox({
-  char, filled, hasError, isFocused, secure,
+  char, filled, hasError, isFocused, secure, compact,
   onSetRef, onChangeText, onKeyPress, onFocus,
 }: {
-  char: string; filled: boolean; hasError: boolean; isFocused: boolean; secure?: boolean;
+  char: string; filled: boolean; hasError: boolean; isFocused: boolean; secure?: boolean; compact?: boolean;
   onSetRef: (r: TextInput | null) => void;
   onChangeText: (t: string) => void;
   onKeyPress: (e: any) => void;
@@ -28,13 +29,13 @@ function CodeBox({
   const localRef = useRef<TextInput>(null);
   return (
     <TouchableOpacity
-      style={[s.box, filled && s.boxFilled, hasError && s.boxError, isFocused && s.boxFocused]}
+      style={[compact ? s.boxCompact : s.box, filled && s.boxFilled, hasError && s.boxError, isFocused && s.boxFocused]}
       onPress={() => localRef.current?.focus()}
       activeOpacity={0.9}
     >
       {secure && filled
         ? <View style={s.dot} />
-        : <Text style={s.digit}>{char}</Text>
+        : <Text style={[s.digit, compact && s.digitCompact]}>{char}</Text>
       }
       {isFocused && !char ? <View style={s.cursor} /> : null}
       <TextInput
@@ -62,9 +63,9 @@ export default function ResetPinScreen() {
   const { signIn, setCompany } = useAuth();
 
   const [step, setStep]         = useState<Step>('otp');
-  const [otp, setOtp]           = useState<string[]>(Array(BOX_LENGTH).fill(''));
-  const [newPin, setNewPin]      = useState<string[]>(Array(BOX_LENGTH).fill(''));
-  const [confirmPin, setConfirm] = useState<string[]>(Array(BOX_LENGTH).fill(''));
+  const [otp, setOtp]           = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [newPin, setNewPin]      = useState<string[]>(Array(PIN_LENGTH).fill(''));
+  const [confirmPin, setConfirm] = useState<string[]>(Array(PIN_LENGTH).fill(''));
   const [focusedIdx, setFocused] = useState(0);
   const [loading, setLoading]    = useState(false);
   const [error, setError]        = useState('');
@@ -76,14 +77,16 @@ export default function ResetPinScreen() {
   const current = step === 'otp' ? otp : step === 'new_pin' ? newPin : confirmPin;
   const setCurrent = step === 'otp' ? setOtp : step === 'new_pin' ? setNewPin : setConfirm;
   const isSecure = step !== 'otp';
+  const length = step === 'otp' ? OTP_LENGTH : PIN_LENGTH;
+  const compact = length > PIN_LENGTH;
 
   const handleChange = (text: string, idx: number) => {
     const digit = text.replace(/\D/g, '').slice(-1);
     const next = [...current]; next[idx] = digit; setCurrent(next); setError('');
-    if (digit && idx < BOX_LENGTH - 1) { inputRefs.current[idx + 1]?.focus(); setFocused(idx + 1); }
-    if (digit && idx === BOX_LENGTH - 1) {
+    if (digit && idx < length - 1) { inputRefs.current[idx + 1]?.focus(); setFocused(idx + 1); }
+    if (digit && idx === length - 1) {
       const full = [...next].join('');
-      if (full.length === BOX_LENGTH) setTimeout(() => handleNext(full), 100);
+      if (full.length === length) setTimeout(() => handleNext(full), 100);
     }
   };
 
@@ -97,7 +100,7 @@ export default function ResetPinScreen() {
 
   const handleNext = async (code?: string) => {
     const val = code || current.join('');
-    if (val.length < BOX_LENGTH) { setError(t('screens.authResetPin.enterAllDigits', { count: BOX_LENGTH })); return; }
+    if (val.length < length) { setError(t('screens.authResetPin.enterAllDigits', { count: length })); return; }
 
     if (step === 'otp') {
       setLoading(true); setError('');
@@ -113,7 +116,7 @@ export default function ResetPinScreen() {
         setStep('new_pin');
       } catch (err: any) {
         setError(err?.message || t('screens.authResetPin.invalidOtpRetry'));
-        setOtp(Array(BOX_LENGTH).fill(''));
+        setOtp(Array(OTP_LENGTH).fill(''));
         setFocused(0);
       } finally { setLoading(false); }
 
@@ -123,7 +126,7 @@ export default function ResetPinScreen() {
     } else if (step === 'confirm_pin') {
       if (newPin.join('') !== val) {
         setError(t('screens.authResetPin.pinMismatch'));
-        setConfirm(Array(BOX_LENGTH).fill(''));
+        setConfirm(Array(PIN_LENGTH).fill(''));
         setFocused(0);
         return;
       }
@@ -172,7 +175,7 @@ export default function ResetPinScreen() {
             <Text style={s.heading}>{heading}</Text>
             <Text style={s.subText}>{sub}</Text>
 
-            <View style={s.pinRow}>
+            <View style={[s.pinRow, compact && s.pinRowCompact]}>
               {current.map((char, idx) => (
                 <CodeBox
                   key={`${step}-${idx}`}
@@ -181,6 +184,7 @@ export default function ResetPinScreen() {
                   hasError={!!error}
                   isFocused={focusedIdx === idx}
                   secure={isSecure}
+                  compact={compact}
                   onSetRef={r => { inputRefs.current[idx] = r; }}
                   onChangeText={t => handleChange(t, idx)}
                   onKeyPress={({ nativeEvent: { key } }) => handleKeyPress(key, idx)}
@@ -192,9 +196,9 @@ export default function ResetPinScreen() {
             {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <TouchableOpacity
-              style={[s.btn, current.join('').length < BOX_LENGTH && s.btnDisabled]}
+              style={[s.btn, current.join('').length < length && s.btnDisabled]}
               onPress={() => handleNext()}
-              disabled={current.join('').length < BOX_LENGTH || loading}
+              disabled={current.join('').length < length || loading}
               activeOpacity={0.8}
             >
               {loading
@@ -229,6 +233,10 @@ const s = StyleSheet.create({
   subText:      { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.lg },
   pinRow:       { flexDirection: 'row', gap: 14, marginBottom: SPACING.sm, justifyContent: 'center' },
   box:          { width: 64, height: 64, borderWidth: 1.5, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  // The 6-digit code step: boxes share the card width, square, at most 56pt.
+  pinRowCompact:{ gap: 8 },
+  boxCompact:   { flex: 1, maxWidth: 56, aspectRatio: 1, borderWidth: 1.5, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  digitCompact: { fontSize: 24 },
   boxFocused:   { borderColor: COLORS.brandPrimary, borderWidth: 2 },
   boxFilled:    { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
   boxError:     { borderColor: COLORS.negative },

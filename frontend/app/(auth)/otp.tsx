@@ -13,7 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { setPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 
-const OTP_LENGTH = 4;
+const OTP_LENGTH = 6;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OTP Box: View+Text display with an invisible TextInput for keyboard events.
@@ -171,7 +171,13 @@ export default function OTPScreen() {
     setCountdown(30);
     setOtp(Array(OTP_LENGTH).fill(''));
     setFocusedIdx(0);
-    await sendOTP(phone || '');
+    setError('');
+    try {
+      await sendOTP(phone || '');
+    } catch (err: any) {
+      // e.g. too many codes for this number in 15 minutes
+      setError(err?.message || t('screens.authOtp.verificationFailed'));
+    }
     setTimeout(() => inputRefs.current[0]?.focus(), 300);
   };
 
@@ -301,14 +307,16 @@ const styles = StyleSheet.create({
   },
   otpRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 8,
     marginBottom: SPACING.sm,
     justifyContent: 'center',
   },
   // ── New OTP Box: View+Text approach for perfect iOS/Android centering ──────
+  // Six boxes share the card width (about 40–45pt each on a phone), square, at most 56pt.
   otpBox: {
-    width: 64,
-    height: 64,
+    flex: 1,
+    maxWidth: 56,
+    aspectRatio: 1,
     borderWidth: 1.5,
     borderColor: COLORS.borderDefault,
     borderRadius: RADIUS.md,
@@ -319,7 +327,7 @@ const styles = StyleSheet.create({
   },
   otpBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 2 },
   otpDigit: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.textPrimary,
     includeFontPadding: false,
@@ -327,7 +335,7 @@ const styles = StyleSheet.create({
   // Blinking cursor bar shown when box is focused but empty
   cursor: {
     width: 2,
-    height: 28,
+    height: 24,
     backgroundColor: COLORS.brandPrimary,
     borderRadius: 1,
   },
