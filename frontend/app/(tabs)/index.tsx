@@ -24,6 +24,7 @@ import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
 import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
 import PairingBanner from '../../src/components/PairingBanner';
+import RestoreRequestBanner from '../../src/components/RestoreRequestBanner';
 import OfflineBadge from '../../src/components/OfflineBadge';
 import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
@@ -595,6 +596,7 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={16} color="#2563EB" />
           </TouchableOpacity>
         )}
+        <RestoreRequestBanner />
         {demoMode && <PairingBanner />}
         {!deviceOnline && (
           <OfflineBadge

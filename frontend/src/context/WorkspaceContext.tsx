@@ -81,6 +81,8 @@ export interface WorkspaceContextValue {
   isOwnerOrAdmin: boolean;
   /** True only for Workspace OWNER (billing / transfer / reset / close). */
   isOwner: boolean;
+  /** Changes whenever a restore request of the active workspace is created, decided or cancelled. */
+  restoreSignal: number;
   capabilities: Set<string>;
   entryMode: EntryMode;
   invitations: any[];
@@ -116,6 +118,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   tallyConnected: false,
   isOwnerOrAdmin: false,
   isOwner: false,
+  restoreSignal: 0,
   capabilities: new Set(),
   entryMode: 'BOTH',
   invitations: [],
@@ -221,6 +224,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [canPair, setCanPair] = useState(false);
   const [canUnpair, setCanUnpair] = useState(false);
   const [invitations, setInvitations] = useState<any[]>([]);
+  const [restoreSignal, setRestoreSignal] = useState(0);
+  const isOwnerRef = React.useRef(false);
   const [loading, setLoading] = useState(true);
 
   const switchWorkspaceRef = React.useRef<((id: string) => Promise<void>) | null>(null);
@@ -637,11 +642,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       if (event === 'restore_status' || event === 'restore_request') {
         refreshContext();
-        Toast.show({
-          type: 'info',
-          text1: 'Restore request',
-          text2: 'Owner/Admin: Settings → Approvals to pick a backup',
-        });
+        setRestoreSignal((n) => n + 1);
+        // Only the Workspace Owner decides a restore, and only a new request needs them.
+        if (isOwnerRef.current && (event === 'restore_request' || payload?.status === 'PENDING')) {
+          Toast.show({
+            type: 'info',
+            text1: 'Restore request waiting',
+            text2: 'Review it on Home or in Settings → Approvals',
+          });
+        }
       }
     };
     socketService.setOnWorkspaceEvent?.(handler);
@@ -661,6 +670,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const membershipType = access?.membershipType || workspace?.membershipType || '';
   const isOwner = membershipType === 'OWNER';
+  React.useLayoutEffect(() => {
+    isOwnerRef.current = isOwner;
+  });
   const roleSystemKey = access?.role?.systemKey || null;
   const isOwnerOrAdmin = isOwner || roleSystemKey === 'ADMIN';
   const entryMode: EntryMode =
@@ -753,6 +765,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     tallyConnected,
     isOwnerOrAdmin,
     isOwner,
+    restoreSignal,
     capabilities: caps,
     entryMode,
     invitations,

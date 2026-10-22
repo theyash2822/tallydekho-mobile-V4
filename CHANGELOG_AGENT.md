@@ -1,3 +1,9 @@
+## 2026-10-22 — Restore requests on Home (branch `21-10-2026`)
+
+- New `src/components/RestoreRequestBanner.tsx` on Home, Workspace Owner only: "Restore request waiting" with the PC and verified contact, tap → Settings → Approvals. Loads on focus, every 30 s while Home is open, and on restore events (`WorkspaceContext.restoreSignal`), because Expo Go gets no push.
+- The restore toast now shows only to the Owner and only for a new request.
+- **Tested:** `tsc --noEmit` 0 errors; `npm test` verify scripts pass. Expo device testing pending.
+
 ## 2026-10-21 (night) — Restore requests approved by the Workspace Owner (branch `21-10-2026`)
 
 - Settings → Approvals: the restore code entry is gone; each pending request (Owner only) shows the PC name, masked verified contact, requested/expiry time and the desktop it replaces, with a backup and company choice per request; approve/reject by request id (`approveRestoreRequest`). Tapping a `restore_request` push opens Approvals. New labels in all 11 languages.
