@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
@@ -16,18 +16,29 @@ import {
   rejectRestoreSession,
 } from '../../src/services/api';
 
+type ApprovalsData = {
+  workspaceId: string | null;
+  hardSync: any[];
+  restoreRequests: any[];
+  backups: any[];
+  canApproveRestore: boolean;
+  activeDesktop: { name: string } | null;
+};
+const NO_APPROVALS: ApprovalsData = {
+  workspaceId: null, hardSync: [], restoreRequests: [], backups: [], canApproveRestore: false, activeDesktop: null,
+};
+
 export default function ApprovalsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { workspaceId, workspace, isOwnerOrAdmin, refreshContext } = useWorkspace();
-  const [loading, setLoading] = useState(true);
-  const [hardSync, setHardSync] = useState<any[]>([]);
-  const [restoreRequests, setRestoreRequests] = useState<any[]>([]);
-  const [backups, setBackups] = useState<any[]>([]);
+  const [data, setData] = useState<ApprovalsData>(NO_APPROVALS);
   const [picks, setPicks] = useState<Record<string, RestorePick>>({});
-  const [canApproveRestore, setCanApproveRestore] = useState(false);
-  const [activeDesktop, setActiveDesktop] = useState<{ name: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const activeWorkspaceRef = useRef(workspaceId);
+  useLayoutEffect(() => {
+    activeWorkspaceRef.current = workspaceId;
+  });
 
   const foldersFor = (backup: any): string[] => {
     let manifest = backup?.company_manifest_json;
@@ -41,26 +52,30 @@ export default function ApprovalsScreen() {
   };
 
   const load = useCallback(async () => {
-    if (!workspaceId || !isOwnerOrAdmin) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    if (!workspaceId || !isOwnerOrAdmin) return;
     try {
       const res: any = await getWorkspaceApprovals(workspaceId);
+      if (activeWorkspaceRef.current !== workspaceId) return;
       const d = res?.data ?? res;
-      setHardSync(Array.isArray(d?.hardSync) ? d.hardSync : []);
-      setRestoreRequests(Array.isArray(d?.restoreRequests) ? d.restoreRequests : []);
-      setBackups(Array.isArray(d?.backups) ? d.backups : []);
-      setCanApproveRestore(!!d?.canApproveRestore);
-      setActiveDesktop(d?.activeDesktop || null);
+      setData({
+        workspaceId,
+        hardSync: Array.isArray(d?.hardSync) ? d.hardSync : [],
+        restoreRequests: Array.isArray(d?.restoreRequests) ? d.restoreRequests : [],
+        backups: Array.isArray(d?.backups) ? d.backups : [],
+        canApproveRestore: !!d?.canApproveRestore,
+        activeDesktop: d?.activeDesktop || null,
+      });
     } catch {
-      setHardSync([]);
-      setRestoreRequests([]);
-    } finally {
-      setLoading(false);
+      // A failed refresh keeps the list on screen; only a first load with nothing to show ends empty.
+      if (activeWorkspaceRef.current !== workspaceId) return;
+      setData((cur) => (cur.workspaceId === workspaceId ? cur : { ...NO_APPROVALS, workspaceId }));
     }
   }, [workspaceId, isOwnerOrAdmin]);
+
+  // The spinner covers the first answer for this workspace only; the 8-second refresh updates in place.
+  const ready = !workspaceId || data.workspaceId === workspaceId;
+  const { hardSync, restoreRequests, backups, canApproveRestore, activeDesktop } =
+    workspaceId && data.workspaceId === workspaceId ? data : NO_APPROVALS;
 
   useFocusEffect(
     useCallback(() => {
@@ -97,7 +112,7 @@ export default function ApprovalsScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
+      {!ready ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.brandPrimary} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: SPACING.md }}>

@@ -2,6 +2,7 @@
 
 - New `src/components/RestoreRequestBanner.tsx` on Home, Workspace Owner only: "Restore request waiting" with the PC and verified contact, tap → Settings → Approvals. Loads on focus, every 30 s while Home is open, and on restore events (`WorkspaceContext.restoreSignal`), because Expo Go gets no push.
 - The restore toast now shows only to the Owner and only for a new request.
+- Approvals no longer blinks: the 8-second refresh swapped the whole list for a spinner (and reset the scroll); the spinner now covers only the first answer for the workspace, refreshes update in place, a failed refresh keeps the list, and a reply for a workspace the user left is dropped.
 - **Tested:** `tsc --noEmit` 0 errors; `npm test` verify scripts pass. Expo device testing pending.
 
 ## 2026-10-21 (night) — Restore requests approved by the Workspace Owner (branch `21-10-2026`)
