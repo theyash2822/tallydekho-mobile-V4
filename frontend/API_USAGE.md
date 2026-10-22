@@ -131,7 +131,7 @@ sendPaymentReminder — POST /api/reminders/send
 getWorkspaceApprovals(workspaceId) — GET /api/workspaces/:id/approvals
 approveHardSyncRequest(id) — POST /api/hard-sync-requests/:id/approve
 rejectHardSyncRequest(id) — POST /api/hard-sync-requests/:id/reject
-approveWorkspaceRestoreByCode({ code, backupId }) — POST /api/workspace/restore/approve
+approveRestoreRequest(requestId, { backupId, companyFolders }) — POST /api/restore-sessions/:id/approve (Workspace Owner only)
 rejectRestoreSession(id) — POST /api/restore-sessions/:id/reject
 
 ## Strict Rule

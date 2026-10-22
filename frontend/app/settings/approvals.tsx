@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import {
   getWorkspaceApprovals,
   approveHardSyncRequest,
   rejectHardSyncRequest,
-  approveWorkspaceRestoreByCode,
+  approveRestoreRequest,
   rejectRestoreSession,
 } from '../../src/services/api';
 
@@ -24,9 +24,9 @@ export default function ApprovalsScreen() {
   const [hardSync, setHardSync] = useState<any[]>([]);
   const [restoreRequests, setRestoreRequests] = useState<any[]>([]);
   const [backups, setBackups] = useState<any[]>([]);
-  const [restoreCode, setRestoreCode] = useState('');
-  const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
-  const [pickedFolders, setPickedFolders] = useState<string[] | null>(null);
+  const [picks, setPicks] = useState<Record<string, RestorePick>>({});
+  const [canApproveRestore, setCanApproveRestore] = useState(false);
+  const [activeDesktop, setActiveDesktop] = useState<{ name: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const foldersFor = (backup: any): string[] => {
@@ -52,14 +52,15 @@ export default function ApprovalsScreen() {
       setHardSync(Array.isArray(d?.hardSync) ? d.hardSync : []);
       setRestoreRequests(Array.isArray(d?.restoreRequests) ? d.restoreRequests : []);
       setBackups(Array.isArray(d?.backups) ? d.backups : []);
-      if (!selectedBackupId && d?.backups?.[0]?.id) setSelectedBackupId(d.backups[0].id);
+      setCanApproveRestore(!!d?.canApproveRestore);
+      setActiveDesktop(d?.activeDesktop || null);
     } catch {
       setHardSync([]);
       setRestoreRequests([]);
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, isOwnerOrAdmin, selectedBackupId]);
+  }, [workspaceId, isOwnerOrAdmin]);
 
   useFocusEffect(
     useCallback(() => {
@@ -172,110 +173,101 @@ export default function ApprovalsScreen() {
           ))}
 
           <Text style={s.section}>{t('screens.settingsApprovals.restoreSection')}</Text>
-          {restoreRequests.length === 0 ? (
+          {!canApproveRestore ? (
+            <Text style={s.empty}>{t('screens.settingsApprovals.restoreOwnerOnly', 'Only the Workspace Owner can approve a restore.')}</Text>
+          ) : restoreRequests.length === 0 ? (
             <Text style={s.empty}>{t('screens.settingsApprovals.noRestore')}</Text>
-          ) : (
-            restoreRequests.map((r) => (
+          ) : restoreRequests.map((r) => {
+            const pick = picks[r.id] || {};
+            const backupId = pick.backupId || backups[0]?.id || null;
+            const allFolders = foldersFor(backups.find((b) => b.id === backupId) || {});
+            const chosen = pick.folders || allFolders;
+            const setPick = (next: RestorePick) => setPicks((cur) => ({ ...cur, [r.id]: { ...cur[r.id], ...next } }));
+            return (
               <View key={r.id} style={s.card}>
-                <Text style={s.cardTitle}>{t('screens.settingsApprovals.restoreRequest')}</Text>
-                <Text style={s.cardMeta}>{t('screens.settingsApprovals.hint', { hint: r.request_code_hint || r.codeHint || '' })}</Text>
-              </View>
-            ))
-          )}
-
-          <Text style={s.label}>{t('screens.settingsApprovals.restoreCode')}</Text>
-          <TextInput
-            style={s.input}
-            value={restoreCode}
-            onChangeText={setRestoreCode}
-            autoCapitalize="characters"
-            placeholder={t('screens.settingsApprovals.codePlaceholder')}
-            placeholderTextColor={COLORS.textTertiary}
-          />
-          <Text style={s.label}>{t('screens.settingsApprovals.backup')}</Text>
-          {backups.map((b) => (
-            <TouchableOpacity
-              key={b.id}
-              style={[s.backupRow, selectedBackupId === b.id && s.backupSelected]}
-              onPress={() => {
-                setSelectedBackupId(b.id);
-                setPickedFolders(foldersFor(b));
-              }}
-            >
-              <Text style={s.cardMeta}>
-                {b.completed_at || b.created_at
-                  ? new Date(Number(b.completed_at || b.created_at) * 1000).toLocaleString()
-                  : b.id}
-              </Text>
-            </TouchableOpacity>
-          ))}
-          {foldersFor(backups.find((b) => b.id === selectedBackupId) || {}).length > 0 && (
-            <View>
-              <Text style={s.label}>Companies (all years in each folder)</Text>
-              {foldersFor(backups.find((b) => b.id === selectedBackupId) || {}).map((folder) => {
-                const on = (pickedFolders || []).includes(folder);
-                return (
+                <Text style={s.cardTitle}>{r.device_name || t('screens.settingsApprovals.restoreRequest')}</Text>
+                <Text style={s.cardMeta}>{t('screens.settingsApprovals.verifiedWith', { contact: r.requester_contact || '—' })}</Text>
+                <Text style={s.cardMeta}>
+                  {t('screens.settingsApprovals.requestedAt', { time: when(r.created_at) })} · {t('screens.settingsApprovals.expiresAt', { time: when(r.expires_at) })}
+                </Text>
+                <Text style={s.replacementLine}>
+                  {activeDesktop
+                    ? t('screens.settingsApprovals.replacesDesktop', { name: activeDesktop.name })
+                    : t('screens.settingsApprovals.noDesktop')}
+                </Text>
+                {backups.length === 0 ? (
+                  <Text style={s.cardMeta}>{t('screens.settingsApprovals.noBackups')}</Text>
+                ) : (
+                  <View>
+                    <Text style={s.label}>{t('screens.settingsApprovals.backup')}</Text>
+                    {backups.map((b) => (
+                      <TouchableOpacity
+                        key={b.id}
+                        style={[s.backupRow, backupId === b.id && s.backupSelected]}
+                        onPress={() => setPick({ backupId: b.id, folders: undefined })}
+                      >
+                        <Text style={s.cardMeta}>{when(b.completed_at || b.created_at)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {allFolders.length > 0 && <Text style={s.label}>{t('screens.settingsApprovals.companies')}</Text>}
+                    {allFolders.map((folder) => {
+                      const on = chosen.includes(folder);
+                      return (
+                        <TouchableOpacity
+                          key={folder}
+                          onPress={() => setPick({ folders: on ? chosen.filter((f) => f !== folder) : [...chosen, folder] })}
+                        >
+                          <Text style={s.cardMeta}>{on ? '☑' : '☐'} {folder}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                <View style={s.row}>
                   <TouchableOpacity
-                    key={folder}
-                    onPress={() => {
-                      const all = foldersFor(backups.find((b) => b.id === selectedBackupId) || {});
-                      const cur = pickedFolders || all;
-                      setPickedFolders(on ? cur.filter((f) => f !== folder) : [...cur, folder]);
+                    style={[s.btn, s.reject]}
+                    disabled={!!busy}
+                    onPress={async () => {
+                      setBusy(r.id);
+                      try {
+                        await rejectRestoreSession(r.id);
+                        Alert.alert(t('screens.settingsApprovals.restoreRejected'));
+                        await load();
+                      } catch (e: any) {
+                        Alert.alert(t('screens.settingsApprovals.rejectFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
+                      } finally {
+                        setBusy(null);
+                      }
                     }}
                   >
-                    <Text style={s.cardMeta}>{on ? '☑' : '☐'} {folder}</Text>
+                    <Text style={s.rejectTxt}>{t('screens.settingsApprovals.reject')}</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-          <View style={s.row}>
-            <TouchableOpacity
-              style={[s.btn, s.reject, { flex: 1 }]}
-              disabled={!restoreRequests[0]?.id || !!busy}
-              onPress={async () => {
-                const sid = restoreRequests[0]?.id;
-                if (!sid) return;
-                setBusy(sid);
-                try {
-                  await rejectRestoreSession(sid);
-                  await load();
-                } catch (e: any) {
-                  Alert.alert(t('screens.settingsApprovals.rejectFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
-                } finally {
-                  setBusy(null);
-                }
-              }}
-            >
-              <Text style={s.rejectTxt}>{t('screens.settingsApprovals.reject')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.btn, s.approve, { flex: 1 }]}
-              disabled={!restoreCode || !selectedBackupId || !!busy}
-              onPress={async () => {
-                setBusy('restore');
-                try {
-                  const allFolders = foldersFor(backups.find((b) => b.id === selectedBackupId) || {});
-                  const chosen = pickedFolders || allFolders;
-                  await approveWorkspaceRestoreByCode({
-                    code: restoreCode.trim().toUpperCase(),
-                    backupId: selectedBackupId!,
-                    companyFolders: chosen.length && chosen.length < allFolders.length ? chosen : null,
-                  });
-                  Alert.alert(t('screens.settingsApprovals.approved'), t('screens.settingsApprovals.restoreApproved'));
-                  setRestoreCode('');
-                  await load();
-                  await refreshContext();
-                } catch (e: any) {
-                  Alert.alert(t('screens.settingsApprovals.approveFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
-                } finally {
-                  setBusy(null);
-                }
-              }}
-            >
-              <Text style={s.approveTxt}>{t('screens.settingsApprovals.approveRestore')}</Text>
-            </TouchableOpacity>
-          </View>
+                  <TouchableOpacity
+                    style={[s.btn, s.approve]}
+                    disabled={!backupId || !chosen.length || !!busy}
+                    onPress={async () => {
+                      setBusy(r.id);
+                      try {
+                        await approveRestoreRequest(r.id, {
+                          backupId: backupId!,
+                          companyFolders: chosen.length && chosen.length < allFolders.length ? chosen : null,
+                        });
+                        Alert.alert(t('screens.settingsApprovals.approved'), t('screens.settingsApprovals.restoreApproved'));
+                        await load();
+                        await refreshContext();
+                      } catch (e: any) {
+                        Alert.alert(t('screens.settingsApprovals.approveFailed'), e?.message || t('screens.settingsApprovals.tryAgain'));
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    <Text style={s.approveTxt}>{t('screens.settingsApprovals.approveRestore')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -283,6 +275,9 @@ export default function ApprovalsScreen() {
 }
 
 const shortGuid = (g?: string) => (g ? `${String(g).slice(0, 8)}…` : '—');
+const when = (sec?: number | string) => (sec ? new Date(Number(sec) * 1000).toLocaleString() : '—');
+
+type RestorePick = { backupId?: string; folders?: string[] };
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },

@@ -1098,10 +1098,9 @@ export const approveHardSyncRequest = (requestId: string) =>
   post<any>(`/hard-sync-requests/${encodeURIComponent(requestId)}/approve`);
 export const rejectHardSyncRequest = (requestId: string) =>
   post<any>(`/hard-sync-requests/${encodeURIComponent(requestId)}/reject`);
-export const approveRestoreSession = (sessionId: string, body: { code: string; backupId: string }) =>
-  post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/approve`, body);
-export const approveWorkspaceRestoreByCode = (body: { code: string; backupId: string; companyFolders?: string[] | null }) =>
-  post<any>('/workspace/restore/approve', body);
+/** Workspace Owner only: approve one restore request (by its id) with the chosen backup and companies. */
+export const approveRestoreRequest = (requestId: string, body: { backupId: string; companyFolders?: string[] | null }) =>
+  post<any>(`/restore-sessions/${encodeURIComponent(requestId)}/approve`, body);
 export const rejectRestoreSession = (sessionId: string) =>
   post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/reject`);
 export const getWorkspaceIntegration = (workspaceId: string, domain: string) =>

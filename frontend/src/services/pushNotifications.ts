@@ -137,6 +137,9 @@ export function setupNotificationHandlers(router: any) {
       case 'compliance':
         safePush(router, '/reports/compliance');
         break;
+      case 'restore_request':
+        safePush(router, '/settings/approvals');
+        break;
       default:
         safePush(router, '/');
     }
