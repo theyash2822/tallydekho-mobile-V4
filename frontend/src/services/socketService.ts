@@ -196,6 +196,11 @@ export const socketService = {
 
     socket.on('disconnect', (reason) => {
       if (__DEV__) console.log('[Socket] disconnected:', reason);
+      // socket.io does not retry after a server-side disconnect (e.g. access changed).
+      // Reconnect once; the server re-checks membership and scope on workspace:register.
+      if (reason === 'io server disconnect') {
+        setTimeout(() => { if (socket && !socket.connected) socket.connect(); }, 3000);
+      }
     });
 
     socket.on('connect_error', (err) => {
