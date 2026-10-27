@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { currentTenantKey, logoFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import { getCompanyProfile, updateCompanyProfile, uploadCompanyLogo, getCompanyLogo } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
@@ -168,6 +169,8 @@ export default function CompanyScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { company } = useAuth();
+  const { isOwner, hasCapability } = useWorkspace();
+  const canEdit = isOwner || hasCapability('company.profile.edit');
 
   // Company Identity — pre-filled from AuthContext / Tally sync
   const [companyName, setCompanyName] = useState(company?.name || t('screens.settingsCompany.yourCompany'));
@@ -263,7 +266,7 @@ export default function CompanyScreen() {
       // Logo uploaded on pick — just refresh local cache
       if (logoKey && logoUri) await AsyncStorage.setItem(logoKey, logoUri).catch(() => {});
       // Save editable fields to backend
-      if (company?.guid) {
+      if (company?.guid && canEdit) {
         await updateCompanyProfile(company.guid, {
           gstin:   gstin.trim(),
           address: address.trim(),
@@ -311,7 +314,7 @@ export default function CompanyScreen() {
         >
           {/* ── Company Logo ── */}
           <View style={s.logoSection}>
-            <TouchableOpacity style={s.logoWrap} onPress={pickLogo} activeOpacity={0.85}>
+            <TouchableOpacity style={s.logoWrap} onPress={pickLogo} activeOpacity={0.85} disabled={!canEdit}>
               {logoUri ? (
                 <Image source={{ uri: logoUri }} style={s.logoImg} resizeMode="contain" />
               ) : (
@@ -334,11 +337,13 @@ export default function CompanyScreen() {
           {/* ── Company Identity ── */}
           <View style={s.card}>
             <Text style={s.cardTitle}>{t('company.identity')}</Text>
+            {!canEdit && <Text style={s.logoHint}>{t('company.readOnly')}</Text>}
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
               <Text style={s.fieldLabel}>{t('company.name')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={companyName}
                 onChangeText={v => { setCompanyName(v); markDirty(); }}
                 placeholder={t('screens.settingsCompany.namePh')}
@@ -350,6 +355,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.gstin')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={gstin}
                 onChangeText={v => { setGstin(v); markDirty(); }}
                 placeholder="27AAJCR0000E1Z2"
@@ -362,6 +368,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.pan')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={pan}
                 onChangeText={v => { setPan(v); markDirty(); }}
                 placeholder="AAJCR0000E"
@@ -379,6 +386,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.address')}</Text>
               <TextInput
                 style={[s.fieldInput, s.fieldMultiline]}
+                editable={canEdit}
                 value={address}
                 onChangeText={v => { setAddress(v); markDirty(); }}
                 multiline
@@ -391,6 +399,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.email')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={email}
                 onChangeText={v => { setEmail(v); markDirty(); }}
                 keyboardType="email-address"
@@ -404,6 +413,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.phone')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={phone}
                 onChangeText={v => { setPhone(v); markDirty(); }}
                 keyboardType="phone-pad"
@@ -416,6 +426,7 @@ export default function CompanyScreen() {
               <Text style={s.fieldLabel}>{t('company.website')}</Text>
               <TextInput
                 style={s.fieldInput}
+                editable={canEdit}
                 value={website}
                 onChangeText={v => { setWebsite(v); markDirty(); }}
                 keyboardType="url"

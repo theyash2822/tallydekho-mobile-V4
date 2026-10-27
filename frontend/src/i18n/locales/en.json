@@ -224,7 +224,8 @@
     "bookLock": "Book Lock",
     "saved": "Company Info Saved",
     "savedDesc": "Details updated successfully.",
-    "selectState": "Select State / UT"
+    "selectState": "Select State / UT",
+    "readOnly": "Read only. The Workspace Owner, an Admin or a role with Company Profile — Edit can change these details."
   },
   "languageRegion": {
     "title": "Language & Region",
