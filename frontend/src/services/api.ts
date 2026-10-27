@@ -1092,6 +1092,16 @@ export const pairWorkspaceTally = (workspaceId: string, pairing_code: string) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/pair`, { pairing_code });
 export const unpairWorkspaceTally = (workspaceId: string) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/unpair`);
+// One-off Owner approvals (RBC-04)
+export const createVoucherRequest = (body: { companyGuid?: string; voucherGuid: string; reason?: string }) =>
+  post<any>('/voucher-requests', body);
+export const getVoucherRequests = (status?: string) =>
+  get<any>(`/voucher-requests${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+export const approveVoucherRequest = (id: string, body: { allowExport?: boolean; ledgerGuid?: string } = {}) =>
+  post<any>(`/voucher-requests/${encodeURIComponent(id)}/approve`, body);
+export const rejectVoucherRequest = (id: string) =>
+  post<any>(`/voucher-requests/${encodeURIComponent(id)}/reject`, {});
+
 export const getWorkspaceApprovals = (workspaceId: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/approvals`);
 export const approveHardSyncRequest = (requestId: string) =>

@@ -17,7 +17,8 @@ import { shareStatementPdf } from '../../src/utils/voucherPdf';
 import { shareVouchersAsMultiPagePdf } from '../../src/utils/multiShare';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
-import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
+import { getLedgerDetail, getLedgerStatement, sendPaymentReminder, createVoucherRequest } from '../../src/services/api';
+import { toastRbasError } from '../../src/utils/rbasErrors';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -316,9 +317,10 @@ export default function LedgerDetailScreen() {
             amount: formatAmount(Math.abs(t.debit || t.credit || 0)),
             amount_raw: Math.abs(t.debit || t.credit || 0),
             isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
-            particulars: t.party_name || t.voucher_type || '',
+            particulars: t.restricted ? '' : (t.party_name || t.voucher_type || ''),
             balance: t.balance,
             balance_type: t.balance_type,
+            restricted: t.restricted === true,
           };
         }));
       } else {
@@ -724,6 +726,23 @@ export default function LedgerDetailScreen() {
                       onPress={() => {
                         if (txnSelectMode) {
                           toggleTxnSelect(txn.id);
+                        } else if ((txn as any).restricted) {
+                          // The other side of this voucher is outside the member's access.
+                          Alert.alert(
+                            t('screens.ledgerRestricted.title'),
+                            t('screens.ledgerRestricted.body'),
+                            [
+                              { text: t('common.cancel'), style: 'cancel' },
+                              {
+                                text: t('screens.ledgerRestricted.ask'),
+                                onPress: () => {
+                                  createVoucherRequest({ companyGuid, voucherGuid: txn.guid })
+                                    .then(() => Alert.alert(t('screens.ledgerRestricted.sentTitle'), t('screens.ledgerRestricted.sentBody')))
+                                    .catch((e: any) => toastRbasError(e) || Alert.alert(t('common.error'), String(e?.message || '')));
+                                },
+                              },
+                            ],
+                          );
                         } else {
                           openVoucherPreview(router, { guid: txn.guid, docType: TX_TO_DOC_TYPE[txn.type] });
                         }
@@ -738,7 +757,7 @@ export default function LedgerDetailScreen() {
 
                       <View style={styles.txnInfo}>
                         <Text style={styles.txnVoucher}>{txn.voucher}</Text>
-                        <Text style={styles.txnType}>{txn.type}</Text>
+                        <Text style={styles.txnType}>{(txn as any).restricted ? t('screens.ledgerRestricted.line') : txn.type}</Text>
                       </View>
 
                       <View style={styles.txnAmounts}>

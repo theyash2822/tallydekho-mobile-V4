@@ -1665,7 +1665,12 @@
       "noDesktop": "No desktop is connected to this workspace now.",
       "companies": "Companies (all years in each folder)",
       "noBackups": "No cloud backups yet. Run Backup Now on the connected Desktop.",
-      "restoreRejected": "Restore request rejected."
+      "restoreRejected": "Restore request rejected.",
+      "voucherRequests": "Voucher requests",
+      "noVoucherRequests": "No voucher requests waiting.",
+      "openOneVoucher": "Open one voucher",
+      "createOneEntry": "Create one entry",
+      "chooseLedgerOnWeb": "Choose the ledger and approve on the Web portal (Settings → Requests)."
     },
     "componentsFormsEinvoiceQrPreviewSheet": {
       "replaceInvNo": "Vendor Invoice No. \"{{value}}\"",
@@ -4703,6 +4708,14 @@
       "pointScanner": "Point scanner at the full barcode below",
       "noBarcodeLinked": "No barcode linked",
       "viewFullDetails": "View Full Details"
+    },
+    "ledgerRestricted": {
+      "title": "Restricted voucher",
+      "body": "The other side of this voucher is outside your access. You can ask the Workspace Owner to let you open this one voucher for an hour.",
+      "ask": "Ask the Owner",
+      "sentTitle": "Request sent",
+      "sentBody": "The Workspace Owner has 30 minutes to decide. If approved, you can open this voucher for one hour.",
+      "line": "Restricted account"
     }
   }
 }

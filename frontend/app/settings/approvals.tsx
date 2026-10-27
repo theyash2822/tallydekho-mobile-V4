@@ -14,6 +14,9 @@ import {
   rejectHardSyncRequest,
   approveRestoreRequest,
   rejectRestoreSession,
+  getVoucherRequests,
+  approveVoucherRequest,
+  rejectVoucherRequest,
 } from '../../src/services/api';
 
 type ApprovalsData = {
@@ -31,8 +34,10 @@ const NO_APPROVALS: ApprovalsData = {
 export default function ApprovalsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { workspaceId, workspace, isOwnerOrAdmin, refreshContext } = useWorkspace();
+  const { workspaceId, workspace, isOwnerOrAdmin, isOwner, refreshContext } = useWorkspace();
   const [data, setData] = useState<ApprovalsData>(NO_APPROVALS);
+  // One-off voucher requests: the Workspace Owner decides (never Admin).
+  const [voucherReqs, setVoucherReqs] = useState<any[]>([]);
   const [picks, setPicks] = useState<Record<string, RestorePick>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const activeWorkspaceRef = useRef(workspaceId);
@@ -53,6 +58,11 @@ export default function ApprovalsScreen() {
 
   const load = useCallback(async () => {
     if (!workspaceId || !isOwnerOrAdmin) return;
+    if (isOwner) {
+      getVoucherRequests('PENDING')
+        .then((r: any) => { if (activeWorkspaceRef.current === workspaceId) setVoucherReqs(Array.isArray(r?.data) ? r.data : []); })
+        .catch(() => {});
+    }
     try {
       const res: any = await getWorkspaceApprovals(workspaceId);
       if (activeWorkspaceRef.current !== workspaceId) return;
@@ -70,7 +80,7 @@ export default function ApprovalsScreen() {
       if (activeWorkspaceRef.current !== workspaceId) return;
       setData((cur) => (cur.workspaceId === workspaceId ? cur : { ...NO_APPROVALS, workspaceId }));
     }
-  }, [workspaceId, isOwnerOrAdmin]);
+  }, [workspaceId, isOwnerOrAdmin, isOwner]);
 
   // The spinner covers the first answer for this workspace only; the 8-second refresh updates in place.
   const ready = !workspaceId || data.workspaceId === workspaceId;
@@ -117,6 +127,51 @@ export default function ApprovalsScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: SPACING.md }}>
           <Text style={s.wsLabel}>{workspace?.name || t('screens.settingsApprovals.workspace')}</Text>
+
+          {isOwner && (
+            <>
+              <Text style={s.section}>{t('screens.settingsApprovals.voucherRequests')}</Text>
+              {voucherReqs.length === 0 ? (
+                <Text style={s.empty}>{t('screens.settingsApprovals.noVoucherRequests')}</Text>
+              ) : voucherReqs.map((r) => (
+                <View key={r.id} style={s.card}>
+                  <Text style={s.cardTitle}>
+                    {r.kind === 'VIEW' ? t('screens.settingsApprovals.openOneVoucher') : t('screens.settingsApprovals.createOneEntry')}
+                  </Text>
+                  <Text style={s.cardMeta}>
+                    {[r.requester_name, r.company_name, r.voucher_type, r.voucher_number].filter(Boolean).join(' · ')}
+                  </Text>
+                  {r.kind === 'CREATE' && (
+                    <Text style={s.cardMeta}>{t('screens.settingsApprovals.chooseLedgerOnWeb')}</Text>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: SPACING.sm }}>
+                    {r.kind === 'VIEW' && (
+                      <TouchableOpacity
+                        style={[s.btn, s.approve, busy === r.id && { opacity: 0.6 }]}
+                        disabled={busy === r.id}
+                        onPress={async () => {
+                          setBusy(r.id);
+                          try { await approveVoucherRequest(r.id); await load(); } catch (e: any) { Alert.alert(t('common.error'), String(e?.message || '')); } finally { setBusy(null); }
+                        }}
+                      >
+                        <Text style={s.approveTxt}>{t('screens.settingsApprovals.approve')}</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[s.btn, s.reject, busy === r.id && { opacity: 0.6 }]}
+                      disabled={busy === r.id}
+                      onPress={async () => {
+                        setBusy(r.id);
+                        try { await rejectVoucherRequest(r.id); await load(); } catch (e: any) { Alert.alert(t('common.error'), String(e?.message || '')); } finally { setBusy(null); }
+                      }}
+                    >
+                      <Text style={s.rejectTxt}>{t('screens.settingsApprovals.reject')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
 
           <Text style={s.section}>{t('screens.settingsApprovals.hardSyncRequests')}</Text>
           {hardSync.length === 0 ? (
