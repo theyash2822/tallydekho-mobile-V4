@@ -16,27 +16,40 @@ export function useNotInAccess() {
   return () => Toast.show({ type: 'info', text1: t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
 }
 
-type Props = { locked: boolean; children: React.ReactNode; style?: ViewStyle; compact?: boolean; testID?: string };
+/**
+ * Drawn inside a card (which must clip with `overflow: 'hidden'`): blurs the card's own content and
+ * shows a small lock. The card keeps its own size and layout; it handles the tap itself.
+ */
+export function LockLayer() {
+  return (
+    <>
+      <BlurView pointerEvents="none" intensity={22} tint="light" style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, s.center]}>
+        <View style={s.lockCircle}>
+          <Ionicons name="lock-closed" size={13} color={COLORS.textSecondary} />
+        </View>
+      </View>
+    </>
+  );
+}
 
-export default function LockedOverlay({ locked, children, style, compact = false, testID }: Props) {
+type Props = { locked: boolean; children: React.ReactNode; style?: ViewStyle; testID?: string };
+
+/** Wraps a whole area (e.g. a locked screen's placeholder cards); single cards use LockLayer. */
+export default function LockedOverlay({ locked, children, style, testID }: Props) {
   const { t } = useTranslation();
   const notInAccess = useNotInAccess();
   if (!locked) return <>{children}</>;
   return (
-    <View style={style} testID={testID || 'locked-overlay'}>
+    <View style={[style, s.clip]} testID={testID || 'locked-overlay'}>
       <View pointerEvents="none">{children}</View>
-      <BlurView intensity={18} tint="light" style={[StyleSheet.absoluteFill, s.round]} />
+      <LockLayer />
       <TouchableOpacity
-        style={[StyleSheet.absoluteFill, s.center]}
-        activeOpacity={0.8}
+        style={StyleSheet.absoluteFill}
+        activeOpacity={1}
         onPress={notInAccess}
         accessibilityLabel={t('common.notInYourAccess', { defaultValue: 'Not in your access' })}
-      >
-        <View style={s.badge}>
-          <Ionicons name="lock-closed" size={12} color={COLORS.textSecondary} />
-          {!compact && <Text style={s.badgeText}>{t('common.notInYourAccess', { defaultValue: 'Not in your access' })}</Text>}
-        </View>
-      </TouchableOpacity>
+      />
     </View>
   );
 }
@@ -76,13 +89,12 @@ export function HiddenValue({ style }: { style?: any }) {
 }
 
 const s = StyleSheet.create({
-  round: { borderRadius: 14, overflow: 'hidden' },
+  clip: { overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  badge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4,
+  lockCircle: {
+    width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  badgeText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
   hidden: { color: COLORS.textSecondary },
   screen: { flex: 1, backgroundColor: COLORS.pageBg },
   screenTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },

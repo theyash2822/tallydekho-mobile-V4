@@ -11,7 +11,7 @@ import ShimmerPlaceholder from './ShimmerPlaceholder';
 import { safePush } from '../utils/safeNavigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { formatSensitive } from '../utils/sensitiveDisplay';
-import LockedOverlay, { useScopeLabel } from './LockedOverlay';
+import { useScopeLabel, LockLayer, useNotInAccess } from './LockedOverlay';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
 const compactAmount = (raw: string): string => {
@@ -64,6 +64,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
   const { formatAmountCompact } = useSettings();
   const { hasCapability, lockedByAccess, sensitivePolicies } = useWorkspace();
   const scopeText = useScopeLabel();
+  const notInAccess = useNotInAccess();
 
   const displayAmount = (item: Metric): string => {
     const policyKey = METRIC_SENSITIVE[item.id];
@@ -112,13 +113,12 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
         const cap = METRIC_CAPS[item.id];
         const locked = !!item.locked || (!!cap && !hasCapability(cap));
         return (
-          <LockedOverlay key={item.id} locked={locked} style={s.tile} testID={`module-tile-${item.id}-locked`}>
           <TouchableOpacity
             key={item.id}
             testID={`module-tile-${item.id}`}
-            style={s.tile}
+            style={[s.tile, locked && s.clip]}
             activeOpacity={0.75}
-            onPress={() => item.route && safePush(router, item.route as any)}
+            onPress={() => (locked ? notInAccess() : item.route && safePush(router, item.route as any))}
           >
             {/* thin colored accent line for identity */}
             <View style={[s.accent, { backgroundColor: id.accent }]} />
@@ -148,8 +148,8 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
                 alwaysShow
               />
             )}
+            {locked && <LockLayer />}
           </TouchableOpacity>
-          </LockedOverlay>
         );
       })}
     </View>
@@ -164,6 +164,7 @@ const s = StyleSheet.create({
     marginTop: SPACING.md,
     marginBottom: SPACING.md,
   },
+  clip: { overflow: 'hidden' },
   tile: {
     flex: 1,
     backgroundColor: COLORS.cardBg,

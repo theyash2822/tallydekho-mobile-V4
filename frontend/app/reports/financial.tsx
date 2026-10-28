@@ -12,6 +12,8 @@ import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { NOT_IN_ACCESS } from '../../src/services/apiErrors';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtInr(n: number): string {
@@ -436,6 +438,8 @@ export default function FinancialReportScreen() {
   const { formatDate } = useSettings();
 
   const [openSection, setOpenSection] = useState<SectionKey | null>('pl');
+  // Sections the server withheld (not in the member's access): shown with a lock, never with old figures.
+  const [lockedSections, setLockedSections] = useState<string[]>([]);
   const toggleSection = (k: SectionKey) =>
     setOpenSection(prev => (prev === k ? null : k));
 
@@ -499,6 +503,11 @@ export default function FinancialReportScreen() {
       .then((res: any) => {
         if (gen !== requestGenRef.current) return;
         const d = res?.data;
+        const locked: string[] = Array.isArray(d?.locked) ? d.locked : [];
+        setLockedSections(locked);
+        if (locked.includes('pl')) setPlData(null as any);
+        if (locked.includes('bs')) setBsData(null as any);
+        if (locked.includes('trialBalance')) setTbData(null as any);
         if (d?.pl)           setPlData(d.pl);
         if (d?.bs)           setBsData(d.bs);
         if (d?.trialBalance) setTbData(d.trialBalance);
@@ -567,7 +576,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'pl'}
           onToggle={toggleSection}
         >
-          <PLCardGrid pl={plData} />
+          {lockedSections.includes('pl') ? <ErrorBanner message={NOT_IN_ACCESS} /> : <PLCardGrid pl={plData} />}
         </AccSection>
 
         <AccSection
@@ -576,7 +585,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'bs'}
           onToggle={toggleSection}
         >
-          <BalanceSheetSection bs={bsData} />
+          {lockedSections.includes('bs') ? <ErrorBanner message={NOT_IN_ACCESS} /> : <BalanceSheetSection bs={bsData} />}
         </AccSection>
 
         <AccSection
@@ -585,7 +594,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'tb'}
           onToggle={toggleSection}
         >
-          <TrialBalanceGrid tb={tbData} />
+          {lockedSections.includes('trialBalance') ? <ErrorBanner message={NOT_IN_ACCESS} /> : <TrialBalanceGrid tb={tbData} />}
         </AccSection>
       </ScrollView>
       )}

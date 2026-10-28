@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { MetricTrendBadge, MetricTrendBadgeProps } from './MetricTrendBadge';
+import { LockLayer, useNotInAccess } from './LockedOverlay';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -25,6 +26,8 @@ export type KPICarouselCardProps = {
   onPress?: () => void;
   testID?: string;
   style?: ViewStyle;
+  /** Outside the member's access: blurred with a small lock; a tap explains instead of opening. */
+  locked?: boolean;
 };
 
 /** Full-width page wrapper for horizontal paging FlatLists. */
@@ -44,7 +47,9 @@ export function KPICarouselCard({
   onPress,
   testID,
   style,
+  locked = false,
 }: KPICarouselCardProps) {
+  const notInAccess = useNotInAccess();
   const trendProps: MetricTrendBadgeProps = {
     trend_pct,
     trend_positive,
@@ -54,7 +59,7 @@ export function KPICarouselCard({
   };
 
   const body = (
-    <View style={[s.card, style]} testID={testID}>
+    <View style={[s.card, style, locked && s.clip]} testID={testID}>
       <View style={s.iconBox}>
         <Ionicons name={icon as any} size={22} color={COLORS.textSecondary} />
       </View>
@@ -63,12 +68,13 @@ export function KPICarouselCard({
         <Text style={s.amount} numberOfLines={1} adjustsFontSizeToFit>{amount}</Text>
       </View>
       <MetricTrendBadge {...trendProps} />
+      {locked && <LockLayer />}
     </View>
   );
 
-  if (onPress) {
+  if (onPress || locked) {
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+      <TouchableOpacity activeOpacity={0.7} onPress={locked ? notInAccess : onPress}>
         {body}
       </TouchableOpacity>
     );
@@ -98,6 +104,7 @@ export const KPI_CAROUSEL_PAGE_WIDTH = SW;
 
 const s = StyleSheet.create({
   page: { width: SW },
+  clip: { overflow: 'hidden' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

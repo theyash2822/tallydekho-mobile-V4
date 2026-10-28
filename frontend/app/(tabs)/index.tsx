@@ -42,7 +42,7 @@ import {
 } from '../../src/utils/periodDates';
 import { tKpiLabel } from '../../src/i18n/labelMap';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
-import LockedOverlay, { useScopeLabel, LockedScreen } from '../../src/components/LockedOverlay';
+import { useScopeLabel, LockedScreen } from '../../src/components/LockedOverlay';
 import { useTabAccess } from '../../src/components/RequireCapability';
 // No mock data imports — real data only (V2 rule)
 
@@ -518,17 +518,16 @@ export default function HomeScreen() {
     const label = tKpiLabel(t, item.id, item.label);
     return (
       <KPICarouselPage>
-        <LockedOverlay locked={!!item.locked} testID={`kpi-card-${item.id}-locked`}>
-          <KPICarouselCard
-            testID={`kpi-card-${item.id}`}
-            icon={item.icon}
-            label={item.scope_label ? `${label} · ${scopeText(item.scope_label)}` : label}
-            amount={item.locked ? '₹ ••••' : amount}
-            trend_pct={item.locked ? null : item.trend_pct}
-            trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
-            onPress={() => item.route && safePush(router, item.route as any)}
-          />
-        </LockedOverlay>
+        <KPICarouselCard
+          testID={`kpi-card-${item.id}`}
+          icon={item.icon}
+          label={item.scope_label ? `${label} · ${scopeText(item.scope_label)}` : label}
+          amount={item.locked ? '₹ ••••' : amount}
+          trend_pct={item.locked ? null : item.trend_pct}
+          trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
+          locked={!!item.locked}
+          onPress={() => item.route && safePush(router, item.route as any)}
+        />
       </KPICarouselPage>
     );
   };

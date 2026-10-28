@@ -21,7 +21,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
 import { useTabAccess } from '../../src/components/RequireCapability';
-import LockedOverlay, { LockedScreen } from '../../src/components/LockedOverlay';
+import { LockedScreen, LockLayer, useNotInAccess } from '../../src/components/LockedOverlay';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -788,13 +788,16 @@ interface SectionCardProps {
   metric?: string;
   trend?: string;
   trendPositive?: boolean;
+  /** Outside the member's access: blurred with a small lock; a tap explains instead of opening. */
+  locked?: boolean;
 }
 
-function SectionCard({ iconName, title, children, onPress, metric, trend, trendPositive }: SectionCardProps) {
+function SectionCard({ iconName, title, children, onPress, metric, trend, trendPositive, locked = false }: SectionCardProps) {
+  const notInAccess = useNotInAccess();
   const { t } = useTranslation();
   return (
     <View style={sc.card}>
-      <TouchableOpacity style={sc.header} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
+      <TouchableOpacity style={sc.header} onPress={locked ? notInAccess : onPress} activeOpacity={onPress || locked ? 0.7 : 1}>
         <View style={sc.iconBox}>
           <Ionicons name={iconName} size={14} color={COLORS.textSecondary} />
         </View>
@@ -815,6 +818,7 @@ function SectionCard({ iconName, title, children, onPress, metric, trend, trendP
           <Text style={sc.footerTxt}>{t('screens.tabsReports.viewDetails')}</Text>
         </TouchableOpacity>
       ) : null}
+      {locked && <LockLayer />}
     </View>
   );
 }
@@ -874,6 +878,7 @@ export default function ReportsScreen() {
   const { workspaceId, hasCapability } = useWorkspace();
   // Reports outside the member's access stay in place, blurred and locked.
   const lockedFor = (cap: string) => !hasCapability(cap);
+  const notInAccess = useNotInAccess();
   const companyGuid = company?.guid;
   const reportIdentity = `${workspaceId || ''}:${companyGuid || ''}:${selectedFY?.startDate || ''}`;
   const identityRef = useRef(reportIdentity);
@@ -1078,8 +1083,8 @@ export default function ReportsScreen() {
         </View>
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
-        <LockedOverlay locked={lockedFor('financials.profit_loss.view')} testID="reports-financial-locked">
         <SectionCard
+          locked={lockedFor('financials.profit_loss.view')}
           iconName="stats-chart-outline"
           title={t('reports.financial')}
           metric={finData ? t('reports.netMetric', { amount: formatAmountCompact(Math.round(netProfit)) }) : undefined}
@@ -1094,11 +1099,10 @@ export default function ReportsScreen() {
             xLabels={finData?.months ?? []}
           />
         </SectionCard>
-        </LockedOverlay>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
-        <LockedOverlay locked={lockedFor('gst.view')} testID="reports-compliance-locked">
         <SectionCard
+          locked={lockedFor('gst.view')}
           iconName="shield-checkmark-outline"
           title={t('reports.compliance')}
           metric={t('reports.pendingMonths', { filed: gstFiledCount, pending: gstPending })}
@@ -1106,7 +1110,6 @@ export default function ReportsScreen() {
         >
           <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
         </SectionCard>
-        </LockedOverlay>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
         <SectionCard
@@ -1123,8 +1126,8 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
-        <LockedOverlay locked={lockedFor('ai_insights.view')} testID="reports-ai-locked">
-        <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => safePush(router, '/reports/ai-insights' as any)}>
+        <SectionCard
+          locked={lockedFor('ai_insights.view')} iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => safePush(router, '/reports/ai-insights' as any)}>
           {aiWeekly && aiWeekly.enough && aiWeekly.forecast.length > 1 && aiWeekly.actual.length === aiWeekly.forecast.length ? (
             <LogLineChart
               lines={[
@@ -1145,7 +1148,6 @@ export default function ReportsScreen() {
             </Text>
           )}
         </SectionCard>
-        </LockedOverlay>
 
         <Text style={styles.moreLabel}>{t('reports.moreReports')}</Text>
         <View style={styles.moreGrid}>
@@ -1156,20 +1158,19 @@ export default function ReportsScreen() {
             { label: t('reports.cashRegister'), icon: 'cash-outline',           route: '/kpi/cash-register', cap: 'financials.cash_register.view' },
             { label: t('reports.dayBook'),      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook', cap: 'daybook.view' },
           ].map(m => (
-            <LockedOverlay key={m.label} locked={lockedFor(m.cap)} compact>
             <TouchableOpacity
               key={m.label}
-              style={[styles.moreTile, m.route.includes('daybook') && styles.moreTileWide]}
+              style={[styles.moreTile, m.route.includes('daybook') && styles.moreTileWide, lockedFor(m.cap) && { overflow: 'hidden' as const }]}
               activeOpacity={0.75}
-              onPress={() => safePush(router, m.route as any)}
+              onPress={() => (lockedFor(m.cap) ? notInAccess() : safePush(router, m.route as any))}
             >
               <View style={styles.moreIcon}>
                 <Ionicons name={m.icon as any} size={18} color={COLORS.textSecondary} />
               </View>
               <Text style={styles.moreTileTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{m.label}</Text>
               <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+              {lockedFor(m.cap) && <LockLayer />}
             </TouchableOpacity>
-            </LockedOverlay>
           ))}
         </View>
       </ScrollView>
