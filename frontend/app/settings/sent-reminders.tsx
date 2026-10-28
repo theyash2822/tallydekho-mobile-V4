@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { LockedScreen } from '../../src/components/LockedOverlay';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +32,7 @@ const CHANNEL: Record<string, { label: string; labelKey?: string; icon: any }> =
   email: { label: 'Email', labelKey: 'profile.email', icon: 'mail-outline' },
 };
 
-export default function SentRemindersScreen() {
+function SentRemindersScreenContent() {
   const router = useRouter();
   const { t } = useTranslation();
   const { company } = useAuth();
@@ -160,3 +162,10 @@ const s = StyleSheet.create({
   statusTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   error: { fontSize: TYPOGRAPHY.xs, color: COLORS.negative },
 });
+
+/** Payment reminders are seen and sent by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
+export default function SentRemindersScreen() {
+  const { isOwnerOrAdmin } = useWorkspace();
+  if (!isOwnerOrAdmin) return <LockedScreen titleKey="settings.paymentReminders" />;
+  return <SentRemindersScreenContent />;
+}

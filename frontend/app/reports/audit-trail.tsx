@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useNotInAccess } from '../../src/components/LockedOverlay';
+import { NOT_IN_ACCESS } from '../../src/services/apiErrors';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View,
@@ -461,7 +464,10 @@ const dd = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
   const { t } = useTranslation();
-  const { isOwnerOrAdmin } = useWorkspace();
+  const notInAccess = useNotInAccess();
+  const { isOwnerOrAdmin, hasCapability } = useWorkspace();
+  // The Day Book follows the Day Book report access (Owner decision, 29 Oct 2026).
+  const dayBookLocked = !hasCapability('daybook.view');
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
@@ -633,6 +639,9 @@ export default function AuditTrailScreen() {
           if (gen !== fetchGenRef.current) return;
           setIsLoading(false);
         });
+    } else if (dayBookLocked) {
+      setIsLoading(false);
+      setApiError(NOT_IN_ACCESS);
     } else {
       getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 })
         .then((res: any) => {
@@ -651,7 +660,7 @@ export default function AuditTrailScreen() {
           setIsLoading(false);
         });
     }
-  }, [companyGuid, fromDate, toDate, activeTab, lifecycleFilter, formatAmount, mapQueueRow]);
+  }, [companyGuid, fromDate, toDate, activeTab, lifecycleFilter, formatAmount, mapQueueRow, dayBookLocked]);
 
   const loadEntries = useCallback((mode: 'hard' | 'soft' = 'hard') => {
     if (!companyGuid) return;
@@ -1042,11 +1051,11 @@ export default function AuditTrailScreen() {
           <TouchableOpacity
             key={tab}
             style={[s.tabBtn, activeTab === tab && s.tabBtnActive]}
-            onPress={() => switchTab(tab)}
+            onPress={() => (tab === 'daybook' && dayBookLocked ? notInAccess() : switchTab(tab))}
             activeOpacity={0.8}
           >
             <Ionicons
-              name={tab === 'myentries' ? 'create-outline' : 'book-outline'}
+              name={tab === 'myentries' ? 'create-outline' : (dayBookLocked ? 'lock-closed-outline' : 'book-outline')}
               size={15}
               color={activeTab === tab ? COLORS.white : COLORS.textSecondary}
             />
@@ -1067,7 +1076,9 @@ export default function AuditTrailScreen() {
         ]}
       >
         {/* Error Banner */}
-        {apiError ? (
+        {apiError === NOT_IN_ACCESS ? (
+          <ErrorBanner message={apiError} />
+        ) : apiError ? (
           <View style={s.errorBanner}>
             <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
             <Text style={s.errorBannerTxt}>{apiError}</Text>

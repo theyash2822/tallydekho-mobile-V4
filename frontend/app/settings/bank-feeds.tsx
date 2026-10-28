@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -494,6 +495,8 @@ const sw = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BankFeedsScreen() {
   const { t } = useTranslation();
+  // Banks are added by the Owner or an Admin only (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin } = useWorkspace();
   const router = useRouter();
   const { company } = useAuth();
 
@@ -597,9 +600,11 @@ export default function BankFeedsScreen() {
               <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
             <Text style={s.hdrTitle}>{t('settings.bankFeeds')}</Text>
-            <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addBtn} activeOpacity={0.85}>
-              <Ionicons name="add" size={24} color={COLORS.white} />
-            </TouchableOpacity>
+            {isOwnerOrAdmin ? (
+              <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addBtn} activeOpacity={0.85}>
+                <Ionicons name="add" size={24} color={COLORS.white} />
+              </TouchableOpacity>
+            ) : <View style={{ width: 40 }} />}
           </View>
         ) : (
           /* ─── Multi-select Header ─────────────────────────────────────── */

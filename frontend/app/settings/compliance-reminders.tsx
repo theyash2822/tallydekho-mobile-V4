@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -172,6 +173,9 @@ function SectionDivider() {
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceRemindersScreen() {
+  // The Owner or an Admin changes these settings; members view them (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin: canEditSettings } = useWorkspace();
+  const isOwnerOrAdmin = canEditSettings;
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -202,6 +206,10 @@ export default function ComplianceRemindersScreen() {
   });
 
   const save = async () => {
+    if (!isOwnerOrAdmin) {
+      Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) });
+      return;
+    }
     try {
       await updateAlertSettings({
         compliance_reminders: {
@@ -353,7 +361,7 @@ export default function ComplianceRemindersScreen() {
         </View>
 
         {/* Save */}
-        <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.8}>
+        <TouchableOpacity style={[s.saveBtn, !isOwnerOrAdmin && { opacity: 0.5 }]} onPress={save} activeOpacity={0.8}>
           <Text style={s.saveTxt}>{t('screens.settingsComplianceReminders.saveSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>

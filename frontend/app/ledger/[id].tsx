@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
   Dimensions, Alert, Keyboard, Pressable, ActivityIndicator,
@@ -247,6 +248,8 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function LedgerDetailScreen() {
   const { t } = useTranslation();
+  // Payment reminders are sent by the Owner or an Admin only (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin } = useWorkspace();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { company, selectedFY } = useAuth();
@@ -794,7 +797,7 @@ export default function LedgerDetailScreen() {
               <Ionicons name="share-outline" size={16} color={COLORS.white} />
               <Text style={styles.shareBtnText}>{t('pdf.sharePdf')}</Text>
             </TouchableOpacity>
-            {(liveLedger?.phone || liveLedger?.mobile) ? (
+            {isOwnerOrAdmin && (liveLedger?.phone || liveLedger?.mobile) ? (
               <TouchableOpacity style={[styles.shareBtn, { flex: 1, backgroundColor: '#25D366' }]} activeOpacity={0.8} onPress={handleSendReminder}>
                 <Ionicons name="logo-whatsapp" size={16} color={COLORS.white} />
                 <Text style={styles.shareBtnText}>{t('screens.ledgerId.remind')}</Text>

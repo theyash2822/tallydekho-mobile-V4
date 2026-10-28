@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { LockedScreen } from '../../src/components/LockedOverlay';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Animated, Alert,
@@ -734,7 +736,7 @@ const DEFAULT_REMINDERS: Reminder[] = [
 
 let nextId = 3;
 
-export default function PaymentRemindersScreen() {
+function PaymentRemindersScreenContent() {
   const { t } = useTranslation();
   const router = useRouter();
   const [threshold, setThreshold] = useState('500');
@@ -962,3 +964,10 @@ const s = StyleSheet.create({
   saveBtn: { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15, alignItems: 'center', marginTop: SPACING.sm },
   saveTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
+
+/** Payment reminders are seen and sent by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
+export default function PaymentRemindersScreen() {
+  const { isOwnerOrAdmin } = useWorkspace();
+  if (!isOwnerOrAdmin) return <LockedScreen titleKey="settings.paymentReminders" />;
+  return <PaymentRemindersScreenContent />;
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, KeyboardAvoidingView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator,
@@ -101,6 +102,9 @@ function RadioRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function StockSettingsScreen() {
+  // The Owner or an Admin changes these settings; members view them (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin: canEditSettings } = useWorkspace();
+  const isOwnerOrAdmin = canEditSettings;
   const { t } = useTranslation();
   const router = useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
@@ -238,6 +242,10 @@ export default function StockSettingsScreen() {
 
   // ── Save — flush any remaining drafts before sending
   const handleSave = async () => {
+    if (!isOwnerOrAdmin) {
+      Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) });
+      return;
+    }
     if (!companyGuid) return;
     setSaving(true);
     try {

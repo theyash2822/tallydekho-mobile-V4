@@ -61,7 +61,9 @@
     "notFound": "Not found",
     "yourName": "Your Name",
     "notInYourAccess": "Not in your access",
-    "hidden": "Hidden"
+    "hidden": "Hidden",
+    "ownerAdminOnly": "Only the Workspace Owner or an Admin can change this.",
+    "askOwnerForAccess": "Ask the Workspace Owner if you need this for this company."
   },
   "nav": {
     "dashboard": "Dashboard",

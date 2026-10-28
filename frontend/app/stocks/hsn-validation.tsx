@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -27,6 +28,8 @@ const STATUS_LABEL_KEY: Record<string, string> = {
 };
 
 export default function HsnValidationScreen() {
+  // Stock items are edited by the Owner or an Admin only (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin } = useWorkspace();
   const router = useRouter();
   const { t } = useTranslation();
   const { company } = useAuth();
@@ -122,6 +125,7 @@ export default function HsnValidationScreen() {
         Toast.show({ type: 'error', text1: t('screens.stocksHsnValidation.invalid'), text2: t('screens.stocksHsnValidation.notAccepted') });
         return;
       }
+      if (!isOwnerOrAdmin) { Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) }); return; }
       const res: any = await alterStockItem({
         companyGuid,
         companyName: company?.name || '',

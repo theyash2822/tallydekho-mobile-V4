@@ -35,13 +35,14 @@ export const RBAS_ERROR_CODES = new Set([
   'NOT_YOUR_ENTRY',
   'SEAT_PAUSED',
   'WORKSPACE_FROZEN',
+  'OWNER_ADMIN_ONLY',
 ]);
 
 /** Member access refusals: shown as "Not in your access", not as an error. */
 export const ACCESS_CODES = new Set([
   'SCOPE_FY_DENIED', 'SCOPE_LEDGER_DENIED', 'SCOPE_RESTRICTED_REPORT', 'SCOPE_REPORT_DENIED',
   'SCOPE_STOCK_DENIED', 'SCOPE_VOUCHER_DENIED', 'COMPANY_SCOPE_DENIED', 'FY_SCOPE_DENIED',
-  'LEDGER_SCOPE_DENIED', 'GODOWN_SCOPE_DENIED', 'COST_CENTRE_SCOPE_DENIED',
+  'LEDGER_SCOPE_DENIED', 'GODOWN_SCOPE_DENIED', 'COST_CENTRE_SCOPE_DENIED', 'OWNER_ADMIN_ONLY',
 ]);
 
 const TITLES: Record<string, string> = {
@@ -74,6 +75,7 @@ const TITLES: Record<string, string> = {
   NOT_YOUR_ENTRY: 'Not your entry',
   SEAT_PAUSED: 'Seat paused',
   WORKSPACE_FROZEN: 'Workspace on hold',
+  OWNER_ADMIN_ONLY: 'Not in your access',
 };
 
 export function isRbasError(err: unknown): boolean {

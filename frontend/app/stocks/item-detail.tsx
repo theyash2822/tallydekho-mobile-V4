@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useTranslation } from 'react-i18next';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput,
@@ -108,6 +109,8 @@ const pr = StyleSheet.create({
 
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 export default function ItemDetailScreen() {
+  // Stock items are edited by the Owner or an Admin only (Owner decision, 29 Oct 2026).
+  const { isOwnerOrAdmin } = useWorkspace();
   const router = useRouter();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -445,6 +448,7 @@ export default function ItemDetailScreen() {
                         Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.invalidHsn'), text2: t('screens.stocksItemDetail.codeNotAccepted') });
                         return;
                       }
+                      if (!isOwnerOrAdmin) { Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) }); return; }
                       const res: any = await alterStockItem({
                         companyGuid,
                         companyName: company?.name || '',
