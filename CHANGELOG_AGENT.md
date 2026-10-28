@@ -1,3 +1,10 @@
+## 2026-10-29 — Manual-test fixes, Phases A–E (branch `28-10-2026`, local only)
+
+- Audit trail shows Made by for the Owner and Admins; Owner billing summary lists recent credit activity.
+- Capabilities narrowed by per-company Reports and Stock access; Home KPI cards, sales/purchases/expenses tiles, report cards and the Stock tab show blurred locked cards ("Not in your access") instead of errors; "Your N parties" labels.
+- Server access codes mapped; background reads outside access no longer raise error toasts; amounts never show ₹NaN; latest permitted year opens by default.
+- `expo-blur` added (~57.0.3). Translations in 10 languages. Tested: `tsc --noEmit` clean; Android bundle builds (HTTP 200).
+
 ## 2026-10-28 — RBAS + workspace billing (branch `28-10-2026`)
 
 - Company profile/GST gating (RBC-01); socket reconnects after a server-side disconnect so scope is re-checked (RBC-03).
