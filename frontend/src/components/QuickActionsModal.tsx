@@ -130,8 +130,8 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
           const cap = ITEM_CAPS[item.id];
           if (cap && !hasCapability(cap)) return false;
           // Entry Mode: OPTIONAL_ONLY → Proforma only (not regular invoice); Quotation via order optional
-          if (item.id === 'sale-invoice' && entryMode === 'OPTIONAL_ONLY') return false;
-          if (item.id === 'sale-proforma' && entryMode === 'REGULAR_ONLY') return false;
+          if (item.id === 'sale-invoice' && (entryMode === 'OPTIONAL_ONLY' || entryMode === 'NONE')) return false;
+          if (item.id === 'sale-proforma' && (entryMode === 'REGULAR_ONLY' || entryMode === 'NONE')) return false;
           return true;
         })
         .map((item) => ({

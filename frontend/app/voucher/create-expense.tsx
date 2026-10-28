@@ -155,6 +155,7 @@ export default function CreateExpenseVoucher() {
       const paymentMethod = parentContainsCash(paidFromData) ? 'Cash' : 'Bank';
       const payload = {
         companyGuid: company?.guid,
+        voucherKind: 'expense',
         companyName: company?.name,
         date: dmyToISO(date),
         amount: amtNum,

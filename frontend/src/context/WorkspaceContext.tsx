@@ -28,6 +28,7 @@ import Toast from 'react-native-toast-message';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { setWorkspaceGeneration } from '../utils/workspaceGeneration';
 import { isDemoCompany, isDemoMode, filterCompaniesForPairing } from '../utils/isDemoCompany';
+import { effectiveCapabilities, toMobileEntryMode, type EntryScope } from '../utils/entryScope';
 import { toAuthCompany } from '../utils/companyIdentity';
 import { tenantKey, companySelectionFeature, fyFeature, setTenantKeyContext } from '../utils/tenantStorage';
 import { normalizeScopes, filterByScopeGuidsOrNames, type ScopeBag } from '../utils/rbasScope';
@@ -38,7 +39,7 @@ const STORAGE_KEY = 'active_workspace_id';
 /** When set, do not auto-jump away from sticky workspace (user picked it). */
 const MANUAL_PIN_KEY = 'active_workspace_manual_pin';
 
-export type EntryMode = 'OPTIONAL_ONLY' | 'REGULAR_ONLY' | 'BOTH';
+export type EntryMode = 'OPTIONAL_ONLY' | 'REGULAR_ONLY' | 'BOTH' | 'NONE';
 
 export interface WorkspaceSummary {
   id: string;
@@ -62,6 +63,8 @@ export interface WorkspaceAccess {
   role?: { id?: string; displayName?: string; systemKey?: string; entryMode?: EntryMode } | null;
   capabilities?: string[];
   entryMode?: EntryMode;
+  // Per company GUID; companies not listed allow what the role allows.
+  entryScopes?: Record<string, EntryScope>;
   sensitivePolicies?: Record<string, boolean>;
   scopes?: any;
 }
@@ -616,6 +619,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (event === 'workspace_access_changed' || event === 'workspace_access_revoked') {
         refreshWorkspaces();
         refreshContext();
+        // Re-join so the server recomputes which company rooms this member may hear.
+        if (event === 'workspace_access_changed' && payload?.workspaceId) {
+          socketService.setWorkspaceContext?.(String(payload.workspaceId));
+        }
         return;
       }
       if (event === 'hard_sync_request') {
@@ -662,11 +669,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [workspaces, workspaceId]
   );
 
+  // Data entry is per company: the selected company narrows the role's create permissions.
+  const selectedCompanyGuid = company?.guid || null;
+  const companyEntryScope = selectedCompanyGuid ? access?.entryScopes?.[selectedCompanyGuid] || null : null;
   const caps = useMemo(() => {
     const list = access?.capabilities;
-    if (Array.isArray(list)) return new Set(list.map(String));
-    return new Set<string>();
-  }, [access]);
+    if (!Array.isArray(list)) return new Set<string>();
+    return new Set(effectiveCapabilities(list.map(String), companyEntryScope));
+  }, [access, companyEntryScope]);
 
   const membershipType = access?.membershipType || workspace?.membershipType || '';
   const isOwner = membershipType === 'OWNER';
@@ -675,10 +685,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const roleSystemKey = access?.role?.systemKey || null;
   const isOwnerOrAdmin = isOwner || roleSystemKey === 'ADMIN';
-  const entryMode: EntryMode =
-    (access?.entryMode as EntryMode) ||
-    (access?.role?.entryMode as EntryMode) ||
-    'BOTH';
+  const entryMode: EntryMode = toMobileEntryMode(
+    companyEntryScope?.entryMode || access?.entryMode || access?.role?.entryMode || 'BOTH',
+  );
   const demoMode = isDemoMode(pairingStatus);
   const tallyConnected = pairingStatus === 'CONNECTED';
 

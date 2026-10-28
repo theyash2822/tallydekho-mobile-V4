@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, TYPOGRAPHY, RADIUS } from '../../constants/colors';
 
 export type EntryType = 'regular' | 'optional';
-export type WorkspaceEntryMode = 'OPTIONAL_ONLY' | 'REGULAR_ONLY' | 'BOTH';
+// NONE: a member setting that conflicts with the role — neither kind is allowed (the server refuses both).
+export type WorkspaceEntryMode = 'OPTIONAL_ONLY' | 'REGULAR_ONLY' | 'BOTH' | 'NONE';
 
 interface Props {
   value: EntryType;
@@ -21,6 +22,7 @@ export function entryTypeAllowed(mode: WorkspaceEntryMode | undefined, type: Ent
   if (!mode || mode === 'BOTH') return true;
   if (mode === 'OPTIONAL_ONLY') return type === 'optional';
   if (mode === 'REGULAR_ONLY') return type === 'regular';
+  if (mode === 'NONE') return false;
   return true;
 }
 
