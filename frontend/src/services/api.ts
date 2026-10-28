@@ -1092,6 +1092,10 @@ export const pairWorkspaceTally = (workspaceId: string, pairing_code: string) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/pair`, { pairing_code });
 export const unpairWorkspaceTally = (workspaceId: string) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/unpair`);
+// Owner billing summary (RBC-09) — read-only on Mobile
+export const getSeatPlan = (workspaceId: string) => get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/seat-plan`);
+export const getBillingNotices = () => get<any>('/billing/notices');
+
 // One-off Owner approvals (RBC-04)
 export const createVoucherRequest = (body: { companyGuid?: string; voucherGuid: string; reason?: string }) =>
   post<any>('/voucher-requests', body);

@@ -3914,7 +3914,19 @@
       "billingBody": "Seat purchase, credit recharge, and additional Workspace checkout are available only on the TallyDekho Web Portal for the Workspace Owner.",
       "askOwner": "If this Workspace needs more credits, ask the Workspace Owner to recharge from the Web Portal.",
       "openWebPortal": "Open Web Portal",
-      "footnote": "Mobile does not sell plans or show a mock Free badge. Credit recharge uses Razorpay on the Web Portal (backend ready). Commercial status comes from the Workspace context."
+      "footnote": "Mobile does not sell plans or show a mock Free badge. Credit recharge uses Razorpay on the Web Portal (backend ready). Commercial status comes from the Workspace context.",
+      "summaryTitle": "This workspace's billing",
+      "transferFeeDue": "Transfer fee due: ₹{{amount}}. This workspace is paused until it is paid on the Web portal.",
+      "available": "Available credits",
+      "credits": "credits",
+      "heldExpiring": "Held for entries waiting for Tally: {{held}} · Expiring in 30 days: {{expiring}}",
+      "seats": "Paid seats",
+      "seatLine": "{{capacity}} seats · {{used}} in use · {{free}} free",
+      "nextRenewal": "Next renewal {{date}} · {{credits}} credits",
+      "seatGrace": "Renewal failed. Recharge before {{date}} or members on paid seats will be paused.",
+      "seatPaused": "Members on unpaid seats are paused. Unpaid seats retire on {{date}}.",
+      "seatDues": "Seat dues: {{credits}} credits. New seats are blocked until paid on the Web portal.",
+      "notices": "Recent billing notices"
     },
     "componentsFormsAddPartyModal": {
       "customer": "Customer",
