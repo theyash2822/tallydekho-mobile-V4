@@ -13,8 +13,11 @@ type Options = {
   /** Fallback when router cannot go back. Default: home tabs. */
   href?: string;
   message?: string;
-  /** The screen draws its own locked view when the member's access (not the role) refuses it. */
-  lockedView?: boolean;
+  /**
+   * The screen draws its own locked view instead of navigating away: `true` when the member's
+   * access (not the role) refuses it, `'always'` for any refusal (the main tabs).
+   */
+  lockedView?: boolean | 'always';
 };
 
 export function useRequireCapability(capability: string, opts?: Options): boolean {
@@ -33,7 +36,7 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
   useEffect(() => {
     if (loading || redirected.current || grantedOnce) return;
     if (hasCapability(capability)) return;
-    if (opts?.lockedView && lockedByAccess(capability)) return;
+    if (opts?.lockedView === 'always' || (opts?.lockedView && lockedByAccess(capability))) return;
     redirected.current = true;
     if (lockedByAccess(capability)) {
       // The role allows it; the member's access for this company does not.
@@ -57,6 +60,20 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
   }, [loading, grantedOnce, capability, hasCapability, lockedByAccess, router, opts?.href, opts?.message, opts?.lockedView]);
 
   return allowed;
+}
+
+/**
+ * For the main tabs: 'allowed', 'loading' (access not loaded yet — never shown as locked), or
+ * 'locked' (the tab's screen shows a lock instead of navigating away).
+ */
+export function useTabAccess(capability: string): 'loading' | 'allowed' | 'locked' {
+  const ws = useWorkspace() as ReturnType<typeof useWorkspace> & { access?: unknown };
+  const { hasCapability, loading } = ws;
+  const [grantedOnce, setGrantedOnce] = useState(false);
+  const grantedNow = !loading && hasCapability(capability);
+  if (grantedNow && !grantedOnce) setGrantedOnce(true);
+  if (grantedOnce || grantedNow) return 'allowed';
+  return loading || !ws.access ? 'loading' : 'locked';
 }
 
 interface Props extends Options {

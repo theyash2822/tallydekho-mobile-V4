@@ -15,6 +15,7 @@ import {
   setDeviceOnline,
   markServerReachable,
   friendlyUserMessage,
+  NOT_IN_ACCESS,
 } from './apiErrors';
 import { toastRbasError, ACCESS_CODES } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
@@ -280,7 +281,8 @@ async function request<T>(
         const data = await safeParseJson(res);
         const { message, code } = extractErrorMeta(data);
         const kind = kindFromStatus(res.status, code);
-        const err = new ApiError(message || `HTTP ${res.status}`, { status: res.status, code, kind, raw: data });
+        const accessRefused = res.status === 403 && !!code && ACCESS_CODES.has(code);
+        const err = new ApiError(accessRefused ? NOT_IN_ACCESS : (message || `HTTP ${res.status}`), { status: res.status, code, kind, raw: data });
         if (res.status === 401) {
           if (requiresAuth && allowRefresh) {
             const outcome = await tryRefreshSession();
@@ -312,8 +314,10 @@ async function request<T>(
     if (!res.ok) {
       const { message, code } = extractErrorMeta(data);
       const kind = kindFromStatus(res.status, code);
+      // A refusal of the member's access reads "Not in your access" everywhere, so screens lock instead of erroring.
+      const accessRefused = res.status === 403 && !!code && ACCESS_CODES.has(code);
       const err = new ApiError(
-        message || `HTTP ${res.status}`,
+        accessRefused ? NOT_IN_ACCESS : (message || `HTTP ${res.status}`),
         { status: res.status, code, kind, raw: data },
       );
       // Genuine protected 401 → try the refresh token once, then replay the

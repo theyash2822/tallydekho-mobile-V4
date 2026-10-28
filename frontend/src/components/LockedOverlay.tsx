@@ -7,6 +7,7 @@ import { StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-nativ
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../constants/colors';
 
@@ -49,6 +50,21 @@ export function useScopeLabel() {
   };
 }
 
+/** A whole screen outside the member's access: placeholder cards behind the blur, with a lock. */
+export function LockedScreen({ titleKey }: { titleKey: string }) {
+  const { t } = useTranslation();
+  return (
+    <SafeAreaView style={s.screen} edges={['top']}>
+      <Text style={s.screenTitle}>{t(titleKey)}</Text>
+      <LockedOverlay locked testID="screen-locked">
+        <View style={s.screenBody}>
+          {[120, 84, 84, 84].map((h, i) => <View key={i} style={[s.placeholder, { height: h }]} />)}
+        </View>
+      </LockedOverlay>
+    </SafeAreaView>
+  );
+}
+
 /** A hidden sensitive value: a lock and "Hidden", never a zero. */
 export function HiddenValue({ style }: { style?: any }) {
   const { t } = useTranslation();
@@ -68,4 +84,8 @@ const s = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
   hidden: { color: COLORS.textSecondary },
+  screen: { flex: 1, backgroundColor: COLORS.pageBg },
+  screenTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+  screenBody: { padding: 16, gap: 12 },
+  placeholder: { borderRadius: 14, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
 });

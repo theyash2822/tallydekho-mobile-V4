@@ -66,6 +66,12 @@ export function errorMessage(err: unknown, fallback = 'Request failed'): string 
  * Map raw backend / network copy to on-brand user-facing text.
  * Keeps technical codes out of full-page ErrorState.
  */
+/** Message carried by refusals of the member's access (SCOPE_*): screens show a lock, not an error. */
+export const NOT_IN_ACCESS = 'Not in your access';
+export function isAccessMessage(message?: string | null): boolean {
+  return String(message || '').trim() === NOT_IN_ACCESS;
+}
+
 export function friendlyUserMessage(
   message?: string | null,
   code?: string | null,

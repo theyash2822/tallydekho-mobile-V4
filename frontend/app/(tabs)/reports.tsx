@@ -20,8 +20,8 @@ import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
-import { useRequireCapability } from '../../src/components/RequireCapability';
-import LockedOverlay from '../../src/components/LockedOverlay';
+import { useTabAccess } from '../../src/components/RequireCapability';
+import LockedOverlay, { LockedScreen } from '../../src/components/LockedOverlay';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -866,7 +866,7 @@ const sc = StyleSheet.create({
 // Main Reports Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
-  const allowed = useRequireCapability('financials.view');
+  const tabAccess = useTabAccess('financials.view');
   const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
@@ -1040,7 +1040,8 @@ export default function ReportsScreen() {
   const netProfit = revenueTotal - expenseTotal;
   const gstPending = Math.max(0, 12 - gstFiledCount);
 
-  if (!allowed) return null;
+  if (tabAccess === 'locked') return <LockedScreen titleKey="nav.reports" />;
+  if (tabAccess === 'loading') return null;
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
       {apiError && <ErrorBanner message={apiError} onRetry={() => loadReports({ soft: hasFinDataRef.current })} />}

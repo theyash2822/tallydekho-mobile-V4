@@ -5,7 +5,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/colors';
-import { friendlyUserMessage } from '../services/apiErrors';
+import { friendlyUserMessage, isAccessMessage } from '../services/apiErrors';
 
 // ── Loading ────────────────────────────────────────────────────
 export function LoadingState({ message }: { message?: string }) {
@@ -25,6 +25,18 @@ export function ErrorState({
   title,
 }: { message?: string; onRetry?: () => void; title?: string }) {
   const { t } = useTranslation();
+  // Outside the member's access: a lock, not an error, and nothing to retry.
+  if (isAccessMessage(message)) {
+    return (
+      <View style={s.center}>
+        <View style={[s.iconCircle, { backgroundColor: COLORS.activeBg }]}>
+          <Ionicons name="lock-closed-outline" size={30} color={COLORS.textSecondary} />
+        </View>
+        <Text style={s.title}>{t('common.notInYourAccess', { defaultValue: 'Not in your access' })}</Text>
+        <Text style={s.subText}>{t('common.askOwnerForAccess', { defaultValue: 'Ask the Workspace Owner if you need this for this company.' })}</Text>
+      </View>
+    );
+  }
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.center}>
@@ -67,6 +79,7 @@ export function ErrorBanner({
   onRetry,
 }: { message: string; onRetry?: () => void }) {
   const { t } = useTranslation();
+  if (isAccessMessage(message)) return <LockedNote />;
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.banner}>
@@ -87,6 +100,7 @@ export function SectionError({
   onRetry,
 }: { message: string; onRetry?: () => void }) {
   const { t } = useTranslation();
+  if (isAccessMessage(message)) return <LockedNote />;
   const detail = friendlyUserMessage(message);
   return (
     <View style={s.sectionErr}>
@@ -101,7 +115,24 @@ export function SectionError({
   );
 }
 
+/** One-line lock note used in place of an error banner when the member's access refuses the data. */
+function LockedNote() {
+  const { t } = useTranslation();
+  return (
+    <View style={s.lockedNote}>
+      <Ionicons name="lock-closed-outline" size={14} color={COLORS.textSecondary} />
+      <Text style={s.lockedNoteText} numberOfLines={2}>{t('common.notInYourAccess', { defaultValue: 'Not in your access' })}</Text>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  lockedNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SPACING.md, marginVertical: SPACING.sm, paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: RADIUS.md, backgroundColor: COLORS.activeBg,
+  },
+  lockedNoteText: { flex: 1, fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
   center: {
     flex: 1,
     alignItems: 'center',

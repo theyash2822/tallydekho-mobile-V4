@@ -51,7 +51,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const handleTabPress = (route: Route, idx: number) => {
     const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (def?.capability && !hasCapability(def.capability)) {
-      Toast.show({ type: 'error', text1: t('screens.tabsLayout.notAllowed'), text2: t('screens.tabsLayout.noAccess') });
+      Toast.show({ type: 'info', text1: t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
       return;
     }
     const isFocused = state.index === idx;
@@ -68,9 +68,9 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const renderTab = (route: Route, idx: number) => {
     const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (!def) return null;
+    // A tab outside the member's access stays in place with a lock; tapping it explains why.
     const allowed = !def.capability || hasCapability(def.capability);
-    if (!allowed) return <View key={route.key} style={styles.tabItem} />;
-    const isFocused = state.index === idx;
+    const isFocused = allowed && state.index === idx;
     return (
       <TouchableOpacity
         key={route.key}
@@ -80,12 +80,19 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
         accessibilityRole="button"
         accessibilityState={{ selected: isFocused }}
       >
-        <Ionicons
-          name={isFocused ? def.icon : def.iconOutline}
-          size={22}
-          color={isFocused ? COLORS.navText : COLORS.inactiveNavText}
-        />
-        <Text style={[styles.tabLabel, { color: isFocused ? COLORS.navText : COLORS.inactiveNavText }]}>
+        <View style={!allowed && styles.lockedTab}>
+          <Ionicons
+            name={isFocused ? def.icon : def.iconOutline}
+            size={22}
+            color={isFocused ? COLORS.navText : COLORS.inactiveNavText}
+          />
+          {!allowed && (
+            <View style={styles.lockBadge}>
+              <Ionicons name="lock-closed" size={9} color={COLORS.white} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.tabLabel, { color: isFocused ? COLORS.navText : COLORS.inactiveNavText }, !allowed && styles.lockedTabLabel]}>
           {t(def.titleKey)}
         </Text>
       </TouchableOpacity>
@@ -124,7 +131,6 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
 
 export default function TabsLayout() {
   const [showActions, setShowActions] = useState(false);
-  const { hasCapability, loading } = useWorkspace();
   const handleFabPress = useCallback(() => setShowActions(true), []);
   const handleModalClose = useCallback(() => setShowActions(false), []);
   // Memoize the tabBar renderer so React Navigation never sees a prop change
@@ -134,12 +140,6 @@ export default function TabsLayout() {
     [handleFabPress],
   );
 
-  const tabHref = (cap?: string) => {
-    if (!cap) return undefined;
-    // Fail closed while loading / missing view cap — hide from Expo Router tab list
-    if (loading || !hasCapability(cap)) return null;
-    return undefined;
-  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -147,10 +147,11 @@ export default function TabsLayout() {
         screenOptions={{ headerShown: false }}
         tabBar={renderTabBar}
       >
-        <Tabs.Screen name="index" options={{ href: tabHref('dashboard.view') }} />
-        <Tabs.Screen name="ledger" options={{ href: tabHref('ledgers.view') }} />
-        <Tabs.Screen name="stocks" options={{ href: tabHref('inventory.view') }} />
-        <Tabs.Screen name="reports" options={{ href: tabHref('financials.view') }} />
+        {/* Every tab stays registered; the tab bar and each screen show a lock when access is missing. */}
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="ledger" />
+        <Tabs.Screen name="stocks" />
+        <Tabs.Screen name="reports" />
       </Tabs>
       {/* Modal lives outside Tabs so navigation re-renders never affect it */}
       <QuickActionsModal visible={showActions} onClose={handleModalClose} />
@@ -185,6 +186,12 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     minHeight: 52,
     justifyContent: 'flex-end',
+  },
+  lockedTab: { opacity: 0.45 },
+  lockedTabLabel: { opacity: 0.55 },
+  lockBadge: {
+    position: 'absolute', right: -7, top: -4, width: 14, height: 14, borderRadius: 7,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.inactiveNavText,
   },
   tabLabel: {
     fontSize: 11,

@@ -13,15 +13,17 @@ export const ENTRY_KEYS = new Set<string>([
 export type EntryScope = { mode?: string; keys?: string[]; entryMode?: string };
 
 /** Role capabilities minus the entry types this company's scope does not allow. */
-/** Reports the Owner can switch per member and company (same list as the server). */
+/**
+ * Reports the Owner can switch per member and company (same list as the server). Area
+ * capabilities (Home, Reports, Stock) are never in it, so narrowing reports never removes a tab.
+ */
 export const REPORT_KEYS = new Set([
-  'financials.view', 'financials.profit_loss.view', 'financials.balance_sheet.view', 'financials.trial_balance.view',
+  'financials.profit_loss.view', 'financials.balance_sheet.view', 'financials.trial_balance.view',
   'financials.cash_register.view', 'financials.bank_balance.view', 'financials.loans_od.view',
   'financials.receivables.view', 'financials.payables.view', 'daybook.view', 'expenses.view',
   'gst.view', 'einvoice.view', 'eway.view',
-  'inventory.view', 'inventory.warehouses.view', 'inventory.stock_ledger.view', 'inventory.negative_stock.view',
-  'inventory.aged_items.view', 'inventory.expiry.view', 'inventory.reorder.view',
-  'dashboard.view', 'ai_insights.view',
+  'inventory.stock_ledger.view', 'inventory.negative_stock.view', 'inventory.aged_items.view',
+  'inventory.expiry.view', 'inventory.reorder.view', 'ai_insights.view',
 ]);
 
 export type SectionScopes = {
