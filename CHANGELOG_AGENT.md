@@ -1,3 +1,10 @@
+## 2026-10-29 (01:00–02:10) — Fixes from manual testing (branch `28-10-2026`, local only)
+
+- All four tabs always shown; a tab outside access carries a lock and explains on tap; its screen shows a locked view.
+- Locks are drawn inside cards (KPI carousel, Home tiles, Reports cards, Stocks tiles and reorder card) so layouts stay intact; access refusals show a lock in the shared error views.
+- Financial Report shows withheld sections (e.g. Trial Balance) as locked.
+- Tested: `tsc --noEmit` clean; Android bundle builds.
+
 ## 2026-10-29 — Manual-test fixes, Phases A–E (branch `28-10-2026`, local only)
 
 - Audit trail shows Made by for the Owner and Admins; Owner billing summary lists recent credit activity.

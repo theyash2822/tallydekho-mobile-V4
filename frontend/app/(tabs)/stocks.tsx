@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useTabAccess } from '../../src/components/RequireCapability';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
-import { LockedScreen } from '../../src/components/LockedOverlay';
+import { LockedScreen, LockLayer, useNotInAccess } from '../../src/components/LockedOverlay';
 
 const SEG_COUNT = 20;
 
@@ -90,6 +90,7 @@ export default function StocksDashboard() {
   const companyGuid = company?.guid;
   const { formatAmount, formatAmountCompact } = useSettings();
   const { sensitivePolicies } = useWorkspace();
+  const notInAccess = useNotInAccess();
 
   const fmtInv = (v: number) =>
     formatSensitive(
@@ -164,12 +165,15 @@ export default function StocksDashboard() {
   const NEUTRAL_BG = COLORS.pageBg;
 
   const d = data || {};
+  // Figures the server withheld (stock reports not in the member's access) show a lock, never 0.
+  const withheld = new Set<string>(Array.isArray(d.locked) ? d.locked : []);
   const categories = Array.isArray(d.categories) ? d.categories : [];
   const maxCat = Math.max(...categories.map((c: any) => Number(c.value) || 0), 1);
 
   const STAT_TILES = [
     {
       id: 'movement', label: t('stocks.movements'),
+      locked: withheld.has('recentMovements'),
       value: String(d.recentMovements ?? 0),
       sub: t('stocks.last7Days'),
       icon: 'swap-vertical-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
@@ -184,6 +188,7 @@ export default function StocksDashboard() {
     },
     {
       id: 'fast', label: t('stocks.fastMoving'),
+      locked: withheld.has('fastMovingCount'),
       value: String(d.fastMovingCount ?? 0),
       sub: t('stocks.activeSkus'),
       icon: 'flash-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
@@ -191,6 +196,7 @@ export default function StocksDashboard() {
     },
     {
       id: 'aged', label: t('stocks.agedStock'),
+      locked: withheld.has('agedInventoryValue'),
       value: fmtInv(Number(d.agedInventoryValue) || 0),
       sub: t('stocks.daysOld', { days: d.agedInventoryDays ?? 90 }),
       icon: 'time-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
@@ -261,7 +267,7 @@ export default function StocksDashboard() {
                 <View style={s.heroIcon}>
                   <Ionicons name="cube-outline" size={18} color={COLORS.white} />
                 </View>
-                <View style={[s.trendPill, { backgroundColor: d.valueTrendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                {!withheld.has('valueTrendPct') && <View style={[s.trendPill, { backgroundColor: d.valueTrendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
                   <Ionicons
                     name={d.valueTrendPositive ? 'trending-up' : 'trending-down'}
                     size={13}
@@ -270,7 +276,7 @@ export default function StocksDashboard() {
                   <Text style={[s.trendTxt, { color: d.valueTrendPositive ? COLORS.positive : COLORS.negative }]}>
                     {d.valueTrendPositive ? '+' : ''}{d.valueTrendPct ?? 0}%
                   </Text>
-                </View>
+                </View>}
               </View>
               <Text style={s.heroLabel}>{t('stocks.totalStockValue')}</Text>
               <Text style={s.heroValue}>{
@@ -290,19 +296,20 @@ export default function StocksDashboard() {
             </TouchableOpacity>
 
             <View style={s.grid}>
-              {STAT_TILES.map(tile => (
+              {STAT_TILES.map((tile: any) => (
                 <TouchableOpacity
                   key={tile.id}
-                  style={s.tile}
+                  style={[s.tile, tile.locked && { overflow: 'hidden' as const }]}
                   activeOpacity={0.8}
-                  onPress={() => safePush(router, tile.route as any)}
+                  onPress={() => (tile.locked ? notInAccess() : safePush(router, tile.route as any))}
                 >
                   <View style={[s.tileIcon, { backgroundColor: tile.tint }]}>
                     <Ionicons name={tile.icon as any} size={16} color={tile.accent} />
                   </View>
                   <Text style={s.tileLabel}>{tile.label}</Text>
-                  <Text style={s.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{tile.value}</Text>
+                  <Text style={s.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{tile.locked ? '••' : tile.value}</Text>
                   <Text style={s.tileSub} numberOfLines={1}>{tile.sub}</Text>
+                  {tile.locked && <LockLayer />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -324,9 +331,9 @@ export default function StocksDashboard() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={s.reorder}
+              style={[s.reorder, withheld.has('reorderQueueCount') && { overflow: 'hidden' as const }]}
               activeOpacity={0.85}
-              onPress={() => safePush(router, '/stocks/reorder-queue' as any)}
+              onPress={() => (withheld.has('reorderQueueCount') ? notInAccess() : safePush(router, '/stocks/reorder-queue' as any))}
             >
               <View style={s.reorderIcon}>
                 <Ionicons name="repeat" size={18} color={(d.reorderQueueCount ?? 0) > 0 ? COLORS.negative : COLORS.textSecondary} />
@@ -340,6 +347,7 @@ export default function StocksDashboard() {
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+              {withheld.has('reorderQueueCount') && <LockLayer />}
             </TouchableOpacity>
 
             <TouchableOpacity
