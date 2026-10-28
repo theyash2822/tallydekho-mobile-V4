@@ -59,7 +59,9 @@
     "comingSoon": "लवकरच येत आहे",
     "provisional": "तात्पुरते",
     "notFound": "सापडले नाही",
-    "yourName": "तुमचे नाव"
+    "yourName": "तुमचे नाव",
+    "notInYourAccess": "तुमच्या प्रवेशात नाही",
+    "hidden": "लपवलेले"
   },
   "nav": {
     "dashboard": "डॅशबोर्ड",
@@ -494,7 +496,9 @@
     "noCompanySynced": "कोणतीही सक्रिय Tally कंपनी सापडली नाही. TallyDekho Desktop मध्ये कंपनी/FY निवड तपासा आणि पुन्हा सिंक करा.",
     "loadingDemo": "डेमो पुस्तके लोड होत आहेत…",
     "noCompanyKpi": "अजून कोणतीही कंपनी सिंक झालेली नाही",
-    "kpiUnavailable": "KPI उपलब्ध नाही"
+    "kpiUnavailable": "KPI उपलब्ध नाही",
+    "yourParties_one": "तुमची {{count}} पार्टी",
+    "yourParties_other": "तुमच्या {{count}} पार्ट्या"
   },
   "quickActions": {
     "title": "झटपट कृती",
@@ -3923,7 +3927,13 @@
       "seatGrace": "नूतनीकरण अयशस्वी. {{date}} पूर्वी रिचार्ज करा, नाहीतर सशुल्क सीटवरील सदस्य थांबवले जातील.",
       "seatPaused": "न भरलेल्या सीटवरील सदस्य थांबवले आहेत. या सीट {{date}} रोजी निवृत्त होतील.",
       "seatDues": "सीट थकबाकी: {{credits}} क्रेडिट. वेब पोर्टलवर भरेपर्यंत नवीन सीट बंद.",
-      "notices": "अलीकडील बिलिंग सूचना"
+      "notices": "अलीकडील बिलिंग सूचना",
+      "creditHistory": "अलीकडील क्रेडिट हालचाल",
+      "statusHELD": "राखून ठेवले",
+      "statusCHARGED": "आकारले",
+      "statusRETURNED": "परत केले",
+      "statusADDED": "जोडले",
+      "statusEXPIRED": "कालबाह्य"
     },
     "componentsFormsAddPartyModal": {
       "customer": "ग्राहक",
@@ -4525,7 +4535,8 @@
       "loadMore": "आणखी लोड करा",
       "allEntriesLoaded": "सर्व {{count}} नोंदी लोड झाल्या",
       "push": "पाठवा",
-      "preparing": "तयार होत आहे…"
+      "preparing": "तयार होत आहे…",
+      "madeBy": "{{name}} यांनी केले"
     },
     "purchaseCreateOrder": {
       "orderDetails": "ऑर्डर तपशील",

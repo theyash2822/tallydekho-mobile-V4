@@ -59,7 +59,9 @@
     "comingSoon": "ਜਲਦੀ ਆ ਰਿਹਾ ਹੈ",
     "provisional": "ਆਰਜ਼ੀ",
     "notFound": "ਨਹੀਂ ਮਿਲਿਆ",
-    "yourName": "ਤੁਹਾਡਾ ਨਾਮ"
+    "yourName": "ਤੁਹਾਡਾ ਨਾਮ",
+    "notInYourAccess": "ਤੁਹਾਡੀ ਪਹੁੰਚ ਵਿੱਚ ਨਹੀਂ",
+    "hidden": "ਲੁਕਿਆ ਹੋਇਆ"
   },
   "nav": {
     "dashboard": "ਡੈਸ਼ਬੋਰਡ",
@@ -494,7 +496,9 @@
     "noCompanySynced": "ਕੋਈ ਸਰਗਰਮ Tally ਕੰਪਨੀ ਨਹੀਂ ਮਿਲੀ। TallyDekho Desktop ਵਿੱਚ ਕੰਪਨੀ/FY ਚੋਣ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਸਿੰਕ ਕਰੋ।",
     "loadingDemo": "ਡੈਮੋ ਖਾਤੇ ਲੋਡ ਹੋ ਰਹੇ ਹਨ…",
     "noCompanyKpi": "ਹਾਲੇ ਕੋਈ ਕੰਪਨੀ ਸਿੰਕ ਨਹੀਂ ਹੋਈ",
-    "kpiUnavailable": "KPI ਉਪਲਬਧ ਨਹੀਂ"
+    "kpiUnavailable": "KPI ਉਪਲਬਧ ਨਹੀਂ",
+    "yourParties_one": "ਤੁਹਾਡੀ {{count}} ਪਾਰਟੀ",
+    "yourParties_other": "ਤੁਹਾਡੀਆਂ {{count}} ਪਾਰਟੀਆਂ"
   },
   "quickActions": {
     "title": "ਤੁਰੰਤ ਕਾਰਵਾਈਆਂ",
@@ -3923,7 +3927,13 @@
       "seatGrace": "ਨਵੀਨੀਕਰਨ ਅਸਫਲ। {{date}} ਤੋਂ ਪਹਿਲਾਂ ਰੀਚਾਰਜ ਕਰੋ, ਨਹੀਂ ਤਾਂ ਭੁਗਤਾਨ ਵਾਲੀਆਂ ਸੀਟਾਂ ਦੇ ਮੈਂਬਰ ਰੋਕੇ ਜਾਣਗੇ।",
       "seatPaused": "ਬਿਨਾਂ ਭੁਗਤਾਨ ਸੀਟਾਂ ਦੇ ਮੈਂਬਰ ਰੋਕੇ ਗਏ ਹਨ। ਇਹ ਸੀਟਾਂ {{date}} ਨੂੰ ਖਤਮ ਹੋਣਗੀਆਂ।",
       "seatDues": "ਸੀਟ ਬਕਾਇਆ: {{credits}} ਕ੍ਰੈਡਿਟ। ਵੈੱਬ ਪੋਰਟਲ 'ਤੇ ਭੁਗਤਾਨ ਤੱਕ ਨਵੀਆਂ ਸੀਟਾਂ ਬੰਦ।",
-      "notices": "ਹਾਲੀਆ ਬਿਲਿੰਗ ਸੂਚਨਾਵਾਂ"
+      "notices": "ਹਾਲੀਆ ਬਿਲਿੰਗ ਸੂਚਨਾਵਾਂ",
+      "creditHistory": "ਹਾਲੀਆ ਕ੍ਰੈਡਿਟ ਗਤੀਵਿਧੀ",
+      "statusHELD": "ਰੋਕੇ ਗਏ",
+      "statusCHARGED": "ਕੱਟੇ ਗਏ",
+      "statusRETURNED": "ਵਾਪਸ ਕੀਤੇ",
+      "statusADDED": "ਜੋੜੇ ਗਏ",
+      "statusEXPIRED": "ਮਿਆਦ ਪੁੱਗੀ"
     },
     "componentsFormsAddPartyModal": {
       "customer": "ਗਾਹਕ",
@@ -4525,7 +4535,8 @@
       "loadMore": "ਹੋਰ ਲੋਡ ਕਰੋ",
       "allEntriesLoaded": "ਸਾਰੀਆਂ {{count}} ਐਂਟਰੀਆਂ ਲੋਡ ਹੋਈਆਂ",
       "push": "ਭੇਜੋ",
-      "preparing": "ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ…"
+      "preparing": "ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ…",
+      "madeBy": "{{name}} ਵੱਲੋਂ ਬਣਾਇਆ"
     },
     "purchaseCreateOrder": {
       "orderDetails": "ਆਰਡਰ ਵੇਰਵੇ",

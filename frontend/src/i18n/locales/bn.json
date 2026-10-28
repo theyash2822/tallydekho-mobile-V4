@@ -59,7 +59,9 @@
     "comingSoon": "শীঘ্রই আসছে",
     "provisional": "অস্থায়ী",
     "notFound": "পাওয়া যায়নি",
-    "yourName": "আপনার নাম"
+    "yourName": "আপনার নাম",
+    "notInYourAccess": "আপনার অ্যাক্সেসে নেই",
+    "hidden": "লুকানো"
   },
   "nav": {
     "dashboard": "ড্যাশবোর্ড",
@@ -494,7 +496,9 @@
     "noCompanySynced": "কোনো সক্রিয় Tally কোম্পানি পাওয়া যায়নি। TallyDekho Desktop-এ কোম্পানি/FY নির্বাচন দেখে আবার সিঙ্ক করুন।",
     "loadingDemo": "ডেমো খাতা লোড হচ্ছে…",
     "noCompanyKpi": "এখনও কোনো কোম্পানি সিঙ্ক হয়নি",
-    "kpiUnavailable": "KPI উপলব্ধ নয়"
+    "kpiUnavailable": "KPI উপলব্ধ নয়",
+    "yourParties_one": "আপনার {{count}}টি পার্টি",
+    "yourParties_other": "আপনার {{count}}টি পার্টি"
   },
   "quickActions": {
     "title": "দ্রুত কাজ",
@@ -3923,7 +3927,13 @@
       "seatGrace": "নবীকরণ ব্যর্থ। {{date}}-এর আগে রিচার্জ করুন, না হলে পেইড সিটের সদস্যরা স্থগিত হবেন।",
       "seatPaused": "অপরিশোধিত সিটের সদস্যরা স্থগিত। এই সিটগুলি {{date}}-এ বাতিল হবে।",
       "seatDues": "সিট বকেয়া: {{credits}} ক্রেডিট। ওয়েব পোর্টালে পরিশোধ না হওয়া পর্যন্ত নতুন সিট বন্ধ।",
-      "notices": "সাম্প্রতিক বিলিং নোটিশ"
+      "notices": "সাম্প্রতিক বিলিং নোটিশ",
+      "creditHistory": "সাম্প্রতিক ক্রেডিট কার্যকলাপ",
+      "statusHELD": "আটকে রাখা",
+      "statusCHARGED": "কাটা হয়েছে",
+      "statusRETURNED": "ফেরত",
+      "statusADDED": "যোগ হয়েছে",
+      "statusEXPIRED": "মেয়াদোত্তীর্ণ"
     },
     "componentsFormsAddPartyModal": {
       "customer": "গ্রাহক",
@@ -4525,7 +4535,8 @@
       "loadMore": "আরও লোড করুন",
       "allEntriesLoaded": "সব {{count}}টি এন্ট্রি লোড হয়েছে",
       "push": "পাঠান",
-      "preparing": "প্রস্তুত হচ্ছে…"
+      "preparing": "প্রস্তুত হচ্ছে…",
+      "madeBy": "{{name}} তৈরি করেছেন"
     },
     "purchaseCreateOrder": {
       "orderDetails": "অর্ডারের বিবরণ",

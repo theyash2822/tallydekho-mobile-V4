@@ -59,7 +59,9 @@
     "comingSoon": "Coming soon",
     "provisional": "Provisional",
     "notFound": "Not found",
-    "yourName": "Your Name"
+    "yourName": "Your Name",
+    "notInYourAccess": "Not in your access",
+    "hidden": "Hidden"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -494,7 +496,9 @@
     "noCompanySynced": "No active Tally companies found. Check the company/FY selection in TallyDekho Desktop and sync again.",
     "loadingDemo": "Loading demo books…",
     "noCompanyKpi": "No company synced yet",
-    "kpiUnavailable": "KPI unavailable"
+    "kpiUnavailable": "KPI unavailable",
+    "yourParties_one": "Your {{count}} party",
+    "yourParties_other": "Your {{count}} parties"
   },
   "quickActions": {
     "title": "Quick Actions",
@@ -3926,7 +3930,13 @@
       "seatGrace": "Renewal failed. Recharge before {{date}} or members on paid seats will be paused.",
       "seatPaused": "Members on unpaid seats are paused. Unpaid seats retire on {{date}}.",
       "seatDues": "Seat dues: {{credits}} credits. New seats are blocked until paid on the Web portal.",
-      "notices": "Recent billing notices"
+      "notices": "Recent billing notices",
+      "creditHistory": "Recent credit activity",
+      "statusHELD": "Held",
+      "statusCHARGED": "Charged",
+      "statusRETURNED": "Returned",
+      "statusADDED": "Added",
+      "statusEXPIRED": "Expired"
     },
     "componentsFormsAddPartyModal": {
       "customer": "Customer",
@@ -4531,7 +4541,8 @@
       "preparing": "Preparing…",
       "outcomeUnknownTitle": "Was this saved in Tally?",
       "outcomeUnknownBody": "TallyDekho could not confirm whether Tally saved this entry. Check the Day Book in Tally first — retrying an entry that was already saved creates a duplicate.",
-      "retryAnyway": "Retry anyway"
+      "retryAnyway": "Retry anyway",
+      "madeBy": "Made by {{name}}"
     },
     "purchaseCreateOrder": {
       "orderDetails": "Order Details",

@@ -59,7 +59,9 @@
     "comingSoon": "ଶୀଘ୍ର ଆସୁଛି",
     "provisional": "ଅସ୍ଥାୟୀ",
     "notFound": "ମିଳିଲା ନାହିଁ",
-    "yourName": "ଆପଣଙ୍କ ନାମ"
+    "yourName": "ଆପଣଙ୍କ ନାମ",
+    "notInYourAccess": "ଆପଣଙ୍କ ପ୍ରବେଶରେ ନାହିଁ",
+    "hidden": "ଲୁଚାଯାଇଛି"
   },
   "nav": {
     "dashboard": "ଡ୍ୟାଶ୍‌ବୋର୍ଡ",
@@ -494,7 +496,9 @@
     "noCompanySynced": "କୌଣସି ସକ୍ରିୟ Tally କମ୍ପାନୀ ମିଳିଲା ନାହିଁ। TallyDekho Desktop ରେ କମ୍ପାନୀ/FY ଚୟନ ଯାଞ୍ଚ କରି ପୁଣି ସିଙ୍କ୍ କରନ୍ତୁ।",
     "loadingDemo": "ଡେମୋ ଖାତା ଲୋଡ୍ ହେଉଛି…",
     "noCompanyKpi": "ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି କମ୍ପାନୀ ସିଙ୍କ୍ ହୋଇନାହିଁ",
-    "kpiUnavailable": "KPI ଉପଲବ୍ଧ ନାହିଁ"
+    "kpiUnavailable": "KPI ଉପଲବ୍ଧ ନାହିଁ",
+    "yourParties_one": "ଆପଣଙ୍କ {{count}}ଟି ପାର୍ଟି",
+    "yourParties_other": "ଆପଣଙ୍କ {{count}}ଟି ପାର୍ଟି"
   },
   "quickActions": {
     "title": "ଶୀଘ୍ର କାର୍ଯ୍ୟ",
@@ -3923,7 +3927,13 @@
       "seatGrace": "ନବୀକରଣ ବିଫଳ। {{date}} ପୂର୍ବରୁ ରିଚାର୍ଜ କରନ୍ତୁ, ନଚେତ୍ ପେଡ୍ ସିଟ୍‌ର ସଦସ୍ୟ ସ୍ଥଗିତ ହେବେ।",
       "seatPaused": "ଅପେଡ୍ ସିଟ୍‌ର ସଦସ୍ୟ ସ୍ଥଗିତ। ଏହି ସିଟ୍ {{date}}ରେ ଅବସର ନେବ।",
       "seatDues": "ସିଟ୍ ବକେୟା: {{credits}} କ୍ରେଡିଟ୍। ୱେବ୍ ପୋର୍ଟାଲରେ ପୈଠ ପର୍ଯ୍ୟନ୍ତ ନୂଆ ସିଟ୍ ବନ୍ଦ।",
-      "notices": "ସାମ୍ପ୍ରତିକ ବିଲିଂ ସୂଚନା"
+      "notices": "ସାମ୍ପ୍ରତିକ ବିଲିଂ ସୂଚନା",
+      "creditHistory": "ସାମ୍ପ୍ରତିକ କ୍ରେଡିଟ୍ କାର୍ଯ୍ୟକଳାପ",
+      "statusHELD": "ଅଟକାଯାଇଛି",
+      "statusCHARGED": "କଟାଯାଇଛି",
+      "statusRETURNED": "ଫେରସ୍ତ",
+      "statusADDED": "ଯୋଡ଼ାଯାଇଛି",
+      "statusEXPIRED": "ଅବଧି ସମାପ୍ତ"
     },
     "componentsFormsAddPartyModal": {
       "customer": "ଗ୍ରାହକ",
@@ -4525,7 +4535,8 @@
       "loadMore": "ଅଧିକ ଲୋଡ୍ କରନ୍ତୁ",
       "allEntriesLoaded": "ସମସ୍ତ {{count}}ଟି ଏଣ୍ଟ୍ରି ଲୋଡ୍ ହେଲା",
       "push": "ପଠାନ୍ତୁ",
-      "preparing": "ପ୍ରସ୍ତୁତ ହେଉଛି…"
+      "preparing": "ପ୍ରସ୍ତୁତ ହେଉଛି…",
+      "madeBy": "{{name}} ଦ୍ୱାରା ତିଆରି"
     },
     "purchaseCreateOrder": {
       "orderDetails": "ଅର୍ଡର ବିବରଣୀ",

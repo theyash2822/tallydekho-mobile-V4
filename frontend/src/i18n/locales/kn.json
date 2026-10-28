@@ -59,7 +59,9 @@
     "comingSoon": "ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ",
     "provisional": "ತಾತ್ಕಾಲಿಕ",
     "notFound": "ಕಂಡುಬಂದಿಲ್ಲ",
-    "yourName": "ನಿಮ್ಮ ಹೆಸರು"
+    "yourName": "ನಿಮ್ಮ ಹೆಸರು",
+    "notInYourAccess": "ನಿಮ್ಮ ಪ್ರವೇಶದಲ್ಲಿ ಇಲ್ಲ",
+    "hidden": "ಮರೆಮಾಡಲಾಗಿದೆ"
   },
   "nav": {
     "dashboard": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
@@ -494,7 +496,9 @@
     "noCompanySynced": "ಯಾವುದೇ ಸಕ್ರಿಯ Tally ಕಂಪನಿಗಳು ಕಂಡುಬಂದಿಲ್ಲ. TallyDekho Desktop ನಲ್ಲಿ ಕಂಪನಿ/FY ಆಯ್ಕೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಸಿಂಕ್ ಮಾಡಿ.",
     "loadingDemo": "ಡೆಮೊ ಪುಸ್ತಕಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…",
     "noCompanyKpi": "ಇನ್ನೂ ಯಾವುದೇ ಕಂಪನಿ ಸಿಂಕ್ ಆಗಿಲ್ಲ",
-    "kpiUnavailable": "KPI ಲಭ್ಯವಿಲ್ಲ"
+    "kpiUnavailable": "KPI ಲಭ್ಯವಿಲ್ಲ",
+    "yourParties_one": "ನಿಮ್ಮ {{count}} ಪಾರ್ಟಿ",
+    "yourParties_other": "ನಿಮ್ಮ {{count}} ಪಾರ್ಟಿಗಳು"
   },
   "quickActions": {
     "title": "ತ್ವರಿತ ಕ್ರಿಯೆಗಳು",
@@ -3923,7 +3927,13 @@
       "seatGrace": "ನವೀಕರಣ ವಿಫಲ. {{date}} ಮೊದಲು ರೀಚಾರ್ಜ್ ಮಾಡಿ, ಇಲ್ಲದಿದ್ದರೆ ಪಾವತಿಸಿದ ಸೀಟುಗಳ ಸದಸ್ಯರನ್ನು ಸ್ಥಗಿತಗೊಳಿಸಲಾಗುತ್ತದೆ.",
       "seatPaused": "ಪಾವತಿಸದ ಸೀಟುಗಳ ಸದಸ್ಯರನ್ನು ಸ್ಥಗಿತಗೊಳಿಸಲಾಗಿದೆ. ಈ ಸೀಟುಗಳು {{date}} ರಂದು ನಿವೃತ್ತಿಯಾಗುತ್ತವೆ.",
       "seatDues": "ಸೀಟು ಬಾಕಿ: {{credits}} ಕ್ರೆಡಿಟ್‌ಗಳು. ವೆಬ್ ಪೋರ್ಟಲ್‌ನಲ್ಲಿ ಪಾವತಿಸುವವರೆಗೆ ಹೊಸ ಸೀಟುಗಳು ನಿರ್ಬಂಧಿತ.",
-      "notices": "ಇತ್ತೀಚಿನ ಬಿಲ್ಲಿಂಗ್ ಸೂಚನೆಗಳು"
+      "notices": "ಇತ್ತೀಚಿನ ಬಿಲ್ಲಿಂಗ್ ಸೂಚನೆಗಳು",
+      "creditHistory": "ಇತ್ತೀಚಿನ ಕ್ರೆಡಿಟ್ ಚಟುವಟಿಕೆ",
+      "statusHELD": "ತಡೆಹಿಡಿಯಲಾಗಿದೆ",
+      "statusCHARGED": "ಕಡಿತಗೊಳಿಸಲಾಗಿದೆ",
+      "statusRETURNED": "ಹಿಂತಿರುಗಿಸಲಾಗಿದೆ",
+      "statusADDED": "ಸೇರಿಸಲಾಗಿದೆ",
+      "statusEXPIRED": "ಅವಧಿ ಮುಗಿದಿದೆ"
     },
     "componentsFormsAddPartyModal": {
       "customer": "ಗ್ರಾಹಕ",
@@ -4525,7 +4535,8 @@
       "loadMore": "ಇನ್ನಷ್ಟು ಲೋಡ್ ಮಾಡಿ",
       "allEntriesLoaded": "ಎಲ್ಲಾ {{count}} ನಮೂದುಗಳು ಲೋಡ್ ಆಗಿವೆ",
       "push": "ಪುಶ್",
-      "preparing": "ಸಿದ್ಧಪಡಿಸಲಾಗುತ್ತಿದೆ…"
+      "preparing": "ಸಿದ್ಧಪಡಿಸಲಾಗುತ್ತಿದೆ…",
+      "madeBy": "{{name}} ಮಾಡಿದ್ದಾರೆ"
     },
     "purchaseCreateOrder": {
       "orderDetails": "ಆರ್ಡರ್ ವಿವರಗಳು",

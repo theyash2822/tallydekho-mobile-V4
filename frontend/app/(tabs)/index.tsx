@@ -42,7 +42,7 @@ import {
 } from '../../src/utils/periodDates';
 import { tKpiLabel } from '../../src/i18n/labelMap';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
-import LockedOverlay from '../../src/components/LockedOverlay';
+import LockedOverlay, { useScopeLabel } from '../../src/components/LockedOverlay';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -57,6 +57,7 @@ const KPI_SENSITIVE: Record<string, string> = {
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const scopeText = useScopeLabel();
   const { isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
   const { workspaceId, pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies, refreshContext } = useWorkspace();
   // Product 1A: CONNECTED with no company → empty CTA (dataReady false until company exists)
@@ -519,7 +520,7 @@ export default function HomeScreen() {
           <KPICarouselCard
             testID={`kpi-card-${item.id}`}
             icon={item.icon}
-            label={item.scope_label ? `${label} · ${t('home.scopeLabel', { defaultValue: item.scope_label, label: item.scope_label })}` : label}
+            label={item.scope_label ? `${label} · ${scopeText(item.scope_label)}` : label}
             amount={item.locked ? '₹ ••••' : amount}
             trend_pct={item.locked ? null : item.trend_pct}
             trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}

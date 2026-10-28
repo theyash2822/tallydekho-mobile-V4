@@ -40,6 +40,15 @@ export default function LockedOverlay({ locked, children, style, compact = false
   );
 }
 
+/** The server's "Your 3 parties" label, in the user's language. */
+export function useScopeLabel() {
+  const { t } = useTranslation();
+  return (label?: string | null) => {
+    const m = /^Your (\d+) part(?:y|ies)$/.exec(String(label || ''));
+    return m ? t('home.yourParties', { count: Number(m[1]), defaultValue: label || '' }) : (label || '');
+  };
+}
+
 /** A hidden sensitive value: a lock and "Hidden", never a zero. */
 export function HiddenValue({ style }: { style?: any }) {
   const { t } = useTranslation();

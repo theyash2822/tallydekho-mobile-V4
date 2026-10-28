@@ -11,7 +11,7 @@ import ShimmerPlaceholder from './ShimmerPlaceholder';
 import { safePush } from '../utils/safeNavigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { formatSensitive } from '../utils/sensitiveDisplay';
-import LockedOverlay from './LockedOverlay';
+import LockedOverlay, { useScopeLabel } from './LockedOverlay';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
 const compactAmount = (raw: string): string => {
@@ -63,6 +63,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
   const { t } = useTranslation();
   const { formatAmountCompact } = useSettings();
   const { hasCapability, lockedByAccess, sensitivePolicies } = useWorkspace();
+  const scopeText = useScopeLabel();
 
   const displayAmount = (item: Metric): string => {
     const policyKey = METRIC_SENSITIVE[item.id];
@@ -137,7 +138,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
               {locked ? '₹ ••••' : displayAmount(item)}
             </Text>
             {!!item.scope_label && !locked && (
-              <Text style={s.label} numberOfLines={1}>{t('home.scopeLabel', { defaultValue: item.scope_label })}</Text>
+              <Text style={s.label} numberOfLines={1}>{scopeText(item.scope_label)}</Text>
             )}
 
             {!locked && (

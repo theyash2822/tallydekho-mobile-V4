@@ -59,7 +59,9 @@
     "comingSoon": "త్వరలో వస్తుంది",
     "provisional": "తాత్కాలికం",
     "notFound": "కనుగొనబడలేదు",
-    "yourName": "మీ పేరు"
+    "yourName": "మీ పేరు",
+    "notInYourAccess": "మీ యాక్సెస్‌లో లేదు",
+    "hidden": "దాచబడింది"
   },
   "nav": {
     "dashboard": "డాష్‌బోర్డ్",
@@ -494,7 +496,9 @@
     "noCompanySynced": "యాక్టివ్ Tally కంపెనీలు కనబడలేదు. TallyDekho Desktop‌లో కంపెనీ/FY ఎంపికను తనిఖీ చేసి మళ్లీ సింక్ చేయండి.",
     "loadingDemo": "డెమో బుక్స్ లోడ్ అవుతున్నాయి…",
     "noCompanyKpi": "ఇంకా ఏ కంపెనీ సింక్ కాలేదు",
-    "kpiUnavailable": "KPI అందుబాటులో లేదు"
+    "kpiUnavailable": "KPI అందుబాటులో లేదు",
+    "yourParties_one": "మీ {{count}} పార్టీ",
+    "yourParties_other": "మీ {{count}} పార్టీలు"
   },
   "quickActions": {
     "title": "త్వరిత చర్యలు",
@@ -3923,7 +3927,13 @@
       "seatGrace": "పునరుద్ధరణ విఫలమైంది. {{date}} లోపు రీఛార్జ్ చేయండి, లేకుంటే చెల్లింపు సీట్ల సభ్యులు నిలిపివేయబడతారు.",
       "seatPaused": "చెల్లించని సీట్ల సభ్యులు నిలిపివేయబడ్డారు. ఈ సీట్లు {{date}}న రద్దవుతాయి.",
       "seatDues": "సీటు బకాయి: {{credits}} క్రెడిట్‌లు. వెబ్ పోర్టల్‌లో చెల్లించే వరకు కొత్త సీట్లు నిలిపివేయబడ్డాయి.",
-      "notices": "ఇటీవలి బిల్లింగ్ నోటీసులు"
+      "notices": "ఇటీవలి బిల్లింగ్ నోటీసులు",
+      "creditHistory": "ఇటీవలి క్రెడిట్ కార్యకలాపాలు",
+      "statusHELD": "నిలిపి ఉంచబడింది",
+      "statusCHARGED": "వసూలు చేయబడింది",
+      "statusRETURNED": "తిరిగి ఇవ్వబడింది",
+      "statusADDED": "జోడించబడింది",
+      "statusEXPIRED": "గడువు ముగిసింది"
     },
     "componentsFormsAddPartyModal": {
       "customer": "కస్టమర్",
@@ -4525,7 +4535,8 @@
       "loadMore": "మరిన్ని లోడ్ చేయండి",
       "allEntriesLoaded": "మొత్తం {{count}} ఎంట్రీలు లోడ్ అయ్యాయి",
       "push": "పుష్",
-      "preparing": "సిద్ధం చేస్తోంది…"
+      "preparing": "సిద్ధం చేస్తోంది…",
+      "madeBy": "{{name}} చేశారు"
     },
     "purchaseCreateOrder": {
       "orderDetails": "ఆర్డర్ వివరాలు",
