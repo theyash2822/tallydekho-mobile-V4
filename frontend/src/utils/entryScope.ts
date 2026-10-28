@@ -13,10 +13,34 @@ export const ENTRY_KEYS = new Set<string>([
 export type EntryScope = { mode?: string; keys?: string[]; entryMode?: string };
 
 /** Role capabilities minus the entry types this company's scope does not allow. */
-export function effectiveCapabilities(capabilities: string[], scope?: EntryScope | null): string[] {
-  if (!scope || !scope.mode || scope.mode === 'ALL') return capabilities;
-  const allowed = new Set(scope.keys || []);
-  return capabilities.filter((k) => !ENTRY_KEYS.has(k) || (scope.mode === 'SELECTED' && allowed.has(k)));
+/** Reports the Owner can switch per member and company (same list as the server). */
+export const REPORT_KEYS = new Set([
+  'financials.view', 'financials.profit_loss.view', 'financials.balance_sheet.view', 'financials.trial_balance.view',
+  'financials.cash_register.view', 'financials.bank_balance.view', 'financials.loans_od.view',
+  'financials.receivables.view', 'financials.payables.view', 'daybook.view', 'expenses.view',
+  'gst.view', 'einvoice.view', 'eway.view',
+  'inventory.view', 'inventory.warehouses.view', 'inventory.stock_ledger.view', 'inventory.negative_stock.view',
+  'inventory.aged_items.view', 'inventory.expiry.view', 'inventory.reorder.view',
+  'dashboard.view', 'ai_insights.view',
+]);
+
+export type SectionScopes = {
+  reportScope?: { mode?: string; keys?: string[] } | null;
+  stockScope?: { mode?: string } | null;
+};
+
+/** The role's capabilities narrowed by the member's data entry, reports and stock access for the company. */
+export function effectiveCapabilities(capabilities: string[], scope?: EntryScope | null, sections: SectionScopes = {}): string[] {
+  let caps = capabilities;
+  const narrow = (sc: { mode?: string; keys?: string[] } | null | undefined, keys: Set<string>) => {
+    if (!sc || !sc.mode || sc.mode === 'ALL') return;
+    const allowed = new Set(sc.keys || []);
+    caps = caps.filter((k) => !keys.has(k) || (sc.mode === 'SELECTED' && allowed.has(k)));
+  };
+  narrow(scope, ENTRY_KEYS);
+  narrow(sections.reportScope, REPORT_KEYS);
+  if (sections.stockScope?.mode === 'NONE') caps = caps.filter((k) => !k.startsWith('inventory.'));
+  return caps;
 }
 
 /** The server sends REGULAR / OPTIONAL / BOTH (NONE for a conflicting member setting). */

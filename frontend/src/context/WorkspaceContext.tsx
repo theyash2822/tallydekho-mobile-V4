@@ -65,6 +65,8 @@ export interface WorkspaceAccess {
   entryMode?: EntryMode;
   // Per company GUID; companies not listed allow what the role allows.
   entryScopes?: Record<string, EntryScope>;
+  stockScopes?: Record<string, { mode?: string; groups?: string[]; items?: string[] }>;
+  reportScopes?: Record<string, { mode?: string; keys?: string[] }>;
   sensitivePolicies?: Record<string, boolean>;
   scopes?: any;
 }
@@ -97,6 +99,7 @@ export interface WorkspaceContextValue {
   switchWorkspace: (id: string) => Promise<void>;
   renameWorkspace: (id: string, name: string) => Promise<void>;
   hasCapability: (key: string) => boolean;
+  lockedByAccess: (key: string) => boolean;
   filterScoped: <T extends Record<string, any>>(
     items: T[],
     kind: 'ledgers' | 'godowns' | 'companies' | 'fys' | 'costCentres'
@@ -133,6 +136,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   switchWorkspace: async () => {},
   renameWorkspace: async () => {},
   hasCapability: () => false,
+  lockedByAccess: () => false,
   filterScoped: (items) => items,
   refreshInvitations: async () => [],
   acceptInvite: async () => ({}),
@@ -672,11 +676,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Data entry is per company: the selected company narrows the role's create permissions.
   const selectedCompanyGuid = company?.guid || null;
   const companyEntryScope = selectedCompanyGuid ? access?.entryScopes?.[selectedCompanyGuid] || null : null;
+  const companySections = useMemo(() => ({
+    reportScope: selectedCompanyGuid ? access?.reportScopes?.[selectedCompanyGuid] || null : null,
+    stockScope: selectedCompanyGuid ? access?.stockScopes?.[selectedCompanyGuid] || null : null,
+  }), [access, selectedCompanyGuid]);
+  const roleCaps = useMemo(
+    () => new Set(Array.isArray(access?.capabilities) ? access!.capabilities!.map(String) : []),
+    [access],
+  );
   const caps = useMemo(() => {
     const list = access?.capabilities;
     if (!Array.isArray(list)) return new Set<string>();
-    return new Set(effectiveCapabilities(list.map(String), companyEntryScope));
-  }, [access, companyEntryScope]);
+    return new Set(effectiveCapabilities(list.map(String), companyEntryScope, companySections));
+  }, [access, companyEntryScope, companySections]);
 
   const membershipType = access?.membershipType || workspace?.membershipType || '';
   const isOwner = membershipType === 'OWNER';
@@ -700,6 +712,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return caps.has(key);
     },
     [caps, membershipType]
+  );
+
+  // The role allows it but the member's access for this company does not: shown locked, not hidden.
+  const lockedByAccess = useCallback(
+    (key: string) => membershipType !== 'OWNER' && roleCaps.has(key) && !caps.has(key),
+    [membershipType, roleCaps, caps],
   );
 
   useEffect(() => {
@@ -786,6 +804,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     switchWorkspace,
     renameWorkspace,
     hasCapability,
+    lockedByAccess,
     filterScoped,
     refreshInvitations,
     acceptInvite,

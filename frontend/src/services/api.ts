@@ -16,7 +16,7 @@ import {
   markServerReachable,
   friendlyUserMessage,
 } from './apiErrors';
-import { toastRbasError } from '../utils/rbasErrors';
+import { toastRbasError, ACCESS_CODES } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
 import { beginSingleFlight } from '../utils/singleFlight';
 import { reportError } from './monitoring';
@@ -292,7 +292,7 @@ async function request<T>(
           }
           notifyAuthFailure(err);
         } else if (res.status === 403 || res.status === 402 || res.status === 409) {
-          toastRbasError(err);
+          if (!(method === 'GET' && code && ACCESS_CODES.has(code))) toastRbasError(err);
         }
         throw err;
       }
@@ -330,7 +330,8 @@ async function request<T>(
         }
         notifyAuthFailure(err);
       } else if (res.status === 403 || res.status === 402 || res.status === 409) {
-        toastRbasError(err);
+        // Background reads outside the member's access stay quiet; the screen shows the lock.
+        if (!(method === 'GET' && code && ACCESS_CODES.has(code))) toastRbasError(err);
       } else if (res.status >= 500) {
         reportError(err, { method, endpoint: endpoint.split('?')[0], status: res.status, code });
       }

@@ -48,6 +48,9 @@ function isIndianCurrency(currency: string): boolean {
  *   AED / International: د.إ125,000.00
  */
 export function formatAmount(n: number, settings: FormatSettings): string {
+  // A value the server withheld (hidden or locked) is missing, never ₹NaN.
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  n = Number(n);
   const symbol = getCurrencySymbol(settings.currency);
   const abs = Math.abs(n);
   const locale = settings.number_format === 'Indian' ? 'en-IN' : 'en-US';
@@ -74,6 +77,8 @@ export function formatAmount(n: number, settings: FormatSettings): string {
  *   1,000,000,000 → $1.2B
  */
 export function formatAmountCompact(n: number, settings: FormatSettings): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  n = Number(n);
   const symbol = getCurrencySymbol(settings.currency);
   const sign = n < 0 ? '-' : '';
   const abs = Math.abs(n);

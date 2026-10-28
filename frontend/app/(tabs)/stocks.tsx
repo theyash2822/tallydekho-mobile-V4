@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
+import LockedOverlay from '../../src/components/LockedOverlay';
 
 const SEG_COUNT = 20;
 
@@ -82,13 +83,14 @@ const cat = StyleSheet.create({
 });
 
 export default function StocksDashboard() {
-  const allowed = useRequireCapability('inventory.view');
+  const allowed = useRequireCapability('inventory.view', { lockedView: true });
   const { t } = useTranslation();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmount, formatAmountCompact } = useSettings();
-  const { sensitivePolicies } = useWorkspace();
+  const { sensitivePolicies, lockedByAccess } = useWorkspace();
+  const stockLocked = lockedByAccess('inventory.view');
 
   const fmtInv = (v: number) =>
     formatSensitive(
@@ -199,6 +201,26 @@ export default function StocksDashboard() {
 
   const fmtCat = (v: number) => fmtInv(v);
 
+  // Stock switched off for this member in this company: the cards stay, blurred and locked.
+  if (!allowed && stockLocked) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <View style={s.header}>
+          <View>
+            <Text style={s.headerTitle}>{t('stocks.title')}</Text>
+            <Text style={s.headerSub}>{t('stocks.subtitle')}</Text>
+          </View>
+        </View>
+        <LockedOverlay locked testID="stocks-locked">
+          <View style={{ padding: 16, gap: 12 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={{ height: i === 0 ? 120 : 84, borderRadius: 14, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault }} />
+            ))}
+          </View>
+        </LockedOverlay>
+      </SafeAreaView>
+    );
+  }
   if (!allowed) return null;
   return (
     <SafeAreaView style={s.safe}>

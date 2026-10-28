@@ -42,6 +42,7 @@ import {
 } from '../../src/utils/periodDates';
 import { tKpiLabel } from '../../src/i18n/labelMap';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
+import LockedOverlay from '../../src/components/LockedOverlay';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -155,6 +156,8 @@ export default function HomeScreen() {
       party: r.party,
       date: r.subtitle,
       amount_raw: r.amount_raw,
+      locked: r.locked === true,
+      scope_label: r.scope_label || null,
       is_credit: r.is_credit,
     }));
   }, [searchResults, filteredActivity]);
@@ -508,17 +511,21 @@ export default function HomeScreen() {
           () => rawVisible,
         ) ?? '—')
       : rawVisible;
+    // Restricted members: a locked card carries no figure; scope_label says whose figures these are.
+    const label = tKpiLabel(t, item.id, item.label);
     return (
       <KPICarouselPage>
-        <KPICarouselCard
-          testID={`kpi-card-${item.id}`}
-          icon={item.icon}
-          label={tKpiLabel(t, item.id, item.label)}
-          amount={amount}
-          trend_pct={item.trend_pct}
-          trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
-          onPress={() => item.route && safePush(router, item.route as any)}
-        />
+        <LockedOverlay locked={!!item.locked} testID={`kpi-card-${item.id}-locked`}>
+          <KPICarouselCard
+            testID={`kpi-card-${item.id}`}
+            icon={item.icon}
+            label={item.scope_label ? `${label} · ${t('home.scopeLabel', { defaultValue: item.scope_label, label: item.scope_label })}` : label}
+            amount={item.locked ? '₹ ••••' : amount}
+            trend_pct={item.locked ? null : item.trend_pct}
+            trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
+            onPress={() => item.route && safePush(router, item.route as any)}
+          />
+        </LockedOverlay>
       </KPICarouselPage>
     );
   };

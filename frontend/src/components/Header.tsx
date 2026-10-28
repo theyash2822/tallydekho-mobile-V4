@@ -144,9 +144,11 @@ const Header: React.FC<HeaderProps> = ({
         }
         setLiveFYObjects(fyObjs);
         const labels = fyObjs.map((f) => f.label);
-        setSelectedFY((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
+        // Members limited to some years open on the latest one they may see.
+        const latest = [...fyObjs].sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))[0];
+        setSelectedFY((prev) => (prev && labels.includes(prev) ? prev : latest.label));
         // A sync or heartbeat refetches the years; the chosen FY stays while it still exists.
-        if (!fyInList(contextFyRef.current, fyObjs)) setContextFY(fyObjs[0]);
+        if (!fyInList(contextFyRef.current, fyObjs)) setContextFY(latest);
       })
       .catch(() => {})
       .finally(() => {

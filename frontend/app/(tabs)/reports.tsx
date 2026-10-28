@@ -21,6 +21,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
 import { useRequireCapability } from '../../src/components/RequireCapability';
+import LockedOverlay from '../../src/components/LockedOverlay';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -870,7 +871,9 @@ export default function ReportsScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, hasCapability } = useWorkspace();
+  // Reports outside the member's access stay in place, blurred and locked.
+  const lockedFor = (cap: string) => !hasCapability(cap);
   const companyGuid = company?.guid;
   const reportIdentity = `${workspaceId || ''}:${companyGuid || ''}:${selectedFY?.startDate || ''}`;
   const identityRef = useRef(reportIdentity);
@@ -1074,6 +1077,7 @@ export default function ReportsScreen() {
         </View>
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
+        <LockedOverlay locked={lockedFor('financials.profit_loss.view')} testID="reports-financial-locked">
         <SectionCard
           iconName="stats-chart-outline"
           title={t('reports.financial')}
@@ -1089,8 +1093,10 @@ export default function ReportsScreen() {
             xLabels={finData?.months ?? []}
           />
         </SectionCard>
+        </LockedOverlay>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
+        <LockedOverlay locked={lockedFor('gst.view')} testID="reports-compliance-locked">
         <SectionCard
           iconName="shield-checkmark-outline"
           title={t('reports.compliance')}
@@ -1099,6 +1105,7 @@ export default function ReportsScreen() {
         >
           <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
         </SectionCard>
+        </LockedOverlay>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
         <SectionCard
@@ -1115,6 +1122,7 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
+        <LockedOverlay locked={lockedFor('ai_insights.view')} testID="reports-ai-locked">
         <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => safePush(router, '/reports/ai-insights' as any)}>
           {aiWeekly && aiWeekly.enough && aiWeekly.forecast.length > 1 && aiWeekly.actual.length === aiWeekly.forecast.length ? (
             <LogLineChart
@@ -1136,16 +1144,18 @@ export default function ReportsScreen() {
             </Text>
           )}
         </SectionCard>
+        </LockedOverlay>
 
         <Text style={styles.moreLabel}>{t('reports.moreReports')}</Text>
         <View style={styles.moreGrid}>
           {[
-            { label: t('reports.gstReturns'),   icon: 'receipt-outline',        route: '/reports/gst' },
-            { label: t('reports.einvoices'),    icon: 'document-text-outline',  route: '/reports/einvoice-list' },
-            { label: t('reports.ewayBills'),   icon: 'navigate-outline',       route: '/reports/ewb-list' },
-            { label: t('reports.cashRegister'), icon: 'cash-outline',           route: '/kpi/cash-register' },
-            { label: t('reports.dayBook'),      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook' },
+            { label: t('reports.gstReturns'),   icon: 'receipt-outline',        route: '/reports/gst', cap: 'gst.view' },
+            { label: t('reports.einvoices'),    icon: 'document-text-outline',  route: '/reports/einvoice-list', cap: 'einvoice.view' },
+            { label: t('reports.ewayBills'),   icon: 'navigate-outline',       route: '/reports/ewb-list', cap: 'eway.view' },
+            { label: t('reports.cashRegister'), icon: 'cash-outline',           route: '/kpi/cash-register', cap: 'financials.cash_register.view' },
+            { label: t('reports.dayBook'),      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook', cap: 'daybook.view' },
           ].map(m => (
+            <LockedOverlay key={m.label} locked={lockedFor(m.cap)} compact>
             <TouchableOpacity
               key={m.label}
               style={[styles.moreTile, m.route.includes('daybook') && styles.moreTileWide]}
@@ -1158,6 +1168,7 @@ export default function ReportsScreen() {
               <Text style={styles.moreTileTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{m.label}</Text>
               <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
             </TouchableOpacity>
+            </LockedOverlay>
           ))}
         </View>
       </ScrollView>

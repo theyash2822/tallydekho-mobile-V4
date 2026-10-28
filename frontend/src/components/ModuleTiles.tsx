@@ -11,6 +11,7 @@ import ShimmerPlaceholder from './ShimmerPlaceholder';
 import { safePush } from '../utils/safeNavigation';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { formatSensitive } from '../utils/sensitiveDisplay';
+import LockedOverlay from './LockedOverlay';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
 const compactAmount = (raw: string): string => {
@@ -43,7 +44,9 @@ interface Metric {
   id: string;
   label: string;
   amount?: string;
-  amount_raw?: number;
+  amount_raw?: number | null;
+  locked?: boolean;
+  scope_label?: string | null;
   change: number;
   positive: boolean;
   icon: string;
@@ -59,7 +62,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
   const { formatAmountCompact } = useSettings();
-  const { hasCapability, sensitivePolicies } = useWorkspace();
+  const { hasCapability, lockedByAccess, sensitivePolicies } = useWorkspace();
 
   const displayAmount = (item: Metric): string => {
     const policyKey = METRIC_SENSITIVE[item.id];
@@ -82,7 +85,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
 
   const visible = (metrics || []).filter((item) => {
     const cap = METRIC_CAPS[item.id];
-    return !cap || hasCapability(cap);
+    return !cap || hasCapability(cap) || lockedByAccess(cap) || item.locked;
   });
 
   if (isLoading) {
@@ -105,7 +108,10 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
       {visible.map(item => {
         const id = IDENTITY[item.id] || { accent: COLORS.textSecondary, tint: COLORS.pageBg };
         const isFlat = Number(item.change) === 0;
+        const cap = METRIC_CAPS[item.id];
+        const locked = !!item.locked || (!!cap && !hasCapability(cap));
         return (
+          <LockedOverlay key={item.id} locked={locked} style={s.tile} testID={`module-tile-${item.id}-locked`}>
           <TouchableOpacity
             key={item.id}
             testID={`module-tile-${item.id}`}
@@ -128,15 +134,21 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
               adjustsFontSizeToFit
               minimumFontScale={0.7}
             >
-              {displayAmount(item)}
+              {locked ? '₹ ••••' : displayAmount(item)}
             </Text>
+            {!!item.scope_label && !locked && (
+              <Text style={s.label} numberOfLines={1}>{t('home.scopeLabel', { defaultValue: item.scope_label })}</Text>
+            )}
 
-            <MetricTrendBadge
-              trend={`${isFlat ? '0' : item.change}%`}
-              positive={item.positive}
-              alwaysShow
-            />
+            {!locked && (
+              <MetricTrendBadge
+                trend={`${isFlat ? '0' : item.change}%`}
+                positive={item.positive}
+                alwaysShow
+              />
+            )}
           </TouchableOpacity>
+          </LockedOverlay>
         );
       })}
     </View>

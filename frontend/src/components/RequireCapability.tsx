@@ -13,10 +13,12 @@ type Options = {
   /** Fallback when router cannot go back. Default: home tabs. */
   href?: string;
   message?: string;
+  /** The screen draws its own locked view when the member's access (not the role) refuses it. */
+  lockedView?: boolean;
 };
 
 export function useRequireCapability(capability: string, opts?: Options): boolean {
-  const { hasCapability, loading } = useWorkspace();
+  const { hasCapability, lockedByAccess, loading } = useWorkspace();
   const router = useRouter();
   const redirected = useRef(false);
   // Once granted for this mount, stay true across background workspace re-lists.
@@ -31,12 +33,18 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
   useEffect(() => {
     if (loading || redirected.current || grantedOnce) return;
     if (hasCapability(capability)) return;
+    if (opts?.lockedView && lockedByAccess(capability)) return;
     redirected.current = true;
-    Toast.show({
-      type: 'error',
-      text1: i18n.t('screens.componentsRequireCapability.notAllowed'),
-      text2: opts?.message || i18n.t('screens.componentsRequireCapability.noAccess'),
-    });
+    if (lockedByAccess(capability)) {
+      // The role allows it; the member's access for this company does not.
+      Toast.show({ type: 'info', text1: i18n.t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
+    } else {
+      Toast.show({
+        type: 'error',
+        text1: i18n.t('screens.componentsRequireCapability.notAllowed'),
+        text2: opts?.message || i18n.t('screens.componentsRequireCapability.noAccess'),
+      });
+    }
     try {
       if (typeof (router as any).canGoBack === 'function' && (router as any).canGoBack()) {
         router.back();
@@ -46,7 +54,7 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
     } catch {
       router.replace((opts?.href || '/(tabs)') as any);
     }
-  }, [loading, grantedOnce, capability, hasCapability, router, opts?.href, opts?.message]);
+  }, [loading, grantedOnce, capability, hasCapability, lockedByAccess, router, opts?.href, opts?.message, opts?.lockedView]);
 
   return allowed;
 }
