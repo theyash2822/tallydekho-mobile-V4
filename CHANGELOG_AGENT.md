@@ -1,3 +1,10 @@
+## 2026-10-28 — RBAS + workspace billing (branch `28-10-2026`)
+
+- Company profile/GST gating (RBC-01); socket reconnects after a server-side disconnect so scope is re-checked (RBC-03).
+- Ledger statement shows restricted lines as “Restricted account” with “Ask the Owner”; Owner’s Approvals lists voucher requests (RBC-04).
+- License & Credits: read-only Owner billing summary — credits (available/held/expiring), seat pool and renewal, grace/pause/dues, transfer fee due, recent notices (RBC-09). New text in 11 locales.
+- Tested: `tsc --noEmit` clean.
+
 ## 2026-10-22 — Restore requests on Home (branch `21-10-2026`)
 
 - New `src/components/RestoreRequestBanner.tsx` on Home, Workspace Owner only: "Restore request waiting" with the PC and verified contact, tap → Settings → Approvals. Loads on focus, every 30 s while Home is open, and on restore events (`WorkspaceContext.restoreSignal`), because Expo Go gets no push.
