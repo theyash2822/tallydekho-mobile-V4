@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
-import { getBillingOverview, getSeatPlan, getBillingNotices } from '../../src/services/api';
+import { getBillingOverview, getSeatPlan, getBillingNotices, getCreditHistory } from '../../src/services/api';
 
 const fmtDate = (ts?: number | null) => (ts
   ? new Date(Number(ts) * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -28,7 +28,7 @@ export default function LicenseScreen() {
       ? t('screens.settingsLicense.owner')
       : access?.role?.displayName || access?.role?.systemKey || t('screens.settingsLicense.member');
   // Owner-only, read-only summary of this workspace's billing; payments stay on the Web portal.
-  const [summary, setSummary] = useState<{ overview: any; seats: any; notices: any[] } | null>(null);
+  const [summary, setSummary] = useState<{ overview: any; seats: any; notices: any[]; history: any[] } | null>(null);
   useFocusEffect(
     useCallback(() => {
       if (!isOwner || !workspace?.id) return undefined;
@@ -37,9 +37,15 @@ export default function LicenseScreen() {
         getBillingOverview().catch(() => null),
         getSeatPlan(workspace.id).catch(() => null),
         getBillingNotices().catch(() => null),
-      ]).then(([ov, sp, nt]: any[]) => {
+        getCreditHistory(5).catch(() => null),
+      ]).then(([ov, sp, nt, hs]: any[]) => {
         if (!alive) return;
-        setSummary({ overview: ov?.data ?? null, seats: sp?.data ?? null, notices: Array.isArray(nt?.data) ? nt.data : [] });
+        setSummary({
+          overview: ov?.data ?? null,
+          seats: sp?.data ?? null,
+          notices: Array.isArray(nt?.data) ? nt.data : [],
+          history: Array.isArray(hs?.data) ? hs.data : [],
+        });
       });
       return () => { alive = false; };
     }, [isOwner, workspace?.id]),
@@ -113,6 +119,17 @@ export default function LicenseScreen() {
                 <Text style={s.label}>{t('screens.settingsLicense.notices')}</Text>
                 {summary.notices.slice(0, 5).map((n: any) => (
                   <Text key={n.id} style={[s.body, { marginTop: 6 }]}>• {n.title} — {fmtDate(n.createdAt)}</Text>
+                ))}
+              </>
+            )}
+            {summary.history.length > 0 && (
+              <>
+                <View style={s.divider} />
+                <Text style={s.label}>{t('screens.settingsLicense.creditHistory', { defaultValue: 'Recent credit activity' })}</Text>
+                {summary.history.map((h: any) => (
+                  <Text key={h.id} style={[s.body, { marginTop: 6 }]}>
+                    • {h.what}{h.madeBy ? ` · ${h.madeBy}` : ''} — {h.amount > 0 ? '+' : ''}{Number(h.amount).toFixed(2)} ({t(`screens.settingsLicense.status${h.status}`, { defaultValue: h.status.charAt(0) + h.status.slice(1).toLowerCase() })})
+                  </Text>
                 ))}
               </>
             )}

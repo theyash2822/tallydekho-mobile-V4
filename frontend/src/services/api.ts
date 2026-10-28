@@ -1095,6 +1095,7 @@ export const unpairWorkspaceTally = (workspaceId: string) =>
 // Owner billing summary (RBC-09) — read-only on Mobile
 export const getSeatPlan = (workspaceId: string) => get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/seat-plan`);
 export const getBillingNotices = () => get<any>('/billing/notices');
+export const getCreditHistory = (limit = 5) => get<any>(`/billing/history?limit=${limit}`);
 
 // One-off Owner approvals (RBC-04)
 export const createVoucherRequest = (body: { companyGuid?: string; voucherGuid: string; reason?: string }) =>

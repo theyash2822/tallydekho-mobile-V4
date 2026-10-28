@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View,
   Text,
@@ -81,6 +82,7 @@ interface VoucherEntry {
   queueStateLabel?: string;
   action?: 'Created' | 'Edited' | 'Deleted';
   isMine: boolean;
+  madeBy?: string;
   /** Master writes (ledger/bank/warehouse/item) — no Regular/Optional badges */
   isMaster?: boolean;
   queueId?: number | string | null;
@@ -190,6 +192,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   isCredit: isCreditVoucher(r.app_voucher_type || r.voucher_type),
   syncStatus: 'synced' as const,
   isMine: true,
+  madeBy: r.made_by_name || '',
   isMaster: !!(r._is_master || isMasterEntryType(r.voucher_type)),
   queueId: r._queue_id ?? null,
   tdkRef: r.tdk_reference_no || '',
@@ -458,6 +461,7 @@ const dd = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
   const { t } = useTranslation();
+  const { isOwnerOrAdmin } = useWorkspace();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
@@ -563,6 +567,7 @@ export default function AuditTrailScreen() {
     rawAmount: Math.abs(+(p.amount || 0)),
     rawDate: p.date || '',
     rawParty: p.party_name || '',
+    madeBy: p.made_by_name || '',
     rawPayload: p._payload,
     isCredit: isCreditVoucher(p.voucher_type || ''),
     syncStatus: p._queue_status === 'success' ? 'synced'
@@ -1278,6 +1283,9 @@ export default function AuditTrailScreen() {
 
                             <View style={s.entryBody}>
                               <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
+                              {isOwnerOrAdmin && entry.madeBy ? (
+                                <Text style={s.lineLeft} numberOfLines={1}>{t('screens.reportsAuditTrail.madeBy', { defaultValue: 'Made by {{name}}', name: entry.madeBy })}</Text>
+                              ) : null}
 
                               <View style={s.lineRow}>
                                 <Text style={s.lineLeft} numberOfLines={1}>
