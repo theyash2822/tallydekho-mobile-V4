@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { sendOTP } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 import { PHONE_COUNTRIES as COUNTRIES, type PhoneCountry as Country } from '../../src/constants/phoneCountries';
+import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function LoginScreen() {
@@ -96,9 +97,9 @@ export default function LoginScreen() {
           {/* ── Logo ── */}
           <View style={styles.logoSection}>
             <View style={styles.logoBox}>
-              <Ionicons name="stats-chart" size={32} color={COLORS.white} />
+              <AuditerMark height={30} color={COLORS.white} />
             </View>
-            <Text style={styles.appName}>Tallydekho</Text>
+            <View style={styles.appName}><AuditerWordmark height={28} color={COLORS.textPrimary} /></View>
           </View>
 
           {/* ── Card ── */}
@@ -223,10 +224,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary,
     alignItems: 'center', justifyContent: 'center',
   },
-  appName: {
-    fontSize: TYPOGRAPHY.xl, fontWeight: '800',
-    color: COLORS.textPrimary, letterSpacing: -0.5,
-  },
+  appName: { paddingVertical: 2 },
 
   // ── Card ───────────────────────────────────────────────────────────────────
   card: {

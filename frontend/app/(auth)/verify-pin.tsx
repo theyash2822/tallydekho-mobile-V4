@@ -14,6 +14,7 @@ import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { useTranslation } from 'react-i18next';
 import { getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { getBiometricPin } from '../../src/utils/biometricPin';
+import { AuditerWordmark } from '../../src/components/AuditerLogo';
 
 const PIN_LENGTH = 4;
 
@@ -210,7 +211,7 @@ export default function VerifyPinScreen() {
           <View style={s.iconBox}>
             <Ionicons name="lock-closed" size={28} color={COLORS.white} />
           </View>
-          <Text style={s.appName}>TallyDekho</Text>
+          <View style={s.appName}><AuditerWordmark height={24} color={COLORS.textPrimary} /></View>
 
           <View style={s.card}>
             <Text style={s.heading}>{t('screens.authVerifyPin.heading')}</Text>
@@ -279,7 +280,7 @@ const s = StyleSheet.create({
   backBtn:    { position: 'absolute', top: 56, left: 20, zIndex: 10, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   container:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.md },
   iconBox:    { width: 64, height: 64, borderRadius: 18, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  appName:    { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, marginBottom: SPACING.xl },
+  appName:    { marginBottom: SPACING.xl },
   card:       { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl, padding: SPACING.lg, width: '100%', borderWidth: 1, borderColor: COLORS.borderDefault },
   heading:    { fontSize: TYPOGRAPHY.xl, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 6 },
   sub:        { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.lg },

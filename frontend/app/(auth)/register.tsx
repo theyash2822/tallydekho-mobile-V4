@@ -14,6 +14,7 @@ import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { registerUser, setRefreshToken, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
 const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 'Italian', 'Japanese', 'Korean'];
 const CODE_LENGTH = 6;
@@ -128,9 +129,9 @@ export default function RegisterScreen() {
         <View style={styles.container}>
           {/* Logo */}
           <View style={styles.logoBox}>
-            <Ionicons name="stats-chart" size={28} color={COLORS.white} />
+            <AuditerMark height={26} color={COLORS.white} />
           </View>
-          <Text style={styles.appName}>Tallydekho</Text>
+          <View style={styles.appName}><AuditerWordmark height={24} color={COLORS.textPrimary} /></View>
 
           {/* Card */}
           <View style={styles.card}>
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,
   },
-  appName: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, marginBottom: SPACING.xl },
+  appName: { marginBottom: SPACING.xl },
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl,
     padding: SPACING.lg, width: '100%',

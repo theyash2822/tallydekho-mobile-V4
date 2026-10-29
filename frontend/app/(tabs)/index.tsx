@@ -637,7 +637,7 @@ export default function HomeScreen() {
                 {tallyConnected
                   ? t(
                       'home.noCompanySynced',
-                      'No active Tally companies found. Check the company/FY selection in TallyDekho Desktop and sync again.'
+                      'No active Tally companies found. Check the company/FY selection in Auditer Agent and sync again.'
                     )
                   : demoMode
                     ? t('home.loadingDemo', 'Loading demo books…')

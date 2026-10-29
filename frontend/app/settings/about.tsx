@@ -7,6 +7,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
+import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '';
 const APP_BUILD = Platform.OS === 'ios'
@@ -69,9 +70,9 @@ export default function AboutScreen() {
         {/* Logo card */}
         <View style={s.logoCard}>
           <View style={s.appIcon}>
-            <Ionicons name="bar-chart-outline" size={36} color={COLORS.white} />
+            <AuditerMark height={30} color={COLORS.white} />
           </View>
-          <Text style={s.appName}>TallyDekho</Text>
+          <View style={s.appName}><AuditerWordmark height={24} color={COLORS.textPrimary} /></View>
           <Text style={s.appVersion}>{appVersionLabel}</Text>
           <TouchableOpacity
             style={s.planBadge}
@@ -138,7 +139,7 @@ const s = StyleSheet.create({
 
   logoCard:   { alignItems:'center', backgroundColor:COLORS.cardBg, borderRadius:RADIUS.xl, padding:SPACING.xl, marginBottom:SPACING.md, borderWidth:1, borderColor:COLORS.borderDefault, gap:8 },
   appIcon:    { width:72, height:72, borderRadius:RADIUS.xl, backgroundColor:COLORS.brandPrimary, alignItems:'center', justifyContent:'center' },
-  appName:    { fontSize:TYPOGRAPHY.lg, fontWeight:'800', color:COLORS.textPrimary },
+  appName:    { paddingVertical:2 },
   appVersion: { fontSize:TYPOGRAPHY.sm, color:COLORS.textSecondary },
   planBadge:  { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:COLORS.positiveBg, paddingHorizontal:12, paddingVertical:5, borderRadius:RADIUS.full },
   planTxt:    { fontSize:TYPOGRAPHY.sm, fontWeight:'700', color:COLORS.positive },

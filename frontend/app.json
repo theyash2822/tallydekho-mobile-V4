@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Auditor",
+    "name": "Auditer",
     "slug": "auditor",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,7 @@
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true
         },
-        "NSFaceIDUsageDescription": "Use Face ID to unlock Auditor quickly and securely"
+        "NSFaceIDUsageDescription": "Use Face ID to unlock Auditer quickly and securely"
       },
       "bundleIdentifier": "com.tallydekho.app"
     },
@@ -27,7 +27,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#1A1A1A"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -64,7 +64,7 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#1A1A1A"
         }
       ],
       "expo-web-browser",
@@ -72,7 +72,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Use Face ID to unlock Auditor quickly and securely"
+          "faceIDPermission": "Use Face ID to unlock Auditer quickly and securely"
         }
       ],
       [
@@ -87,8 +87,8 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Allow Auditor to use the microphone for voice search.",
-          "speechRecognitionPermission": "Allow Auditor to use speech recognition for voice search."
+          "microphonePermission": "Allow Auditer to use the microphone for voice search.",
+          "speechRecognitionPermission": "Allow Auditer to use speech recognition for voice search."
         }
       ],
       "expo-font",

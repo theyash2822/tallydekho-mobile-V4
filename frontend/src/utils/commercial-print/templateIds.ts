@@ -37,8 +37,8 @@ const LEGACY_TO_TEMPLATE: Record<string, CommercialTemplateId> = {
 
 export const TEMPLATE_DISPLAY: Record<CommercialTemplateId, string> = {
   tally_classic_commercial_v1: 'Tally Classic',
-  td_thermal_commercial_v1: 'TallyDekho Thermal',
-  td_executive_commercial_v1: 'TallyDekho Executive',
+  td_thermal_commercial_v1: 'Auditer Thermal',
+  td_executive_commercial_v1: 'Auditer Executive',
 };
 
 export function resolveCommercialTemplateId(

@@ -69,7 +69,7 @@ const timestamp = () => {
 const WELCOME_MSG: Message = {
   id: 'welcome',
   role: 'bot',
-  text: "Hi! I'm the TallyDekho Support Assistant.\nAsk me anything — pairing with Tally, creating vouchers, payment reminders, GST, reports, and more.",
+  text: "Hi! I'm the Auditer Support Assistant.\nAsk me anything — pairing with Tally, creating vouchers, payment reminders, GST, reports, and more.",
   time: timestamp(),
 };
 
@@ -294,7 +294,7 @@ export default function HelpCenterScreen() {
         <View style={s.hdrRight}>
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => openLink('mailto:support@tallydekho.com', t('screens.settingsHelp.emailFallback'))}
+            onPress={() => openLink('mailto:support@auditer.com', t('screens.settingsHelp.emailFallback'))}
             activeOpacity={0.75}
           >
             <Ionicons name="mail-outline" size={21} color={COLORS.brandPrimary} />

@@ -215,7 +215,7 @@ ${executiveAmountSummary(model)}
 </table>
 ${renderTaxSummaryTable(model)}
 ${executiveClosing(model)}
-<div class="page-footer">TallyDekho Executive</div>`;
+<div class="page-footer">Auditer Executive</div>`;
 
   return wrapCommercialHtmlDocument(body);
 }

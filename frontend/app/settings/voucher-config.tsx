@@ -116,8 +116,8 @@ const makeDefault = (id: string): VConfig => ({
 
 const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
   { id: 'tally_classic_v1', label: 'Tally Classic' },
-  { id: 'td_thermal_v1',    label: 'TallyDekho Thermal' },
-  { id: 'td_executive_v1',  label: 'TallyDekho Executive' },
+  { id: 'td_thermal_v1',    label: 'Auditer Thermal' },
+  { id: 'td_executive_v1',  label: 'Auditer Executive' },
 ];
 
 /** Live QR preview when Generate from UPI is selected and UPI ID is filled. */

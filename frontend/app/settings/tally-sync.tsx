@@ -239,7 +239,7 @@ export default function TallySyncScreen() {
           const lastSeen = d.device.last_seen
             ? new Date(Number(d.device.last_seen) * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
             : i18n.t('screens.settingsTallySync.never');
-          setDeviceInfo({ name: d.device.name || 'TallyDekho Desktop', lastSync: lastSeen });
+          setDeviceInfo({ name: d.device.name || 'Auditer Agent', lastSync: lastSeen });
         }
       })
       .catch(() => {});
@@ -360,7 +360,7 @@ export default function TallySyncScreen() {
                   <Ionicons name="desktop-outline" size={26} color={COLORS.brandPrimary} />
                 </View>
                 <View style={s.deviceInfo}>
-                  <Text style={s.deviceName}>{deviceInfo?.name || 'TallyDekho Desktop'}</Text>
+                  <Text style={s.deviceName}>{deviceInfo?.name || 'Auditer Agent'}</Text>
                   <Text style={s.deviceSub}>{t('screens.settingsTallySync.lastSeen', { time: deviceInfo?.lastSync || t('screens.settingsTallySync.unknown') })}</Text>
                   <View style={s.onlineRow}>
                     <View style={s.onlineDot} />
@@ -469,7 +469,7 @@ export default function TallySyncScreen() {
 
               <Text style={s.stepBody}>
                 {t('common.download')}{' '}
-                <Text style={s.boldText}>TallyDekho</Text>
+                <Text style={s.boldText}>Auditer</Text>
                 {' '}{t('screens.settingsTallySync.agentFrom')}{'\n'}
                 <Text style={s.linkText}>https://www.tallydekho.com/download</Text>
               </Text>

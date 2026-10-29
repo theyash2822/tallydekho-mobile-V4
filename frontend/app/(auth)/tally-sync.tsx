@@ -13,6 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { listMyWorkspaces, pairWorkspaceTally } from '../../src/services/api';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
+import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
 type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
 
@@ -103,9 +104,9 @@ export default function TallySyncScreen() {
         <View style={styles.container}>
           {/* Logo */}
           <View style={styles.logoBox}>
-            <Ionicons name="stats-chart" size={28} color={COLORS.white} />
+            <AuditerMark height={26} color={COLORS.white} />
           </View>
-          <Text style={styles.appName}>Tallydekho</Text>
+          <View style={styles.appName}><AuditerWordmark height={24} color={COLORS.textPrimary} /></View>
 
           {step === 'prompt' && (
             <View style={styles.card}>
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,
   },
-  appName: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, marginBottom: SPACING.xl },
+  appName: { marginBottom: SPACING.xl },
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl,
     padding: SPACING.lg, width: '100%',

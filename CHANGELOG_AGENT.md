@@ -1,3 +1,11 @@
+## 2026-10-29 (18:00–19:30) — Auditer name and logo (local only)
+
+- App name "Auditer" (was "Auditor"); Face ID, microphone and speech prompts say Auditer. Store IDs `com.tallydekho.app`, Expo slug and deep-link scheme `auditor` unchanged.
+- New app icon, Android adaptive icon and favicon: the white crossbar-free A on #1A1A1A (same as the desktop Auditer Agent); splash: white Auditer wordmark on #1A1A1A (replaces the template placeholders). Takes effect in the next native build.
+- `src/components/AuditerLogo.tsx` (wordmark + A mark from the logo kit, react-native-svg) on login, OTP, register, PIN, pairing, onboarding and About.
+- All 11 languages: TallyDekho → Auditer, TallyDekho Desktop/App/Agent → Auditer Agent, support@auditer.com. Print template names and PDF footer say Auditer; Android notification channel "Auditer Notifications". Stored values (`tallydekho_series`, `td_*` template ids), API URLs and tallydekho.com website links unchanged.
+- Tested: `tsc` clean; Android bundle builds.
+
 ## 2026-10-29 (02:10–03:00) — Owner/Admin settings (local only)
 
 - Day Book tab follows Day Book access (locked, no data loaded); payment reminders and sent reminders: Owner/Admin only (locked screen); Remind button, add bank, add stock item and stock-item HSN edits: Owner/Admin only; compliance reminders and stock settings read-only for members; translations added. Tested: tsc clean, Android bundle builds.

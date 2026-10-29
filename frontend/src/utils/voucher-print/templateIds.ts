@@ -31,8 +31,8 @@ const LEGACY_TO_TEMPLATE: Record<string, VoucherTemplateId> = {
 
 export const TEMPLATE_DISPLAY: Record<VoucherTemplateId, string> = {
   tally_classic_v1: 'Tally Classic',
-  td_thermal_v1: 'TallyDekho Thermal',
-  td_executive_v1: 'TallyDekho Executive',
+  td_thermal_v1: 'Auditer Thermal',
+  td_executive_v1: 'Auditer Executive',
 };
 
 export function resolveVoucherTemplateId(

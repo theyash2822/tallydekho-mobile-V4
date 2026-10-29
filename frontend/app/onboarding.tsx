@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { markOnboardingCompleted } from '../src/utils/onboardingNav';
 import { useTranslation } from 'react-i18next';
+import { AuditerMark, AuditerWordmark } from '../src/components/AuditerLogo';
 
 const { width: SW } = Dimensions.get('window');
 const PAGE_BG  = '#F5F4EF';
@@ -48,13 +49,13 @@ function HeroSlide() {
       {/* App logo */}
       <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }], marginBottom: 28 }}>
         <View style={hero.logoBox}>
-          <Ionicons name="stats-chart" size={42} color={GOLD} />
+          <AuditerMark height={40} color="#FFFFFF" />
         </View>
       </Animated.View>
 
       {/* Text */}
       <Animated.View style={{ alignItems: 'center', opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <Text style={hero.appName}>TallyDekho</Text>
+        <View style={hero.appName}><AuditerWordmark height={40} color={TEXT_PRI} /></View>
         <Text style={hero.tagline}>Ab Hisab Ungaliyon Par</Text>
         <View style={hero.divider} />
         <Text style={hero.subtitle}>
@@ -73,7 +74,7 @@ const hero = StyleSheet.create({
     shadowColor: DARK, shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.22, shadowRadius: 20, elevation: 10,
   },
-  appName:  { fontSize: 34, fontWeight: '800', color: TEXT_PRI, letterSpacing: -0.5, marginBottom: 6, textAlign: 'center' },
+  appName:  { marginBottom: 10 },
   tagline:  { fontSize: 16, fontWeight: '600', color: GOLD, textAlign: 'center', letterSpacing: 0.4 },
   divider:  { width: 40, height: 2, backgroundColor: GOLD, borderRadius: 1, marginVertical: 16, opacity: 0.6 },
   subtitle: { fontSize: 13, color: TEXT_SEC, textAlign: 'center', lineHeight: 21 },

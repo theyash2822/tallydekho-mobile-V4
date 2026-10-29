@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { setPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
+import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
 const OTP_LENGTH = 6;
 
@@ -191,9 +192,9 @@ export default function OTPScreen() {
         <View style={styles.container}>
           {/* Logo */}
           <View style={styles.logoBox}>
-            <Ionicons name="stats-chart" size={28} color={COLORS.white} />
+            <AuditerMark height={26} color={COLORS.white} />
           </View>
-          <Text style={styles.appName}>Tallydekho</Text>
+          <View style={styles.appName}><AuditerWordmark height={24} color={COLORS.textPrimary} /></View>
 
           {/* Card */}
           <View style={styles.card}>
@@ -280,9 +281,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   appName: {
-    fontSize: TYPOGRAPHY.lg,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
     marginBottom: SPACING.xl,
   },
   card: {

@@ -423,7 +423,7 @@ export default function SettingsScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.madeInIndia}>{t('screens.settings.madeInIndia')}</Text>
-          <Text style={styles.version}>TallyDekho v3.7.2 · Build 257</Text>
+          <Text style={styles.version}>Auditer v3.7.2 · Build 257</Text>
         </View>
 
         {/* Logout */}
