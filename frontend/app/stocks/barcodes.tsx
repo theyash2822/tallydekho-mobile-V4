@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { LockedScreen } from '../../src/components/LockedOverlay';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable,
@@ -350,7 +352,7 @@ const BARCODE_TYPE_LABEL_KEYS: Record<string, string> = {
   INTERNAL:'screens.stocksBarcodes.typeInternal',
 };
 
-export default function BarcodesScreen() {
+function BarcodesScreenContent() {
   const { t } = useTranslation();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -1500,3 +1502,10 @@ const s = StyleSheet.create({
   bcActionBtnSecondary:   { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
   bcActionBtnSecondaryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 });
+
+/** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
+export default function BarcodesScreen() {
+  const { isOwnerOrAdmin } = useWorkspace();
+  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  return <BarcodesScreenContent />;
+}

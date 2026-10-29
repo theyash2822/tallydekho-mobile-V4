@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { isAccessRefusal } from '../../src/services/apiErrors';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
@@ -949,7 +950,7 @@ export default function ReportsScreen() {
         const filed = gd?.filed_months ?? gd?.months_filed ?? 0;
         setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
       } else {
-        partialParts.push('GST');
+        if (!isAccessRefusal(gstSettled)) partialParts.push('GST');
       }
 
       if (auditSettled.status === 'fulfilled') {
@@ -962,10 +963,11 @@ export default function ReportsScreen() {
         setAuditCount(pending);
         setAuditTotal(Math.max(total, pending));
       } else {
-        partialParts.push('Audit');
+        if (!isAccessRefusal(auditSettled)) partialParts.push('Audit');
       }
 
-      if (finOk) {
+      // The Financial card is locked when P&L is not in the member's access: not an error.
+      if (finOk || isAccessRefusal(finSettled)) {
         if (partialParts.length) {
           setApiError(
             i18n.t('screens.tabsReports.partialError', { parts: partialParts.join(', ') }),

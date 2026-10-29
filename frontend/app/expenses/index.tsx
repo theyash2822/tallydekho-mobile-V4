@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { isAccessRefusal } from '../../src/services/apiErrors';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
@@ -128,7 +129,7 @@ export default function ExpenseScreen() {
         if (expSettled.status === 'rejected' && metricsSettled.status === 'rejected') {
           const err = expSettled.reason;
           setApiError(err?.message || t('expenses.loadFailed'));
-        } else if (expSettled.status === 'rejected' || metricsSettled.status === 'rejected') {
+        } else if ([expSettled, metricsSettled].some((r) => r.status === 'rejected' && !isAccessRefusal(r))) {
           setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
         } else {
           setApiError(null);

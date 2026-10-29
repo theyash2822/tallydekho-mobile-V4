@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { isAccessRefusal } from '../../src/services/apiErrors';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
@@ -165,7 +166,7 @@ export default function PurchaseScreen() {
 
         if (anyOk) {
           hasPurchaseDataRef.current = true;
-          if (invSettled.status === 'rejected' || dnSettled.status === 'rejected' || metricsSettled.status === 'rejected') {
+          if ([invSettled, dnSettled, metricsSettled].some((r) => r.status === 'rejected' && !isAccessRefusal(r))) {
             setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
           } else {
             setApiError(null);

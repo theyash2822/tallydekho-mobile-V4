@@ -72,6 +72,11 @@ export function isAccessMessage(message?: string | null): boolean {
   return String(message || '').trim() === NOT_IN_ACCESS;
 }
 
+/** A request that failed only because it is outside the member's access (shown locked, not as a failure). */
+export function isAccessRefusal(result: PromiseSettledResult<unknown>): boolean {
+  return result.status === 'rejected' && isAccessMessage((result as PromiseRejectedResult).reason?.message);
+}
+
 export function friendlyUserMessage(
   message?: string | null,
   code?: string | null,

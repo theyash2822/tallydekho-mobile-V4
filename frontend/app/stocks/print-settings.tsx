@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { LockedScreen } from '../../src/components/LockedOverlay';
 import {
   View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, Alert,
 } from 'react-native';
@@ -18,7 +20,7 @@ const AMBER = '#A89060';
 // PrintItem is re-exported from labelPrint.ts — do not redefine here
 export type { PrintItem } from '../../src/utils/labelPrint';
 
-export default function PrintSettingsScreen() {
+function PrintSettingsScreenContent() {
   const { t } = useTranslation();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -346,3 +348,10 @@ const s = StyleSheet.create({
   gridInfoLabel:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, textAlign: 'center' },
   gridInfoSep:    { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
 });
+
+/** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
+export default function PrintSettingsScreen() {
+  const { isOwnerOrAdmin } = useWorkspace();
+  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  return <PrintSettingsScreenContent />;
+}

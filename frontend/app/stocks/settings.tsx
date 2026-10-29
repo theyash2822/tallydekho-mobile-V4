@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { LockedScreen } from '../../src/components/LockedOverlay';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, KeyboardAvoidingView, TouchableOpacity, StyleSheet,
@@ -101,7 +102,7 @@ function RadioRow({
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function StockSettingsScreen() {
+function StockSettingsScreenContent() {
   // The Owner or an Admin changes these settings; members view them (Owner decision, 29 Oct 2026).
   const { isOwnerOrAdmin: canEditSettings } = useWorkspace();
   const isOwnerOrAdmin = canEditSettings;
@@ -1076,3 +1077,10 @@ const s = StyleSheet.create({
   },
   saveBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
 });
+
+/** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
+export default function StockSettingsScreen() {
+  const { isOwnerOrAdmin } = useWorkspace();
+  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  return <StockSettingsScreenContent />;
+}

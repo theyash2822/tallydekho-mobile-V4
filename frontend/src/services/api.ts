@@ -41,8 +41,15 @@ const REQUEST_TIMEOUT_MS = 25_000;
 /** Active Workspace for X-Workspace-Id — set by WorkspaceContext. */
 let _activeWorkspaceId: string | null = null;
 
+let _workspaceWaiters: Array<() => void> = [];
+
 export function setActiveWorkspaceId(id: string | null) {
   _activeWorkspaceId = id ? String(id) : null;
+  if (_activeWorkspaceId && _workspaceWaiters.length) {
+    const waiting = _workspaceWaiters;
+    _workspaceWaiters = [];
+    waiting.forEach((resume) => resume());
+  }
 }
 
 export function getActiveWorkspaceId(): string | null {
@@ -248,6 +255,14 @@ async function request<T>(
   /** Internal: false on the replay of a response older than one already shown. */
   allowRevisionRetry = true,
 ): Promise<T> {
+  // After an app refresh, company data must not be asked for before the workspace is restored:
+  // without X-Workspace-Id the server would answer for another workspace ("Something went wrong").
+  if (requiresAuth && !_activeWorkspaceId && /[?&]companyGuid=/.test(endpoint)) {
+    await new Promise<void>((resume) => {
+      const timer = setTimeout(resume, 8_000);
+      _workspaceWaiters.push(() => { clearTimeout(timer); resume(); });
+    });
+  }
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
   if (requiresAuth && !token) {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { isAccessRefusal } from '../../src/services/apiErrors';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -110,7 +111,7 @@ export default function SalesScreen() {
       if (anyOk) {
         hasSalesDataRef.current = true;
         setApiError(null);
-        if (invSettled.status === 'rejected' || metricsSettled.status === 'rejected') {
+        if ((invSettled.status === 'rejected' && !isAccessRefusal(invSettled)) || (metricsSettled.status === 'rejected' && !isAccessRefusal(metricsSettled))) {
           setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
         }
       } else {

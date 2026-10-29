@@ -89,7 +89,8 @@ export default function StocksDashboard() {
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmount, formatAmountCompact } = useSettings();
-  const { sensitivePolicies } = useWorkspace();
+  // Stock settings and barcodes are the Owner's or an Admin's (Owner decision, 29 Oct 2026).
+  const { sensitivePolicies, isOwnerOrAdmin } = useWorkspace();
   const notInAccess = useNotInAccess();
 
   const fmtInv = (v: number) =>
@@ -221,11 +222,11 @@ export default function StocksDashboard() {
           {SECONDARY_ACTIONS.map(a => (
             <TouchableOpacity
               key={a.id}
-              style={s.actionBtn}
+              style={[s.actionBtn, !isOwnerOrAdmin && { opacity: 0.55 }]}
               activeOpacity={0.7}
-              onPress={() => safePush(router, a.route as any)}
+              onPress={() => (isOwnerOrAdmin ? safePush(router, a.route as any) : notInAccess())}
             >
-              <Ionicons name={a.icon as any} size={18} color={COLORS.textSecondary} />
+              <Ionicons name={(isOwnerOrAdmin ? a.icon : 'lock-closed-outline') as any} size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
           ))}
         </View>

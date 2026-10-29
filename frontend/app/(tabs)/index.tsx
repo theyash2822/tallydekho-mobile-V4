@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { isAccessRefusal } from '../../src/services/apiErrors';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, FlatList,
@@ -329,7 +330,8 @@ export default function HomeScreen() {
         }
       }
 
-      const primaryOkCount = [kpiOk, metOk, cfOk].filter(Boolean).length;
+      // A section outside the member's access shows its lock; it is not a failed update.
+      const primaryOkCount = [kpiOk || isAccessRefusal(kpiR), metOk || isAccessRefusal(metR), cfOk || isAccessRefusal(cfR)].filter(Boolean).length;
       const anyPrimaryOk = primaryOkCount > 0;
 
       if (anyPrimaryOk) {
