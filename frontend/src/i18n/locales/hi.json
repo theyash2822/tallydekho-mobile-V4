@@ -87,6 +87,8 @@
     "sendOtp": "WhatsApp पर OTP भेजें",
     "verifyOtp": "OTP सत्यापित करें",
     "resendOtp": "OTP पुनः भेजें",
+    "pasteCode": "कोड पेस्ट करें",
+    "noCodeToPaste": "पहले WhatsApp से 6-अंकों का कोड कॉपी करें, फिर कोड पेस्ट करें पर टैप करें।",
     "enterPhone": "अपना मोबाइल नंबर दर्ज करें",
     "enterOtp": "OTP दर्ज करें",
     "welcome": "वापस स्वागत है",

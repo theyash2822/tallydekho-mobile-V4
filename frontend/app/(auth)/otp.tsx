@@ -14,6 +14,8 @@ import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { setPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';
+import * as Clipboard from 'expo-clipboard';
+import { extractCode } from '../../src/utils/otpCode';
 
 const OTP_LENGTH = 6;
 
@@ -63,7 +65,10 @@ function OTPBox({
         onKeyPress={onKeyPress}
         onFocus={onFocus}
         keyboardType="number-pad"
-        maxLength={1}
+        // A whole code can arrive in one box (autofill, keyboard suggestion, paste); the screen spreads it.
+        maxLength={OTP_LENGTH}
+        textContentType="oneTimeCode"
+        autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
         caretHidden
         selectTextOnFocus={false}
       />
@@ -93,8 +98,35 @@ export default function OTPScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  // A whole code arrived in one box (autofill, keyboard suggestion, paste): spread it from `start`.
+  const fillCode = (digits: string, start: number) => {
+    const newOtp = [...otp];
+    digits.slice(0, OTP_LENGTH - start).split('').forEach((d, i) => { newOtp[start + i] = d; });
+    setOtp(newOtp);
+    setError('');
+    const complete = newOtp.every(Boolean);
+    const focusIdx = complete ? OTP_LENGTH - 1 : Math.min(start + digits.length, OTP_LENGTH - 1);
+    inputRefs.current[focusIdx]?.focus();
+    setFocusedIdx(focusIdx);
+    if (complete) handleVerify(newOtp.join(''));
+  };
+
+  const pasteCode = async () => {
+    const code = extractCode(await Clipboard.getStringAsync(), OTP_LENGTH);
+    if (code) fillCode(code, 0);
+    else setError(t('auth.noCodeToPaste'));
+  };
+
   const handleChange = (text: string, idx: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1);
+    let digits = text.replace(/\D/g, '');
+    // Typing over a filled box sends the old digit followed by the new one.
+    if (digits.length === 2 && otp[idx] && digits.startsWith(otp[idx])) digits = digits.slice(1);
+    if (digits.length > 1) {
+      const code = digits.length >= OTP_LENGTH ? digits.slice(-OTP_LENGTH) : digits;
+      fillCode(code, code.length === OTP_LENGTH ? 0 : idx);
+      return;
+    }
+    const digit = digits.slice(-1);
     const newOtp = [...otp];
     newOtp[idx] = digit;
     setOtp(newOtp);
@@ -120,8 +152,9 @@ export default function OTPScreen() {
     }
   };
 
-  const handleVerify = async () => {
-    const code = otp.join('');
+  const handleVerify = async (codeArg?: unknown) => {
+    if (loading) return;
+    const code = typeof codeArg === 'string' ? codeArg : otp.join('');
     if (code.length < OTP_LENGTH) {
       setError(t('auth.enterCompleteOtp'));
       return;
@@ -233,18 +266,22 @@ export default function OTPScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Resend */}
-            <TouchableOpacity
-              testID="resend-otp-btn"
-              onPress={handleResend}
-              disabled={countdown > 0}
-              style={styles.resendRow}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.resendText, countdown > 0 && styles.resendDisabled]}>
-                {countdown > 0 ? t('auth.resendOtpTimer', { countdown }) : t('auth.resendOtp')}
-              </Text>
-            </TouchableOpacity>
+            {/* Paste (WhatsApp "Copy code") and Resend */}
+            <View style={styles.resendRow}>
+              <TouchableOpacity testID="paste-otp-btn" onPress={pasteCode} activeOpacity={0.7}>
+                <Text style={styles.resendText}>{t('auth.pasteCode')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="resend-otp-btn"
+                onPress={handleResend}
+                disabled={countdown > 0}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.resendText, countdown > 0 && styles.resendDisabled]}>
+                  {countdown > 0 ? t('auth.resendOtpTimer', { countdown }) : t('auth.resendOtp')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -372,6 +409,8 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   resendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: SPACING.md,
   },

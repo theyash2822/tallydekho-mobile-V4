@@ -13,6 +13,8 @@ import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';
+import * as Clipboard from 'expo-clipboard';
+import { extractCode } from '../../src/utils/otpCode';
 
 const OTP_LENGTH = 6;
 const PIN_LENGTH = 4;
@@ -45,7 +47,10 @@ function CodeBox({
         onKeyPress={onKeyPress}
         onFocus={onFocus}
         keyboardType="number-pad"
-        maxLength={1}
+        // The 6-digit code step takes a whole code in one box (autofill, keyboard suggestion, paste).
+        maxLength={compact ? OTP_LENGTH : 1}
+        textContentType={compact ? 'oneTimeCode' : 'none'}
+        autoComplete={compact ? (Platform.OS === 'android' ? 'sms-otp' : 'one-time-code') : 'off'}
         caretHidden
         secureTextEntry={secure}
       />
@@ -79,8 +84,33 @@ export default function ResetPinScreen() {
   const length = step === 'otp' ? OTP_LENGTH : PIN_LENGTH;
   const compact = length > PIN_LENGTH;
 
+  // A whole code arrived in one box (autofill, keyboard suggestion, paste): spread it from `start`.
+  const fillCode = (digits: string, start: number) => {
+    const next = [...current];
+    digits.slice(0, length - start).split('').forEach((d, i) => { next[start + i] = d; });
+    setCurrent(next); setError('');
+    const complete = next.every(Boolean);
+    const focusIdx = complete ? length - 1 : Math.min(start + digits.length, length - 1);
+    inputRefs.current[focusIdx]?.focus(); setFocused(focusIdx);
+    if (complete) setTimeout(() => handleNext(next.join('')), 100);
+  };
+
+  const pasteCode = async () => {
+    const code = extractCode(await Clipboard.getStringAsync(), OTP_LENGTH);
+    if (code) fillCode(code, 0);
+    else setError(t('auth.noCodeToPaste'));
+  };
+
   const handleChange = (text: string, idx: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1);
+    let digits = text.replace(/\D/g, '');
+    // Typing over a filled box sends the old digit followed by the new one.
+    if (digits.length === 2 && current[idx] && digits.startsWith(current[idx])) digits = digits.slice(1);
+    if (step === 'otp' && digits.length > 1) {
+      const code = digits.length >= OTP_LENGTH ? digits.slice(-OTP_LENGTH) : digits;
+      fillCode(code, code.length === OTP_LENGTH ? 0 : idx);
+      return;
+    }
+    const digit = digits.slice(-1);
     const next = [...current]; next[idx] = digit; setCurrent(next); setError('');
     if (digit && idx < length - 1) { inputRefs.current[idx + 1]?.focus(); setFocused(idx + 1); }
     if (digit && idx === length - 1) {
@@ -192,6 +222,12 @@ export default function ResetPinScreen() {
               ))}
             </View>
 
+            {step === 'otp' ? (
+              <TouchableOpacity style={s.pasteRow} onPress={pasteCode} activeOpacity={0.7}>
+                <Text style={s.pasteText}>{t('auth.pasteCode')}</Text>
+              </TouchableOpacity>
+            ) : null}
+
             {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <TouchableOpacity
@@ -245,6 +281,8 @@ const s = StyleSheet.create({
   cursorCompact: { height: 24 },
   hiddenInput:  { position: 'absolute', width: '100%', height: '100%', opacity: 0 },
   errorText:    { fontSize: TYPOGRAPHY.sm, color: COLORS.negative, marginBottom: SPACING.sm },
+  pasteRow:     { alignSelf: 'flex-end', marginBottom: SPACING.sm },
+  pasteText:    { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
   btn:          { height: 52, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', marginTop: SPACING.sm },
   btnDisabled:  { backgroundColor: COLORS.borderStrong },
   btnText:      { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },

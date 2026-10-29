@@ -1,3 +1,9 @@
+## 2026-10-29 (19:15) — OTP autofill and paste (local only)
+
+- OTP boxes accept a whole code in one box (iOS/Android autofill, keyboard suggestion, long-press paste) and spread it over the six boxes; a complete code verifies at once. Boxes are marked `oneTimeCode` / `sms-otp` for system autofill. Typing over a filled box still replaces just that digit.
+- "Paste code" next to Resend (and on the Reset PIN code step) reads the code copied with WhatsApp's "Copy code" button (`expo-clipboard`, included in Expo Go; `src/utils/otpCode.ts` picks the standalone 6-digit code). Strings in 11 languages.
+- iOS only suggests codes from Messages (SMS) and Mail, so WhatsApp codes are pasted, not auto-suggested.
+
 ## 2026-10-29 (19:00) — OTP / PIN caret (local only)
 
 - The caret in the empty focused box is centred (the empty digit text no longer sits above it and pushes it down) and blinks like the system caret (`src/components/BlinkingCaret.tsx`). OTP, Reset PIN and Verify PIN screens.

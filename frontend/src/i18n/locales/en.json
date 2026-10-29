@@ -87,6 +87,8 @@
     "sendOtp": "Send OTP via WhatsApp",
     "verifyOtp": "Verify OTP",
     "resendOtp": "Resend OTP",
+    "pasteCode": "Paste code",
+    "noCodeToPaste": "Copy the 6-digit code from WhatsApp first, then tap Paste code.",
     "enterPhone": "Enter your mobile number",
     "enterOtp": "Enter OTP",
     "welcome": "Welcome back",
