@@ -1,3 +1,7 @@
+## 2026-10-29 (19:00) — OTP / PIN caret (local only)
+
+- The caret in the empty focused box is centred (the empty digit text no longer sits above it and pushes it down) and blinks like the system caret (`src/components/BlinkingCaret.tsx`). OTP, Reset PIN and Verify PIN screens.
+
 ## 2026-10-29 (18:00–19:30) — Auditer name and logo (local only)
 
 - App name "Auditer" (was "Auditor"); Face ID, microphone and speech prompts say Auditer. Store IDs `com.tallydekho.app`, Expo slug and deep-link scheme `auditor` unchanged.

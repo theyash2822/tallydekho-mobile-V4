@@ -13,6 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { setPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
+import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 
 const OTP_LENGTH = 6;
 
@@ -48,11 +49,10 @@ function OTPBox({
       onPress={handlePress}
       activeOpacity={0.9}
     >
-      {/* Perfectly centred digit via flexbox — no iOS alignment issues */}
-      <Text style={styles.otpDigit}>{digit}</Text>
-
-      {/* Blinking cursor bar when focused + empty */}
-      {isFocused && !digit ? <View style={styles.cursor} /> : null}
+      {/* Either the digit or, in the empty focused box, the caret — one child, so flexbox centres it */}
+      {digit
+        ? <Text style={styles.otpDigit}>{digit}</Text>
+        : isFocused ? <BlinkingCaret style={styles.cursor} /> : null}
 
       {/* Invisible TextInput that captures keyboard events */}
       <TextInput

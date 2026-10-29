@@ -12,6 +12,7 @@ import { setPreAuthToken, getPreAuthToken, clearPreAuthToken } from '../../src/u
 import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
+import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 
 const OTP_LENGTH = 6;
 const PIN_LENGTH = 4;
@@ -33,11 +34,9 @@ function CodeBox({
       onPress={() => localRef.current?.focus()}
       activeOpacity={0.9}
     >
-      {secure && filled
-        ? <View style={s.dot} />
-        : <Text style={[s.digit, compact && s.digitCompact]}>{char}</Text>
-      }
-      {isFocused && !char ? <View style={s.cursor} /> : null}
+      {filled
+        ? (secure ? <View style={s.dot} /> : <Text style={[s.digit, compact && s.digitCompact]}>{char}</Text>)
+        : isFocused ? <BlinkingCaret style={[s.cursor, compact && s.cursorCompact]} /> : null}
       <TextInput
         ref={r => { (localRef as any).current = r; onSetRef(r); }}
         style={s.hiddenInput}
@@ -243,6 +242,7 @@ const s = StyleSheet.create({
   dot:          { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.textPrimary },
   digit:        { fontSize: 28, fontWeight: '700', color: COLORS.textPrimary, includeFontPadding: false },
   cursor:       { width: 2, height: 28, backgroundColor: COLORS.brandPrimary, borderRadius: 1 },
+  cursorCompact: { height: 24 },
   hiddenInput:  { position: 'absolute', width: '100%', height: '100%', opacity: 0 },
   errorText:    { fontSize: TYPOGRAPHY.sm, color: COLORS.negative, marginBottom: SPACING.sm },
   btn:          { height: 52, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', marginTop: SPACING.sm },

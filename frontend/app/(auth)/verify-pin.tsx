@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { getBiometricPin } from '../../src/utils/biometricPin';
 import { AuditerWordmark } from '../../src/components/AuditerLogo';
+import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 
 const PIN_LENGTH = 4;
 
@@ -36,7 +37,7 @@ function PinBox({
       activeOpacity={0.9}
     >
       {/* Show dot instead of character for security */}
-      {filled ? <View style={s.dot} /> : (isFocused ? <View style={s.cursor} /> : null)}
+      {filled ? <View style={s.dot} /> : (isFocused ? <BlinkingCaret style={s.cursor} /> : null)}
       <TextInput
         ref={r => { (localRef as any).current = r; onSetRef(r); }}
         style={s.hiddenInput}
