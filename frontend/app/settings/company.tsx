@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert, Modal,
-  Image, Animated, ActivityIndicator,
+  Alert, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,155 +13,38 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { currentTenantKey, logoFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
-import { getCompanyProfile, updateCompanyProfile, uploadCompanyLogo, getCompanyLogo } from '../../src/services/api';
+import { getCompanyProfile, uploadCompanyLogo, getCompanyLogo } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
-  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
-  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
-  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Andaman and Nicobar Islands', 'Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
-  'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
-];
+// ── Tally formatting ──────────────────────────────────────────────────────────
+const TALLY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-const MONTH_KEYS: Record<string, string> = {
-  January: 'screens.settingsCompany.january',
-  February: 'screens.settingsCompany.february',
-  March: 'screens.settingsCompany.march',
-  April: 'screens.settingsCompany.april',
-  May: 'screens.settingsCompany.may',
-  June: 'screens.settingsCompany.june',
-  July: 'screens.settingsCompany.july',
-  August: 'screens.settingsCompany.august',
-  September: 'screens.settingsCompany.september',
-  October: 'screens.settingsCompany.october',
-  November: 'screens.settingsCompany.november',
-  December: 'screens.settingsCompany.december',
-};
-
-// ── Custom Toggle ─────────────────────────────────────────────────────────────
-function CustomToggle({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
-  const anim = useState(() => new Animated.Value(value ? 1 : 0))[0];
-  const handlePress = () => {
-    const next = !value;
-    Animated.spring(anim, { toValue: next ? 1 : 0, useNativeDriver: false, tension: 80, friction: 8 }).start();
-    onValueChange(next);
-  };
-  const bgColor   = anim.interpolate({ inputRange: [0,1], outputRange: [COLORS.borderStrong, COLORS.brandPrimary] });
-  const translateX = anim.interpolate({ inputRange: [0,1], outputRange: [2, 22] });
-  return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
-      <Animated.View style={[ct.track, { backgroundColor: bgColor }]}>
-        <Animated.View style={[ct.thumb, { transform: [{ translateX }] }]} />
-      </Animated.View>
-    </TouchableOpacity>
-  );
+/** Tally dates arrive as YYYYMMDD (demo data as YYYY-MM-DD); shown the way Tally shows them. */
+function formatTallyDate(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  const m = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(raw);
+  const month = m ? TALLY_MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `${Number(m[3])}-${month}-${m[1]}` : raw;
 }
-const ct = StyleSheet.create({
-  track: { width: 44, height: 26, borderRadius: 13, justifyContent: 'center' },
-  thumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.white, position: 'absolute' },
-});
 
-// ── Generic List Picker Bottom Sheet ─────────────────────────────────────────
-function ListPickerSheet({
-  visible, title, items, selected, onSelect, onClose,
-}: {
-  visible: boolean; title: string; items: string[];
-  selected: string; onSelect: (m: string) => void; onClose: () => void;
-}) {
+function formatSyncedAt(value: unknown): string {
+  const n = Number(value);
+  if (!n) return '';
+  return new Date(n < 1e12 ? n * 1000 : n).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function TallyField({ label, value, last }: { label: string; value?: string | null; last?: boolean }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={mp.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={mp.sheet}>
-          <View style={mp.handle} />
-          <Text style={mp.title}>{title}</Text>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={mp.list}>
-            {items.map(item => {
-              const active = selected === item;
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[mp.row, active && mp.rowActive]}
-                  onPress={() => { onSelect(item); onClose(); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[mp.rowText, active && mp.rowTextActive]}>{item}</Text>
-                  {active && <Ionicons name="checkmark" size={18} color={COLORS.white} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          <View style={{ height: 16 }} />
-        </View>
-      </View>
-    </Modal>
+    <View style={[s.fieldWrap, !last && s.fieldBorder]}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <Text style={s.fieldValue} selectable>{value || '—'}</Text>
+    </View>
   );
 }
 
-// ── Month Picker Bottom Sheet ─────────────────────────────────────────────────
-function MonthPickerSheet({
-  visible, title, selected, onSelect, onClose,
-}: {
-  visible: boolean; title: string; selected: string;
-  onSelect: (m: string) => void; onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={mp.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={mp.sheet}>
-          <View style={mp.handle} />
-          <Text style={mp.title}>{title}</Text>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={mp.list}>
-            {MONTHS.map(month => {
-              const active = selected === month;
-              return (
-                <TouchableOpacity
-                  key={month}
-                  style={[mp.row, active && mp.rowActive]}
-                  onPress={() => { onSelect(month); onClose(); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[mp.rowText, active && mp.rowTextActive]}>{t(MONTH_KEYS[month])}</Text>
-                  {active && <Ionicons name="checkmark" size={18} color={COLORS.white} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          <View style={{ height: 16 }} />
-        </View>
-      </View>
-    </Modal>
-  );
-}
-const mp = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '72%',
-  },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  title:  { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 12 },
-  list:   { gap: 4 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, paddingHorizontal: 16, borderRadius: RADIUS.md,
-  },
-  rowActive:     { backgroundColor: COLORS.brandPrimary },
-  rowText:       { fontSize: TYPOGRAPHY.base, fontWeight: '500', color: COLORS.textPrimary },
-  rowTextActive: { color: COLORS.white, fontWeight: '700' },
-});
+type Loaded = { guid: string; profile: Record<string, any> | null; error: string };
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CompanyScreen() {
@@ -170,71 +52,54 @@ export default function CompanyScreen() {
   const { t } = useTranslation();
   const { company } = useAuth();
   const { isOwner, hasCapability } = useWorkspace();
-  const canEdit = isOwner || hasCapability('company.profile.edit');
+  const canEditLogo = isOwner || hasCapability('company.profile.edit');
+  const companyGuid = company?.guid;
 
-  // Company Identity — pre-filled from AuthContext / Tally sync
-  const [companyName, setCompanyName] = useState(company?.name || t('screens.settingsCompany.yourCompany'));
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
-  const [gstin,       setGstin]       = useState(company?.gstin || '');
-  const [pan,         setPan]         = useState('');
+  // Tally company master for the selected company, read-only.
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Sync when company data loads
-  const [prevCompanyIdentity, setPrevCompanyIdentity] = useState({ name: company?.name, gstin: company?.gstin });
-  if (prevCompanyIdentity.name !== company?.name || prevCompanyIdentity.gstin !== company?.gstin) {
-    setPrevCompanyIdentity({ name: company?.name, gstin: company?.gstin });
-    if (company?.name) setCompanyName(company.name);
-    if (company?.gstin) setGstin(company.gstin);
-  }
-
-  // Contact
-  const [address, setAddress] = useState('');
-  const [email,   setEmail]   = useState('');
-  const [phone,   setPhone]   = useState('');
-  const [website, setWebsite] = useState('');
-
-  // Financial Settings
-  const [fyStartMonth,    setFyStartMonth]    = useState('April');
-  const [bookLockEnabled, setBookLockEnabled] = useState(true);
-  const [bookLockDays,    setBookLockDays]    = useState('30');
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [state,           setState]           = useState('');
-  const [showStatePicker, setShowStatePicker] = useState(false);
-
-  // Load company profile from backend on mount
   useEffect(() => {
-    if (!company?.guid) return;
-    getCompanyProfile(company.guid).then((res: any) => {
-      const d = res?.data;
-      if (!d) return;
-      if (d.gstin)   { setGstin(d.gstin); }
-      if (d.address) { setAddress(d.address); }
-      if (d.state)   { setState(d.state); }
-    }).catch(() => {});
-  }, [company?.guid]);
+    if (!companyGuid) return;
+    let cancelled = false;
+    getCompanyProfile(companyGuid)
+      .then((res: any) => {
+        if (!cancelled) setLoaded({ guid: companyGuid, profile: res?.data || {}, error: '' });
+      })
+      .catch((err: any) => {
+        if (!cancelled) setLoaded({ guid: companyGuid, profile: null, error: err?.message || '' });
+      });
+    return () => { cancelled = true; };
+  }, [companyGuid, reloadKey]);
+
+  const current = loaded?.guid === companyGuid ? loaded : null;
+  const profile = current?.profile || null;
+  const loading = !!companyGuid && !current;
 
   // Logo — load from backend (cross-device), fallback to AsyncStorage cache
-  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [logo, setLogo] = useState<{ guid: string; uri: string | null } | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
-  const logoKey = company?.guid ? currentTenantKey(company.guid, logoFeature()) : null;
+  const logoUri = logo && logo.guid === companyGuid ? logo.uri : null;
 
   useEffect(() => {
-    if (!company?.guid) return;
-    dropLegacyKeys([`company_logo_${company.guid}`]);
-    getCompanyLogo(company.guid).then((res: any) => {
+    if (!companyGuid) return;
+    let cancelled = false;
+    const cacheKey = currentTenantKey(companyGuid, logoFeature());
+    dropLegacyKeys([`company_logo_${companyGuid}`]);
+    const fromCache = () => AsyncStorage.getItem(cacheKey)
+      .then(uri => { if (!cancelled) setLogo({ guid: companyGuid, uri: uri || null }); })
+      .catch(() => {});
+    getCompanyLogo(companyGuid).then((res: any) => {
       const url = res?.data?.logo_url;
-      if (url) {
-        setLogoUri(url);
-        if (logoKey) AsyncStorage.setItem(logoKey, url).catch(() => {});
-      } else if (logoKey) {
-        AsyncStorage.getItem(logoKey).then(uri => { if (uri) setLogoUri(uri); }).catch(() => {});
-      }
-    }).catch(() => {
-      if (logoKey) AsyncStorage.getItem(logoKey).then(uri => { if (uri) setLogoUri(uri); }).catch(() => {});
-    });
-  }, [company?.guid]);
+      if (!url) return fromCache();
+      if (!cancelled) setLogo({ guid: companyGuid, uri: url });
+      AsyncStorage.setItem(cacheKey, url).catch(() => {});
+    }).catch(fromCache);
+    return () => { cancelled = true; };
+  }, [companyGuid]);
 
   const pickLogo = async () => {
+    if (!companyGuid || logoUploading || !canEditLogo) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(t('screens.settingsCompany.permissionNeeded'), t('screens.settingsCompany.permissionMsg'));
@@ -246,44 +111,31 @@ export default function CompanyScreen() {
       quality: 0.7,
       base64: true,
     });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const dataUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-      setLogoUri(dataUri);
-      if (logoKey) AsyncStorage.setItem(logoKey, dataUri).catch(() => {});
-      if (company?.guid) {
-        setLogoUploading(true);
-        uploadCompanyLogo(company.guid, dataUri).catch(() => {}).finally(() => setLogoUploading(false));
-      }
-      markDirty();
+    const asset = result.canceled ? null : result.assets[0];
+    if (!asset) return;
+    const guid = companyGuid;
+    const previous = logoUri;
+    const dataUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+    setLogo({ guid, uri: dataUri });
+    setLogoUploading(true);
+    try {
+      await uploadCompanyLogo(guid, dataUri);
+      AsyncStorage.setItem(currentTenantKey(guid, logoFeature()), dataUri).catch(() => {});
+      Toast.show({ type: 'success', text1: t('company.logoUpdated'), text2: t('company.logoUpdatedDesc') });
+    } catch (err: any) {
+      setLogo(cur => (cur?.guid === guid ? { guid, uri: previous } : cur));
+      Toast.show({ type: 'error', text1: t('company.logoUploadFailed'), text2: err?.message || t('common.tryAgain') });
+    } finally {
+      setLogoUploading(false);
     }
   };
 
-  const [saving, setSaving] = useState(false);
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      // Logo uploaded on pick — just refresh local cache
-      if (logoKey && logoUri) await AsyncStorage.setItem(logoKey, logoUri).catch(() => {});
-      // Save editable fields to backend
-      if (company?.guid && canEdit) {
-        await updateCompanyProfile(company.guid, {
-          gstin:   gstin.trim(),
-          address: address.trim(),
-          state:   state.trim(),
-        });
-      }
-      Toast.show({
-        type: 'success',
-        text1: t('company.saved'),
-        text2: t('company.savedDesc'),
-        visibilityTime: 3000,
-      });
-      setIsDirty(false);
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: t('screens.settingsCompany.failed'), text2: err?.message || t('screens.settingsCompany.saveFailed') });
-    } finally { setSaving(false); }
+  const retry = () => {
+    setLoaded(null);
+    setReloadKey(k => k + 1);
   };
+
+  const syncedAt = formatSyncedAt(profile?.profile_synced_at);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -293,235 +145,89 @@ export default function CompanyScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('company.title')}</Text>
-        {isDirty ? (
-          <TouchableOpacity style={[s.saveBtn, saving && {opacity:0.6}]} onPress={handleSave} activeOpacity={0.7} disabled={saving}>
-            {saving && <ActivityIndicator size="small" color={COLORS.white} style={{marginRight:6}}/>}
-            <Text style={s.saveBtnText}>{saving ? t('common.saving') : t('common.save')}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ width: 52 }} />
-        )}
+        <View style={{ width: 40 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          style={s.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* ── Company Logo ── */}
-          <View style={s.logoSection}>
-            <TouchableOpacity style={s.logoWrap} onPress={pickLogo} activeOpacity={0.85} disabled={!canEdit}>
-              {logoUri ? (
-                <Image source={{ uri: logoUri }} style={s.logoImg} resizeMode="contain" />
-              ) : (
-                <View style={s.logoPlaceholder}>
-                  <Text style={s.logoInitials}>
-                    {(company?.name || 'CO').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              {logoUploading ? (
-                <View style={s.cameraBadge}><ActivityIndicator size="small" color={COLORS.white} /></View>
-              ) : (
-                <View style={s.cameraBadge}><Ionicons name="camera" size={13} color={COLORS.white} /></View>
-              )}
-            </TouchableOpacity>
-            <Text style={s.logoLabel}>{t('company.logo')}</Text>
-            <Text style={s.logoHint}>{t('company.logoHint')}</Text>
-          </View>
-
-          {/* ── Company Identity ── */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{t('company.identity')}</Text>
-            {!canEdit && <Text style={s.logoHint}>{t('company.readOnly')}</Text>}
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.name')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={companyName}
-                onChangeText={v => { setCompanyName(v); markDirty(); }}
-                placeholder={t('screens.settingsCompany.namePh')}
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.gstin')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={gstin}
-                onChangeText={v => { setGstin(v); markDirty(); }}
-                placeholder="27AAJCR0000E1Z2"
-                placeholderTextColor={COLORS.textTertiary}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>{t('company.pan')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={pan}
-                onChangeText={v => { setPan(v); markDirty(); }}
-                placeholder="AAJCR0000E"
-                placeholderTextColor={COLORS.textTertiary}
-                autoCapitalize="characters"
-              />
-            </View>
-          </View>
-
-          {/* ── Contact Details ── */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{t('company.contact')}</Text>
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.address')}</Text>
-              <TextInput
-                style={[s.fieldInput, s.fieldMultiline]}
-                editable={canEdit}
-                value={address}
-                onChangeText={v => { setAddress(v); markDirty(); }}
-                multiline
-                placeholder={t('screens.settingsCompany.addressPh')}
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.email')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={email}
-                onChangeText={v => { setEmail(v); markDirty(); }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholder="company@email.com"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.phone')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={phone}
-                onChangeText={v => { setPhone(v); markDirty(); }}
-                keyboardType="phone-pad"
-                placeholder="+91 XXXXX XXXXX"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.website')}</Text>
-              <TextInput
-                style={s.fieldInput}
-                editable={canEdit}
-                value={website}
-                onChangeText={v => { setWebsite(v); markDirty(); }}
-                keyboardType="url"
-                autoCapitalize="none"
-                placeholder="www.yourcompany.com"
-                placeholderTextColor={COLORS.textTertiary}
-              />
-            </View>
-
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>{t('company.state')}</Text>
-              <TouchableOpacity
-                style={s.dropdownRow}
-                onPress={() => setShowStatePicker(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.dropdownValue, !state && { color: COLORS.textTertiary }]}>
-                  {state || t('company.selectState')}
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* ── Company Logo ── */}
+        <View style={s.logoSection}>
+          <TouchableOpacity style={s.logoWrap} onPress={pickLogo} activeOpacity={0.85} disabled={logoUploading || !canEditLogo}>
+            {logoUri ? (
+              <Image source={{ uri: logoUri }} style={s.logoImg} resizeMode="contain" />
+            ) : (
+              <View style={s.logoPlaceholder}>
+                <Text style={s.logoInitials}>
+                  {(company?.name || 'CO').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()}
                 </Text>
-                <View style={s.dropdownChevron}>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Financial Settings ── */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{t('company.financial')}</Text>
-
-            {/* FY Start Month — themed dropdown */}
-            <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>{t('company.fyStartMonth')}</Text>
-              <TouchableOpacity
-                style={s.dropdownRow}
-                onPress={() => setShowMonthPicker(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={s.dropdownValue}>{MONTH_KEYS[fyStartMonth] ? t(MONTH_KEYS[fyStartMonth]) : fyStartMonth}</Text>
-                <View style={s.dropdownChevron}>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Book Lock Days */}
-            <View style={s.fieldWrap}>
-              <View style={s.lockHeaderRow}>
-                <View style={s.lockLabelRow}>
-                  <Ionicons name="lock-closed-outline" size={14} color={COLORS.textSecondary} />
-                  <Text style={s.fieldLabel}>{t('company.bookLock')}</Text>
-                </View>
-                <CustomToggle value={bookLockEnabled} onValueChange={(v) => { setBookLockEnabled(v); markDirty(); }} />
               </View>
+            )}
+            {logoUploading ? (
+              <View style={s.cameraBadge}><ActivityIndicator size="small" color={COLORS.white} /></View>
+            ) : canEditLogo ? (
+              <View style={s.cameraBadge}><Ionicons name="camera" size={13} color={COLORS.white} /></View>
+            ) : null}
+          </TouchableOpacity>
+          <Text style={s.logoLabel}>{t('company.logo')}</Text>
+          <Text style={s.logoHint}>{t(canEditLogo ? 'company.logoHint' : 'company.readOnly')}</Text>
+        </View>
 
-              {bookLockEnabled ? (
-                <View style={s.lockBody}>
-                  <View style={s.lockInputWrap}>
-                    <TextInput
-                      style={s.lockDaysInput}
-                      value={bookLockDays}
-                      onChangeText={v => { setBookLockDays(v); markDirty(); }}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                      selectTextOnFocus
-                    />
-                  </View>
-                  <Text style={s.lockDaysText}>{t('screens.settingsCompany.daysAfterFyEnd')}</Text>
-                </View>
-              ) : (
-                <Text style={s.lockOffHint}>{t('screens.settingsCompany.booksOpen')}</Text>
-              )}
-            </View>
+        {/* ── Tally notice ── */}
+        <View style={s.notice}>
+          <Ionicons name="information-circle-outline" size={18} color={COLORS.info} />
+          <Text style={s.noticeText}>{t('company.tallyNotice')}</Text>
+        </View>
+
+        {loading ? (
+          <View style={s.stateBox}>
+            <ActivityIndicator size="small" color={COLORS.brandPrimary} />
           </View>
+        ) : current?.error ? (
+          <View style={s.stateBox}>
+            <Text style={s.stateTitle}>{t('company.loadFailed')}</Text>
+            <Text style={s.stateHint}>{current.error}</Text>
+            <TouchableOpacity style={s.retryBtn} onPress={retry} activeOpacity={0.7}>
+              <Text style={s.retryText}>{t('common.retry')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* ── Company Identity ── */}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>{t('company.identity')}</Text>
+              <TallyField label={t('company.name')} value={profile?.name || company?.name} />
+              <TallyField label={t('company.mailingName')} value={profile?.formal_name} />
+              <TallyField label={t('company.gstin')} value={profile?.gstin} />
+              <TallyField label={t('company.pan')} value={profile?.pan} last />
+            </View>
 
-          <View style={{ height: isDirty ? 80 : 24 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+            {/* ── Contact Details ── */}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>{t('company.contact')}</Text>
+              <TallyField label={t('company.address')} value={profile?.address} />
+              <TallyField label={t('company.state')} value={profile?.state} />
+              <TallyField label={t('company.country')} value={profile?.country} />
+              <TallyField label={t('company.pincode')} value={profile?.pincode} />
+              <TallyField label={t('company.email')} value={profile?.email} />
+              <TallyField label={t('company.mobile')} value={profile?.mobile} />
+              <TallyField label={t('company.phone')} value={profile?.phone} />
+              <TallyField label={t('company.website')} value={profile?.website} last />
+            </View>
 
-      {/* ── Month Picker Sheet ── */}
-      <MonthPickerSheet
-        visible={showMonthPicker}
-        title={t('company.fyStartMonth')}
-        selected={fyStartMonth}
-        onSelect={(m) => { setFyStartMonth(m); markDirty(); }}
-        onClose={() => setShowMonthPicker(false)}
-      />
-      <ListPickerSheet
-        visible={showStatePicker}
-        title={t('company.selectState')}
-        items={INDIAN_STATES}
-        selected={state}
-        onSelect={(s) => { setState(s); markDirty(); }}
-        onClose={() => setShowStatePicker(false)}
-      />
+            {/* ── Financial Year ── */}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>{t('company.financial')}</Text>
+              <TallyField label={t('company.fyBeginning')} value={formatTallyDate(profile?.fy_start)} />
+              <TallyField label={t('company.booksBeginning')} value={formatTallyDate(profile?.books_from)} last />
+            </View>
+
+            <Text style={s.syncedText}>
+              {syncedAt ? t('company.tallySyncedAt', { time: syncedAt }) : t('company.tallyNotSynced')}
+            </Text>
+          </>
+        )}
+
+        <View style={{ height: 24 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -542,11 +248,6 @@ const s = StyleSheet.create({
     flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700',
     color: COLORS.textPrimary, textAlign: 'center',
   },
-  saveBtn: {
-    paddingHorizontal: 16, paddingVertical: 7,
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.full,
-  },
-  saveBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   scroll: { flex: 1 },
 
   // Logo
@@ -580,6 +281,18 @@ const s = StyleSheet.create({
   },
   logoHint: { fontSize: 11, color: COLORS.textTertiary },
 
+  // Tally notice
+  notice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    marginHorizontal: SPACING.md, padding: SPACING.md,
+    backgroundColor: COLORS.infoBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  noticeText: {
+    flex: 1, fontSize: TYPOGRAPHY.sm, lineHeight: 19,
+    color: COLORS.textPrimary, fontWeight: '500',
+  },
+
   // Cards
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
@@ -593,49 +306,28 @@ const s = StyleSheet.create({
   },
 
   // Fields
-  fieldWrap:    { paddingVertical: 12 },
-  fieldBorder:  { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  fieldLabel:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 5 },
-  fieldInput:   { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, padding: 0 },
-  fieldMultiline: { height: 64, textAlignVertical: 'top' },
+  fieldWrap:   { paddingVertical: 12 },
+  fieldBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  fieldLabel:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 5 },
+  fieldValue:  { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
-  // Dropdown
-  dropdownRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  dropdownValue: {
-    fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary,
-  },
-  dropdownChevron: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.pageBg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // Book Lock
-  lockHeaderRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 2,
-  },
-  lockLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  lockBody: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginTop: 10, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
-  },
-  lockInputWrap: {
-    borderWidth: 1.5, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg,
-  },
-  lockDaysInput: {
-    width: 56, paddingVertical: 7, paddingHorizontal: 10,
-    fontSize: TYPOGRAPHY.base, fontWeight: '700',
-    color: COLORS.textPrimary, textAlign: 'center',
-  },
-  lockDaysText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, flex: 1 },
-  lockOffHint: {
+  syncedText: {
     fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary,
-    fontStyle: 'italic', marginTop: 8,
+    marginHorizontal: SPACING.md, marginTop: SPACING.md,
   },
+
+  // Loading / error
+  stateBox: {
+    alignItems: 'center', gap: 6,
+    marginHorizontal: SPACING.md, marginTop: SPACING.md, padding: SPACING.lg,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  stateTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  stateHint:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center' },
+  retryBtn: {
+    marginTop: 6, paddingHorizontal: 16, paddingVertical: 7,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.full,
+  },
+  retryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 });

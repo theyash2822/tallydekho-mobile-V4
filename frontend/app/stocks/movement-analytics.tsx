@@ -468,7 +468,7 @@ export default function MovementAnalyticsScreen() {
                 {search.trim() ? t('screens.stocksMovementAnalytics.noMatch') : t('screens.stocksMovementAnalytics.noStockData')}
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
       />
     </SafeAreaView>

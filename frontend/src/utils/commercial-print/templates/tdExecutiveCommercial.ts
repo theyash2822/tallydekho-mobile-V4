@@ -1,5 +1,5 @@
 import { CommercialPrintModel } from '../CommercialPrintModel';
-import { esc, formatInr } from '../../voucher-print/shared';
+import { addressParagraph, esc, formatInr } from '../../voucher-print/shared';
 import {
   renderPartyBlock,
   renderItemsTable,
@@ -11,10 +11,7 @@ import {
 
 function executiveHeader(model: CommercialPrintModel): string {
   const c = model.company;
-  const line2 = [
-    ...(c.addressLines || []).slice(0, 2),
-    c.district,
-  ].filter(Boolean).join(' · ');
+  const line2 = addressParagraph(c.addressLines || [], c.district ? `Distt: ${c.district}` : null);
   const line3 = [c.state || c.stateName, c.stateCode].filter(Boolean).join(' ');
 
   return `

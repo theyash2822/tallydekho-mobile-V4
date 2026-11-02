@@ -351,7 +351,7 @@ const s = StyleSheet.create({
 
 /** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
 export default function PrintSettingsScreen() {
-  const { isOwnerOrAdmin } = useWorkspace();
-  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  const { hasCapability } = useWorkspace();
+  if (!hasCapability('inventory.settings.manage')) return <LockedScreen titleKey="nav.stocks" />;
   return <PrintSettingsScreenContent />;
 }

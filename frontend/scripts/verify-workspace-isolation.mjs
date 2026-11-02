@@ -341,6 +341,26 @@ check('a refresh leaves the selected workspace and company alone', () => {
   );
 });
 
+// ── Per-user secure keys ────────────────────────────────────────────────────
+
+check('SecureStore keys only use letters, digits, ".", "-" and "_"', () => {
+  const valid = /^[\w.-]+$/;
+  for (const f of files.filter((x) => x.code.includes('expo-secure-store'))) {
+    for (const m of f.code.matchAll(/const \w*KEY\w*\s*=\s*'([^']*)'/g)) {
+      assert.match(m[1], valid, `${f.rel}: "${m[1]}"`);
+    }
+  }
+  const pin = stripComments(read('src/utils/biometricPin.ts'));
+  const legacy = /const LEGACY_KEY = '([^']+)'/.exec(pin)?.[1];
+  const body = pin.slice(pin.indexOf('export function biometricPinKey'), pin.indexOf('export async function setBiometricPin'));
+  const templates = [...body.matchAll(/`([^`]*)`/g)].map((m) => m[1]);
+  assert.ok(legacy && templates.length, 'biometricPinKey must build its key from LEGACY_KEY');
+  for (const tpl of templates) {
+    const sample = tpl.replace('${LEGACY_KEY}', legacy).replace(/\$\{[^}]+\}/g, '919876543210');
+    assert.match(sample, valid, `biometricPinKey builds "${sample}", which SecureStore rejects`);
+  }
+});
+
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`);
   process.exit(1);

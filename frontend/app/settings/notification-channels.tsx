@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Animated, Modal,
 } from 'react-native';
@@ -51,7 +52,7 @@ function DrumColumn({
   selected: string;
   onSelect: (v: string) => void;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const idx = items.indexOf(selected);
 
   // Scroll to the current selection once layout is ready

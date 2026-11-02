@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  TextInputInstance,
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
@@ -15,6 +16,7 @@ import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 import * as Clipboard from 'expo-clipboard';
 import { extractCode } from '../../src/utils/otpCode';
+import { getBiometricPin, setBiometricPin } from '../../src/utils/biometricPin';
 
 const OTP_LENGTH = 6;
 const PIN_LENGTH = 4;
@@ -24,12 +26,12 @@ function CodeBox({
   onSetRef, onChangeText, onKeyPress, onFocus,
 }: {
   char: string; filled: boolean; hasError: boolean; isFocused: boolean; secure?: boolean; compact?: boolean;
-  onSetRef: (r: TextInput | null) => void;
+  onSetRef: (r: TextInputInstance | null) => void;
   onChangeText: (t: string) => void;
   onKeyPress: (e: any) => void;
   onFocus: () => void;
 }) {
-  const localRef = useRef<TextInput>(null);
+  const localRef = useRef<TextInputInstance>(null);
   return (
     <TouchableOpacity
       style={[compact ? s.boxCompact : s.box, filled && s.boxFilled, hasError && s.boxError, isFocused && s.boxFocused]}
@@ -74,7 +76,7 @@ export default function ResetPinScreen() {
   const [loading, setLoading]    = useState(false);
   const [error, setError]        = useState('');
   const [preAuthToken, setPreToken] = useState('');
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   useEffect(() => { setTimeout(() => inputRefs.current[0]?.focus(), 400); }, [step]);
 
@@ -165,6 +167,7 @@ export default function ResetPinScreen() {
         const res = await resetPin(newPin.join(''), token);
         if (res?.success) {
           await clearPreAuthToken();
+          if (await getBiometricPin(phone)) await setBiometricPin(phone, newPin.join('')).catch(() => {});
           const { access_token, refresh_token, user, company } = res.data;
           await signIn(
             access_token,

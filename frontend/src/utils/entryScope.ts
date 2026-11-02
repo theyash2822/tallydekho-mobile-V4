@@ -12,6 +12,18 @@ export const ENTRY_KEYS = new Set<string>([
 
 export type EntryScope = { mode?: string; keys?: string[]; entryMode?: string };
 
+/**
+ * Keys whose creation obeys Entry Mode (Regular / Optional): every Tally voucher type and converting
+ * a proforma (which makes a regular invoice). Masters and PDFs have no entry mode.
+ */
+export const ENTRY_MODE_KEYS = new Set<string>([
+  'sales_invoice.create', 'sales_order.create', 'delivery_note.create', 'credit_note.create', 'sales_proforma.convert_to_regular',
+  'purchase_invoice.create', 'purchase_order.create', 'debit_note.create',
+  'receipt.create', 'payment.create', 'expense.create', 'journal.create', 'contra.create',
+  'stock_adjustment.create', 'stock_transfer.create',
+]);
+export const usesEntryMode = (key?: string | null) => !!key && ENTRY_MODE_KEYS.has(key);
+
 /** Role capabilities minus the entry types this company's scope does not allow. */
 /**
  * Reports the Owner can switch per member and company (same list as the server). Area

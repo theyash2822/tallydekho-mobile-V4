@@ -8,6 +8,25 @@ export function esc(s: string | null | undefined): string {
     .replace(/"/g, '&quot;');
 }
 
+type AddressPiece = string | null | undefined;
+
+/**
+ * Address pieces as one comma-separated paragraph that wraps over 2–3 lines instead of one piece
+ * per line; a piece that repeats (e.g. the state twice) appears once. Plain text — escape it.
+ */
+export function addressParagraph(...pieces: Array<AddressPiece | AddressPiece[]>): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const piece of pieces.flat()) {
+    const text = String(piece ?? '').trim();
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out.join(', ');
+}
+
 /** Format a decimal money string with Indian grouping for display. */
 export function formatInr(amount: Money | null | undefined, withSymbol = false): string {
   if (amount == null || amount === '') return '';

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { LockedScreen } from '../../src/components/LockedOverlay';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Animated, Alert,
 } from 'react-native';
@@ -105,7 +106,7 @@ const VISIBLE = 5;
 const DRUM_H  = ITEM_H * VISIBLE;
 
 function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: string; onSelect: (v: string) => void }) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const idx = items.indexOf(selected);
   const handleLayout = () => {
     if (scrollRef.current && idx >= 0)
@@ -967,7 +968,7 @@ const s = StyleSheet.create({
 
 /** Payment reminders are seen and sent by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
 export default function PaymentRemindersScreen() {
-  const { isOwnerOrAdmin } = useWorkspace();
-  if (!isOwnerOrAdmin) return <LockedScreen titleKey="settings.paymentReminders" />;
+  const { hasCapability } = useWorkspace();
+  if (!hasCapability('reminders.manage')) return <LockedScreen titleKey="settings.paymentReminders" />;
   return <PaymentRemindersScreenContent />;
 }

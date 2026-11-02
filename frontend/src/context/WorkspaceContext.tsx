@@ -6,10 +6,12 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useEffect,
   useMemo,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import {
@@ -583,6 +585,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, 20_000);
     return () => clearInterval(t);
   }, [isAuthenticated, refreshWorkspaces]);
+
+  // Back from the background: re-read role, permissions and data access, so a role edited on Web
+  // while the app was suspended shows up without a restart (at most once every 15 s).
+  const lastForegroundRefreshRef = useRef(0);
+  useEffect(() => {
+    if (!isAuthenticated || !workspaceId) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const now = Date.now();
+      if (now - lastForegroundRefreshRef.current < 15_000) return;
+      lastForegroundRefreshRef.current = now;
+      refreshContext();
+    });
+    return () => sub.remove();
+  }, [isAuthenticated, workspaceId, refreshContext]);
 
   useEffect(() => {
     if (!workspaceId) return;

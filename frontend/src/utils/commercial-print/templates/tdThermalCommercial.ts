@@ -3,7 +3,7 @@
  * Spec §13: stacked reflow from CommercialPrintModel.
  */
 import { CommercialPrintModel } from '../CommercialPrintModel';
-import { esc, formatInr } from '../../voucher-print/shared';
+import { addressParagraph, esc, formatInr } from '../../voucher-print/shared';
 import {
   ThermalPaperWidth,
   DEFAULT_THERMAL_PAPER_WIDTH,
@@ -40,8 +40,8 @@ function renderBody(model: CommercialPrintModel, w: ThermalPaperWidth): string {
 
   const company: string[] = [];
   company.push(`<div class="c b" style="font-size:${w === 58 ? '11px' : '12px'}">${esc(c.name)}</div>`);
-  for (const a of c.addressLines || []) company.push(`<div class="c muted">${esc(a)}</div>`);
-  if (c.district) company.push(`<div class="c muted">Distt: ${esc(c.district)}</div>`);
+  const address = addressParagraph(c.addressLines || [], c.district ? `Distt: ${c.district}` : null);
+  if (address) company.push(`<div class="c muted">${esc(address)}</div>`);
   if (c.stateName || c.state || c.stateCode) {
     company.push(
       `<div class="c muted">${esc([c.stateName || c.state, c.stateCode ? `(${c.stateCode})` : ''].filter(Boolean).join(' '))}</div>`
@@ -56,7 +56,7 @@ function renderBody(model: CommercialPrintModel, w: ThermalPaperWidth): string {
       const lines = [
         `<div class="b">${esc(p.label)}</div>`,
         `<div class="b">${esc(p.name)}</div>`,
-        ...(p.addressLines || []).map((a) => `<div class="muted">${esc(a)}</div>`),
+        p.addressLines?.length ? `<div class="muted">${esc(addressParagraph(p.addressLines))}</div>` : '',
         p.state || p.stateCode
           ? `<div class="muted">${esc([p.state, p.stateCode].filter(Boolean).join(' - '))}</div>`
           : '',

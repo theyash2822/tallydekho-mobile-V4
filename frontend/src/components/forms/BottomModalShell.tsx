@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView, ScrollViewInstance,
   KeyboardAvoidingView, Platform, ViewStyle, Keyboard, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +26,7 @@ type Props = {
   /** Content between title and scroll body (e.g. search bar) */
   headerExtra?: React.ReactNode;
   /** Pass ScrollView ref when parent needs scrollToEnd */
-  scrollRef?: React.RefObject<ScrollView | null>;
+  scrollRef?: React.RefObject<ScrollViewInstance | null>;
   /** Enable keyboard avoidance only while keyboard is open (default true) */
   keyboardAvoiding?: boolean;
   sheetStyle?: ViewStyle;
@@ -99,7 +99,7 @@ export function BottomModalShell({
       {headerExtra}
 
       <ScrollView
-        ref={scrollRef as any}
+        ref={scrollRef}
         // flexGrow:0 → height follows content; flexShrink:1 → compress above keyboard
         style={[shell.scroll, keyboardOpen && shell.scrollWithKeyboard]}
         showsVerticalScrollIndicator={false}

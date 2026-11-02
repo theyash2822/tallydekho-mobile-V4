@@ -34,7 +34,9 @@ const NO_APPROVALS: ApprovalsData = {
 export default function ApprovalsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { workspaceId, workspace, isOwnerOrAdmin, isOwner, refreshContext } = useWorkspace();
+  const { workspaceId, workspace, isOwnerOrAdmin: ownerOrAdmin, isOwner, hasCapability, refreshContext } = useWorkspace();
+  // Hard Sync approval is the tally.restore_replace permission (Owner, and Admins by default).
+  const isOwnerOrAdmin = ownerOrAdmin || hasCapability('tally.restore_replace');
   const [data, setData] = useState<ApprovalsData>(NO_APPROVALS);
   // One-off voucher requests: the Workspace Owner decides (never Admin).
   const [voucherReqs, setVoucherReqs] = useState<any[]>([]);

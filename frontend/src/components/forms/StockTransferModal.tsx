@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, Keyboard } from 'react-native';
+import {ScrollViewInstance, ScrollView, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useTranslation } from 'react-i18next';
 import { StockItem } from '../../data/stockData';
@@ -34,7 +34,7 @@ export function StockTransferModal({
   const { t } = useTranslation();
   const { company } = useAuth();
   const { scopeGodowns, assertCanCreate } = useRbasCreate();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const [sourceWhName, setSourceWhName] = useState('');
   const [destWhName,   setDestWhName]   = useState('');

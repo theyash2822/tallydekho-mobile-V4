@@ -1,5 +1,5 @@
 import { CommercialPrintModel } from '../CommercialPrintModel';
-import { esc, formatInr } from '../../voucher-print/shared';
+import { addressParagraph, esc, formatInr } from '../../voucher-print/shared';
 
 const CELL = 'border:1px solid #000;padding:3px 5px;font-size:9px;vertical-align:top';
 const TH = `${CELL};font-weight:bold;background:#fff`;
@@ -37,11 +37,12 @@ export function renderCompanyLetterhead(model: CommercialPrintModel, centered = 
     lines.push(`<img class="logo" src="${esc(c.logoUrl)}" alt=""/>`);
   }
   lines.push(`<div style="font-size:12px;font-weight:bold">${esc(c.name)}</div>`);
-  for (const a of c.addressLines || []) {
-    lines.push(`<div style="font-size:9px">${esc(a)}</div>`);
-  }
-  if (c.district) lines.push(`<div style="font-size:9px">Distt: ${esc(c.district)}</div>`);
-  if (c.state) lines.push(`<div style="font-size:9px">${esc(c.state)}</div>`);
+  const address = addressParagraph(
+    c.addressLines || [],
+    c.district ? `Distt: ${c.district}` : null,
+    c.stateName || c.stateCode ? null : c.state,
+  );
+  if (address) lines.push(`<div style="font-size:9px">${esc(address)}</div>`);
   if (c.stateName || c.stateCode) {
     const parts = [
       c.stateName ? `State Name : ${esc(c.stateName)}` : '',
@@ -73,13 +74,12 @@ export function renderPartyBlock(party: CommercialPrintModel['parties'][number])
     `<div style="font-size:9px;font-weight:bold">${esc(party.label)}</div>`,
     `<div style="font-size:9.5px;font-weight:bold;margin-top:2px">${esc(party.name)}</div>`,
   ];
-  for (const a of party.addressLines) {
-    lines.push(`<div style="font-size:9px">${esc(a)}</div>`);
-  }
-  if (party.city) lines.push(`<div style="font-size:9px">${esc(party.city)}</div>`);
-  if (party.state || party.stateCode) {
+  // The state joins the address unless it comes with its GST code (then it keeps its own line).
+  const address = addressParagraph(party.addressLines || [], party.city, party.stateCode ? null : party.state);
+  if (address) lines.push(`<div style="font-size:9px">${esc(address)}</div>`);
+  if (party.stateCode) {
     lines.push(
-      `<div style="font-size:9px">${[party.state, party.stateCode ? `Code: ${party.stateCode}` : ''].filter(Boolean).join(', ')}</div>`
+      `<div style="font-size:9px">${esc([party.state, `Code: ${party.stateCode}`].filter(Boolean).join(', '))}</div>`
     );
   }
   if (party.gstin) lines.push(`<div style="font-size:9px">GSTIN/UIN: ${esc(party.gstin)}</div>`);
@@ -371,11 +371,12 @@ function renderCompanyBlockInCell(model: CommercialPrintModel): string {
   const lines: string[] = [];
   if (c.logoUrl) lines.push(`<img class="logo" src="${esc(c.logoUrl)}" alt=""/>`);
   lines.push(`<div style="font-size:11px;font-weight:bold">${esc(c.name)}</div>`);
-  for (const a of c.addressLines || []) {
-    lines.push(`<div style="font-size:9px">${esc(a)}</div>`);
-  }
-  if (c.district) lines.push(`<div style="font-size:9px">Distt: ${esc(c.district)}</div>`);
-  if (c.state) lines.push(`<div style="font-size:9px">${esc(c.state)}</div>`);
+  const address = addressParagraph(
+    c.addressLines || [],
+    c.district ? `Distt: ${c.district}` : null,
+    c.stateName || c.stateCode ? null : c.state,
+  );
+  if (address) lines.push(`<div style="font-size:9px">${esc(address)}</div>`);
   if (c.stateName || c.stateCode) {
     lines.push(
       `<div style="font-size:9px">State Name : ${esc(c.stateName || c.state || '')}${c.stateCode ? `, Code : ${esc(c.stateCode)}` : ''}</div>`

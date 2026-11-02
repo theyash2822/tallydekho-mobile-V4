@@ -1,7 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
+  TextInputInstance,
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Linking, type TextInput as TextInputType,
+  TextInput, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -183,8 +185,8 @@ const sd = StyleSheet.create({
 export default function HelpCenterScreen() {
   const router    = useRouter();
   const { t }     = useTranslation();
-  const scrollRef = useRef<ScrollView>(null);
-  const inputRef   = useRef<TextInputType>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const inputRef   = useRef<TextInputInstance>(null);
   const { user }  = useAuth();
 
   const chatKey = `td_help_chat_${user?.phone || 'guest'}`;

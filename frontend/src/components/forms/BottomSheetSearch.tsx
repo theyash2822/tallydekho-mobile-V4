@@ -241,7 +241,6 @@ export default function BottomSheetSearch({
               </Text>
             </View>
           }
-          ListFooterComponent={null}
           renderItem={({ item, index }) => {
             const isActive = multiSelect ? pending.has(item.value) : item.value === value;
             return (

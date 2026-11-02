@@ -89,8 +89,9 @@ export default function StocksDashboard() {
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmount, formatAmountCompact } = useSettings();
-  // Stock settings and barcodes are the Owner's or an Admin's (Owner decision, 29 Oct 2026).
-  const { sensitivePolicies, isOwnerOrAdmin } = useWorkspace();
+  const { sensitivePolicies, hasCapability, refreshContext } = useWorkspace();
+  // Stock settings / print follow inventory.settings.manage; barcodes follow inventory.barcodes.view (03-11-2026).
+  const actionAllowed = (route: string) => (route.includes('barcode') ? hasCapability('inventory.barcodes.view') : hasCapability('inventory.settings.manage'));
   const notInAccess = useNotInAccess();
 
   const fmtInv = (v: number) =>
@@ -153,7 +154,7 @@ export default function StocksDashboard() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadStock({ soft: true });
+    await Promise.all([loadStock({ soft: true }), refreshContext?.().catch(() => {})]);
     setRefreshing(false);
   };
 
@@ -219,16 +220,19 @@ export default function StocksDashboard() {
           <Text style={s.headerSub}>{t('stocks.subtitle')}</Text>
         </View>
         <View style={s.headerActions}>
-          {SECONDARY_ACTIONS.map(a => (
+          {SECONDARY_ACTIONS.map(a => {
+            const allowed = actionAllowed(String(a.route));
+            return (
             <TouchableOpacity
               key={a.id}
-              style={[s.actionBtn, !isOwnerOrAdmin && { opacity: 0.55 }]}
+              style={[s.actionBtn, !allowed && { opacity: 0.55 }]}
               activeOpacity={0.7}
-              onPress={() => (isOwnerOrAdmin ? safePush(router, a.route as any) : notInAccess())}
+              onPress={() => (allowed ? safePush(router, a.route as any) : notInAccess())}
             >
-              <Ionicons name={(isOwnerOrAdmin ? a.icon : 'lock-closed-outline') as any} size={18} color={COLORS.textSecondary} />
+              <Ionicons name={(allowed ? a.icon : 'lock-closed-outline') as any} size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </View>
       </View>
 

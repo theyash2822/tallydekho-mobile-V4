@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, TouchableOpacity, ScrollView, TextInput,
   StyleSheet,
 } from 'react-native';
@@ -31,7 +32,7 @@ export function BulkTransferModal({
   const { t } = useTranslation();
   const { company } = useAuth();
   const { scopeGodowns, assertCanCreate } = useRbasCreate();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const [rows,             setRows]             = useState<TransferRow[]>([]);
   const [search,           setSearch]           = useState('');

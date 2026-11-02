@@ -14,6 +14,7 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
+  ViewInstance,
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, Alert, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -78,8 +79,8 @@ export default function StockBarcodeScannerScreen() {
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const helperTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const zoomStepRef = useRef(0);
-  const frameMeasureRef = useRef<View>(null);
-  const cameraMeasureRef = useRef<View>(null);
+  const frameMeasureRef = useRef<ViewInstance>(null);
+  const cameraMeasureRef = useRef<ViewInstance>(null);
   const outOfFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentDataRef = useRef<{ data: string; time: number }[]>([]);
 

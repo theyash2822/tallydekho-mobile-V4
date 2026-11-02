@@ -40,7 +40,7 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
     redirected.current = true;
     if (lockedByAccess(capability)) {
       // The role allows it; the member's access for this company does not.
-      Toast.show({ type: 'info', text1: i18n.t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
+      Toast.show({ type: 'info', text1: i18n.t('common.limitedByAccess', { defaultValue: 'Limited by your data access' }), text2: i18n.t('common.limitedByAccessHint', { defaultValue: 'Your role allows this; your access for this company does not. Ask the Workspace Owner.' }) });
     } else {
       Toast.show({
         type: 'error',

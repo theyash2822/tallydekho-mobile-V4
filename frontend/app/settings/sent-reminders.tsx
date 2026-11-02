@@ -139,7 +139,7 @@ function SentRemindersScreenContent() {
               subtitle={t('screens.settingsSentReminders.emptySubtitle')}
             />
           }
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.brandPrimary} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.brandPrimary} /> : undefined}
         />
       )}
     </SafeAreaView>
@@ -165,7 +165,7 @@ const s = StyleSheet.create({
 
 /** Payment reminders are seen and sent by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
 export default function SentRemindersScreen() {
-  const { isOwnerOrAdmin } = useWorkspace();
-  if (!isOwnerOrAdmin) return <LockedScreen titleKey="settings.paymentReminders" />;
+  const { hasCapability } = useWorkspace();
+  if (!hasCapability('reminders.manage')) return <LockedScreen titleKey="settings.paymentReminders" />;
   return <SentRemindersScreenContent />;
 }

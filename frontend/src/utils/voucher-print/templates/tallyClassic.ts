@@ -1,5 +1,5 @@
 import { VoucherPrintModel } from '../VoucherPrintModel';
-import { esc, formatInr, wrapHtmlDocument } from '../shared';
+import { addressParagraph, esc, formatInr, wrapHtmlDocument } from '../shared';
 import { voucherTitle } from '../VoucherPrintModelAdapter';
 
 /** Tally Classic — MD §6. Centered company header, traditional ruled tables. */
@@ -15,11 +15,12 @@ function companyHeader(model: VoucherPrintModel): string {
   const c = model.company;
   const lines: string[] = [];
   lines.push(`<div style="font-size:12px;font-weight:bold">${esc(c.name)}</div>`);
-  for (const a of c.addressLines || []) {
-    lines.push(`<div style="font-size:9px">${esc(a)}</div>`);
-  }
-  if (c.district) lines.push(`<div style="font-size:9px">Distt: ${esc(c.district)}</div>`);
-  if (c.state && !c.stateName) lines.push(`<div style="font-size:9px">${esc(c.state)}</div>`);
+  const address = addressParagraph(
+    c.addressLines || [],
+    c.district ? `Distt: ${c.district}` : null,
+    c.stateName ? null : c.state,
+  );
+  if (address) lines.push(`<div style="font-size:9px">${esc(address)}</div>`);
   if (c.stateName || c.stateCode) {
     const parts = [
       c.stateName ? `State Name : ${esc(c.stateName)}` : '',

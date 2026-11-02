@@ -23,6 +23,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
 } from 'react-native';
@@ -90,7 +91,7 @@ export default function CreateReceiptVoucher() {
   const allowed = useRequireCapability('receipt.create');
   const { t } = useTranslation();
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const narrationY = useRef(0);
   const scrollNarrationIntoView = () => {
     setTimeout(() => {

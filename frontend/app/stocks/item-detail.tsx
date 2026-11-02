@@ -110,7 +110,9 @@ const pr = StyleSheet.create({
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 export default function ItemDetailScreen() {
   // Stock items are edited by the Owner or an Admin only (Owner decision, 29 Oct 2026).
-  const { isOwnerOrAdmin } = useWorkspace();
+  const { hasCapability } = useWorkspace();
+  // HSN edits alter the stock item: stock_item.alter (03-11-2026).
+  const isOwnerOrAdmin = hasCapability('stock_item.alter');
   const router = useRouter();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -448,7 +450,7 @@ export default function ItemDetailScreen() {
                         Toast.show({ type: 'error', text1: t('screens.stocksItemDetail.invalidHsn'), text2: t('screens.stocksItemDetail.codeNotAccepted') });
                         return;
                       }
-                      if (!isOwnerOrAdmin) { Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) }); return; }
+                      if (!isOwnerOrAdmin) { Toast.show({ type: 'info', text1: t('common.permissionNeeded', { defaultValue: 'This needs a permission your role does not have.' }) }); return; }
                       const res: any = await alterStockItem({
                         companyGuid,
                         companyName: company?.name || '',
@@ -515,7 +517,9 @@ export default function ItemDetailScreen() {
               movements.map((m: any, i: number) => {
                 const isTransfer = !!m.is_transfer;
                 const qty      = +(m.qty || 0);
-                const isInward = !isTransfer && ((m.type || '').toLowerCase().includes('purchase') || qty > 0);
+                const isInward = !isTransfer && (m.direction
+                  ? m.direction === 'in'
+                  : ((m.type || '').toLowerCase().includes('purchase') || qty > 0));
                 const qtyLabel = isTransfer
                   ? `${qty} ${itemUnit}`
                   : `${isInward ? '+' : '-'}${Math.abs(qty)}`;

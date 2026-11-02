@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  TextInputInstance,
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
@@ -13,7 +14,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { useTranslation } from 'react-i18next';
 import { getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
-import { getBiometricPin } from '../../src/utils/biometricPin';
+import { getBiometricPin, setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
 import { AuditerWordmark } from '../../src/components/AuditerLogo';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 
@@ -24,12 +25,12 @@ function PinBox({
   char, filled, hasError, isFocused, onSetRef, onChangeText, onKeyPress, onFocus,
 }: {
   char: string; filled: boolean; hasError: boolean; isFocused: boolean;
-  onSetRef: (r: TextInput | null) => void;
+  onSetRef: (r: TextInputInstance | null) => void;
   onChangeText: (t: string) => void;
   onKeyPress: (e: any) => void;
   onFocus: () => void;
 }) {
-  const localRef = useRef<TextInput>(null);
+  const localRef = useRef<TextInputInstance>(null);
   return (
     <TouchableOpacity
       style={[s.box, filled && s.boxFilled, hasError && s.boxError, isFocused && s.boxFocused]}
@@ -69,7 +70,7 @@ export default function VerifyPinScreen() {
   const [preAuthToken, setPreAuthTokenState] = useState('');
   const preAuthTokenRef = useRef('');
   const [biometricAvail, setBioAvail]   = useState(false);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   const biometricEnabled = biometric === '1';
 
@@ -87,7 +88,7 @@ export default function VerifyPinScreen() {
         const storedPin = await getBiometricPin(phone);
         const token = preAuthTokenRef.current;
         if (storedPin && token) {
-          await doVerify(storedPin);
+          await doVerify(storedPin, true);
         } else if (!storedPin) {
           // No stored PIN — biometric enabled but no PIN stored yet
           setError(t('auth.biometricFallback'));
@@ -121,7 +122,7 @@ export default function VerifyPinScreen() {
     }
   };
 
-  const doVerify = async (code?: string) => {
+  const doVerify = async (code?: string, fromBiometric = false) => {
     const enteredPin = code || pin.join('');
     if (enteredPin.length < PIN_LENGTH) { setError(t('screens.authVerifyPin.enterFullPin')); return; }
     const token = preAuthTokenRef.current || preAuthToken;
@@ -131,6 +132,10 @@ export default function VerifyPinScreen() {
       const res = await verifyPin(enteredPin, token);
       if (res?.success) {
         await clearPreAuthToken();
+        // A typed PIN refreshes the copy biometric unlock uses (it may have been changed on the web).
+        if (!fromBiometric && biometricEnabled && biometricAvail) {
+          await setBiometricPin(phone, enteredPin).catch(() => {});
+        }
         const { access_token, refresh_token, user, company } = res.data;
         await signIn(
           access_token,
@@ -148,7 +153,12 @@ export default function VerifyPinScreen() {
     } catch (err: any) {
       setPin(Array(PIN_LENGTH).fill(''));
       setFocused(0);
-      setError(err?.message || t('screens.authVerifyPin.incorrectPinRetry'));
+      if (fromBiometric && err?.code === 'PIN_INVALID') {
+        await clearBiometricPin(phone);
+        setError(t('auth.biometricFallback'));
+      } else {
+        setError(err?.message || t('screens.authVerifyPin.incorrectPinRetry'));
+      }
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } finally {
       setLoading(false);

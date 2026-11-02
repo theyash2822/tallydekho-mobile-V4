@@ -3,7 +3,7 @@
  * Spec §7: narrow reflow, same VoucherPrintModel as Classic/Executive.
  */
 import { VoucherPrintModel } from '../VoucherPrintModel';
-import { esc, formatInr } from '../shared';
+import { addressParagraph, esc, formatInr } from '../shared';
 import { voucherTitle } from '../VoucherPrintModelAdapter';
 import {
   ThermalPaperWidth,
@@ -37,10 +37,8 @@ function header(model: VoucherPrintModel, w: ThermalPaperWidth): string {
   const c = model.company;
   const lines: string[] = [];
   lines.push(`<div class="c b" style="font-size:${w === 58 ? '11px' : '12px'}">${esc(c.name)}</div>`);
-  for (const a of c.addressLines || []) {
-    lines.push(`<div class="c muted">${esc(a)}</div>`);
-  }
-  if (c.district) lines.push(`<div class="c muted">Distt: ${esc(c.district)}</div>`);
+  const address = addressParagraph(c.addressLines || [], c.district ? `Distt: ${c.district}` : null);
+  if (address) lines.push(`<div class="c muted">${esc(address)}</div>`);
   if (c.stateName || c.state || c.stateCode) {
     const st = [c.stateName || c.state, c.stateCode].filter(Boolean).join(' - ');
     lines.push(`<div class="c muted">${esc(st)}</div>`);

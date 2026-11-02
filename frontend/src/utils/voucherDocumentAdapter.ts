@@ -283,7 +283,7 @@ export function toVoucherDocument(
     documentNumber: numberLabel,
     date: raw.documentDate || '',
     company: {
-      name: raw.company?.name || '',
+      name: raw.company?.formalName || raw.company?.name || '',
       address: raw.company?.address || '',
       gstin: raw.company?.gstin || '',
       pan: raw.company?.pan || '',
@@ -342,7 +342,7 @@ export function toVoucherDocument(
     footerInfo: {
       declaration: layout?.showDeclaration ? (raw.company?.declarationText || undefined) : undefined,
       receiverNote: layout?.showReceivedInGoodCondition ? 'Recd. in Good Condition' : undefined,
-      authorizedSignatory: raw.company?.name || undefined,
+      authorizedSignatory: raw.company?.formalName || raw.company?.name || undefined,
       systemNote: layout?.computerGeneratedText || undefined,
     },
     dispatchDetails: raw.dispatchDetails || raw.dispatch_details || undefined,
@@ -781,13 +781,14 @@ export function fromTallyVoucher(
     documentNumber: String(v.voucher_number || '—'),
     date: formatDate(v.date || ''),
     company: {
-      name: companyName || co?.name || 'Company',
+      name: co?.formal_name || companyName || co?.name || 'Company',
       address: [co?.address, co?.state, co?.country].filter(Boolean).join(', ') || '',
       gstin: co?.gstin || undefined,
       pan: co?.pan || undefined,
       state: co?.state || undefined,
+      pincode: co?.pincode || undefined,
       email: co?.email || undefined,
-      phone: co?.phone || undefined,
+      phone: co?.phone || co?.mobile || undefined,
     },
     party: partyName ? {
       name: partyName,
@@ -846,7 +847,7 @@ export function fromTallyVoucher(
       // wording rather than printing an invoice with no declaration at all.
       declaration: layout.showDeclaration ? DEFAULT_DECLARATION : undefined,
       receiverNote: layout.showReceivedInGoodCondition ? 'Recd. in Good Condition' : undefined,
-      authorizedSignatory: companyName || co?.name || undefined,
+      authorizedSignatory: co?.formal_name || companyName || co?.name || undefined,
       systemNote: layout.computerGeneratedText,
     },
   };

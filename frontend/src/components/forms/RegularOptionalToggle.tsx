@@ -27,6 +27,16 @@ export function entryTypeAllowed(mode: WorkspaceEntryMode | undefined, type: Ent
 }
 
 export default function RegularOptionalToggle({ value, onChange, entryMode = 'BOTH' }: Props) {
+  if (entryMode === 'NONE') {
+    // Neither kind is allowed for this member in this company; the server refuses both.
+    return (
+      <View style={s.wrap}>
+        <View style={[s.btn, s.noneChip]}>
+          <Text style={s.txt}>NO ENTRY</Text>
+        </View>
+      </View>
+    );
+  }
   if (entryMode === 'OPTIONAL_ONLY' || entryMode === 'REGULAR_ONLY') {
     // Locked to a single mode — show read-only chip
     const locked: EntryType = entryMode === 'OPTIONAL_ONLY' ? 'optional' : 'regular';
@@ -72,5 +82,6 @@ const s = StyleSheet.create({
   txt: { fontSize: 10, fontWeight: '800', color: COLORS.textTertiary, letterSpacing: 0.5 },
   regActive: { backgroundColor: COLORS.brandPrimary },
   optActive: { backgroundColor: '#D97706' },
+  noneChip: { backgroundColor: COLORS.pageBg },
   activeTxt: { color: '#fff' },
 });

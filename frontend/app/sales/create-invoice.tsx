@@ -35,7 +35,7 @@ import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
-import RegularOptionalToggle, { EntryType, defaultEntryTypeForMode } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle, { EntryType, defaultEntryTypeForMode, entryTypeAllowed } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -803,6 +803,8 @@ export default function CreateSalesInvoiceScreen() {
     setPrevEntryDeps([entryMode, isProforma]);
     if (!isProforma) setEntryType(defaultEntryTypeForMode(entryMode));
   }
+  // A restored draft cannot pick a kind the entry mode forbids (Regular only / Optional only).
+  if (!isProforma && !entryTypeAllowed(entryMode, entryType)) setEntryType(defaultEntryTypeForMode(entryMode));
   const [ledger, setLedger] = useState('');
   const [invoiceNo] = useState('');
   const [date, setDate] = useState(todayStr());
@@ -1447,7 +1449,8 @@ export default function CreateSalesInvoiceScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (!assertCanCreate('sales_invoice.create')) return;
+    // Converting a proforma is a regular entry under its own permission; a proforma is always optional.
+    if (!assertCanCreate(convertProformaTdkRef ? 'sales_proforma.convert_to_regular' : 'sales_invoice.create', isProforma ? 'optional' : entryType)) return;
     // Dismiss any open keyboard before validation / submit — prevents the keyboard from
     // hovering over the success modal when user submits with a text field still focused.
     Keyboard.dismiss();

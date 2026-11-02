@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  TextInputInstance,
+  ScrollViewInstance,
   ActivityIndicator,
   Alert,
   Keyboard,
@@ -502,9 +504,9 @@ export default function CreateCreditNoteScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const narrationY = useRef(0);
-  const narrationInputRef = useRef<TextInput>(null);
+  const narrationInputRef = useRef<TextInputInstance>(null);
   const { company, selectedFY } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);

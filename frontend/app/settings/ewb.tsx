@@ -47,7 +47,8 @@ function Field({
 export default function EWBIntegrationScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { workspaceId, isOwnerOrAdmin } = useWorkspace();
+  const { workspaceId, isOwnerOrAdmin: ownerOrAdmin, hasCapability } = useWorkspace();
+  const isOwnerOrAdmin = ownerOrAdmin || hasCapability('integrations.configure');
   const [status, setStatus] = useState('NOT_CONFIGURED');
   const [gstin, setGstin] = useState('');
   const [isDirty, setIsDirty] = useState(false);

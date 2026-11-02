@@ -972,18 +972,18 @@ function BarcodesScreenContent() {
           <View style={s.emptyWrap}>
             <ActivityIndicator size="large" color={COLORS.brandPrimary} />
           </View>
-        ) : null}
+        ) : undefined}
         ListEmptyComponent={!loading ? (
           <View style={s.emptyWrap}>
             <Ionicons name="barcode-outline" size={48} color={COLORS.textTertiary} />
             <Text style={s.emptyText}>{t('screens.stocksBarcodes.noItemsFound')}</Text>
           </View>
-        ) : null}
+        ) : undefined}
         ListFooterComponent={loading && items.length > 0 ? (
           <View style={{ paddingVertical: 16, alignItems: 'center' }}>
             <ActivityIndicator size="small" color={COLORS.brandPrimary} />
           </View>
-        ) : null}
+        ) : undefined}
       />
 
       {/* ── Add to Print Queue sticky button */}
@@ -1505,7 +1505,8 @@ const s = StyleSheet.create({
 
 /** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
 export default function BarcodesScreen() {
-  const { isOwnerOrAdmin } = useWorkspace();
-  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  const { hasCapability } = useWorkspace();
+  // Barcode screens follow inventory.barcodes.view; the server checks inventory.barcodes.manage on every write.
+  if (!hasCapability('inventory.barcodes.view')) return <LockedScreen titleKey="nav.stocks" />;
   return <BarcodesScreenContent />;
 }

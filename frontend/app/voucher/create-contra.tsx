@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, Modal,
 } from 'react-native';
@@ -65,7 +66,7 @@ export default function CreateContraVoucher() {
   const allowed = useRequireCapability('contra.create');
   const { t } = useTranslation();
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const { company, selectedFY } = useAuth();
   const { settings, formatAmount, currencySymbol } = useSettings();
 

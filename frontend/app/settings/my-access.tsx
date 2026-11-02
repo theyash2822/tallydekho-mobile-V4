@@ -1,8 +1,9 @@
 /**
- * My Access — read-only role / capability / scope summary for current Workspace.
- * Mobile can view; cannot edit roles or scopes (Web Portal).
+ * My Access — read-only summary of role, modules, data scope and sensitive-data policy for the current
+ * Workspace, with the same information as the web portal. Mobile can view; roles and scopes are changed
+ * on the Web Portal.
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,25 +12,13 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useAuth } from '../../src/context/AuthContext';
+import { getCompanies } from '../../src/services/api';
+import { buildMyAccessView, type CompanyRef } from '../../src/utils/myAccess';
 
-const ENTRY_LABEL_KEY: Record<string, string> = {
-  BOTH: 'screens.settingsMyAccess.entryBoth',
-  REGULAR_ONLY: 'screens.settingsMyAccess.entryRegularOnly',
-  OPTIONAL_ONLY: 'screens.settingsMyAccess.entryOptionalOnly',
-};
-
-function Chip({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'ok' | 'warn' }) {
-  const bg =
-    tone === 'ok' ? COLORS.positiveBg :
-    tone === 'warn' ? COLORS.warningBg :
-    COLORS.pageBg;
-  const fg =
-    tone === 'ok' ? COLORS.positive :
-    tone === 'warn' ? COLORS.warning :
-    COLORS.textSecondary;
+function Chip({ label }: { label: string }) {
   return (
-    <View style={[s.chip, { backgroundColor: bg }]}>
-      <Text style={[s.chipTxt, { color: fg }]} numberOfLines={1}>{label}</Text>
+    <View style={s.chip}>
+      <Text style={s.chipTxt} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -57,69 +46,51 @@ export default function MyAccessScreen() {
   const { t } = useTranslation();
   const { company } = useAuth();
   const {
+    workspaceId,
     workspace,
     access,
     entryMode,
     pairingStatus,
     demoMode,
+    isOwner,
     isOwnerOrAdmin,
-    capabilities,
-    scopes,
     sensitivePolicies,
     hasCapability,
   } = useWorkspace();
 
-  const roleLabel =
-    access?.membershipType === 'OWNER'
-      ? t('screens.settingsMyAccess.owner')
-      : access?.role?.displayName || access?.role?.systemKey || t('screens.settingsMyAccess.member');
+  // The company scope holds GUIDs; the company list (the same one the company switcher uses) names them.
+  const scopedCompanies = access?.scopes?.companies;
+  const needsCompanyNames = !isOwner && Array.isArray(scopedCompanies) && scopedCompanies.length > 0;
+  const [companies, setCompanies] = useState<CompanyRef[]>([]);
+  useEffect(() => {
+    if (!needsCompanyNames) return;
+    let cancelled = false;
+    getCompanies()
+      .then((res: any) => {
+        if (!cancelled && Array.isArray(res?.data)) setCompanies(res.data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [needsCompanyNames, workspaceId]);
 
-  const membershipStatus = access?.membershipStatus || workspace?.membershipStatus || 'ACTIVE';
-
-  const capList = useMemo(() => {
-    const arr = Array.from(capabilities || []).map(String).sort();
-    if (access?.membershipType === 'OWNER' && arr.length === 0) {
-      return [t('screens.settingsMyAccess.allCapabilities')];
-    }
-    return arr;
-  }, [capabilities, access?.membershipType, t]);
-
-  const scopeBlocks = useMemo(() => {
-    const blocks: { id: string; title: string; items: string[]; open: boolean }[] = [
-      { id: 'companies', title: t('screens.settingsMyAccess.scopeCompanies'), items: scopes.companies || [], open: !(scopes.companies?.length) },
-      { id: 'financialYears', title: t('screens.settingsMyAccess.scopeFinancialYears'), items: scopes.financialYears || [], open: !(scopes.financialYears?.length) },
-      { id: 'ledgers', title: t('screens.settingsMyAccess.scopeLedgers'), items: scopes.ledgers || [], open: !(scopes.ledgers?.length) },
-      { id: 'godowns', title: t('screens.settingsMyAccess.scopeGodowns'), items: scopes.godowns || [], open: !(scopes.godowns?.length) },
-      { id: 'costCentres', title: t('screens.settingsMyAccess.scopeCostCentres'), items: scopes.costCentres || [], open: !(scopes.costCentres?.length) },
-    ];
-    return blocks;
-  }, [scopes, t]);
-
-  const policyRows = useMemo(() => {
-    const keys = Object.keys(sensitivePolicies || {});
-    if (!keys.length) {
-      return isOwnerOrAdmin
-        ? [{ key: 'default', label: t('screens.settingsMyAccess.sensitiveFields'), value: t('screens.settingsMyAccess.visibleDefault') }]
-        : [{ key: 'default', label: t('screens.settingsMyAccess.sensitiveFields'), value: t('screens.settingsMyAccess.followsRolePolicy') }];
-    }
-    return keys.sort().map((key) => {
-      const raw = (sensitivePolicies as any)[key];
-      const vis =
-        raw === true || raw === 'VISIBLE' ? t('screens.settingsMyAccess.visible') :
-        raw === 'MASKED' ? t('screens.settingsMyAccess.masked') :
-        t('screens.settingsMyAccess.hidden');
-      return { key, label: key.replace(/_/g, ' '), value: vis };
-    });
-  }, [sensitivePolicies, isOwnerOrAdmin, t]);
-
-  const moduleChecks = [
-    { label: t('nav.dashboard'), cap: 'dashboard.view' },
-    { label: t('nav.sales'), cap: 'sales.view' },
-    { label: t('nav.purchase'), cap: 'purchase.view' },
-    { label: t('quickActions.inventory'), cap: 'inventory.view' },
-    { label: t('screens.settingsMyAccess.financials'), cap: 'financials.view' },
-    { label: t('screens.settingsMyAccess.pdfShare'), cap: 'document.pdf.generate' },
-  ];
+  const view = useMemo(() => buildMyAccessView({
+    isOwner,
+    isOwnerOrAdmin,
+    workspaceName: workspace?.name,
+    companyName: company?.name,
+    pairingStatus,
+    demoMode,
+    membershipStatus: access?.membershipStatus || workspace?.membershipStatus,
+    roleDisplayName: access?.role?.displayName,
+    entryMode,
+    can: hasCapability,
+    scopes: access?.scopes,
+    companies: company ? [company, ...companies] : companies,
+    sensitivePolicies,
+  }, t), [
+    isOwner, isOwnerOrAdmin, workspace, company, pairingStatus, demoMode, access, entryMode,
+    hasCapability, companies, sensitivePolicies, t,
+  ]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -133,80 +104,49 @@ export default function MyAccessScreen() {
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Section title={t('screens.settingsMyAccess.workspace')}>
-          <Row label={t('screens.settingsMyAccess.name')} value={workspace?.name || '—'} />
-          <Row label={t('screens.settingsMyAccess.company')} value={company?.name || '—'} />
-          <Row label={t('screens.settingsMyAccess.pairing')} value={pairingStatus || 'UNPAIRED'} />
-          <View style={s.chipRow}>
-            {demoMode ? <Chip label={t('screens.settingsMyAccess.demoMode')} tone="warn" /> : <Chip label={t('screens.settingsMyAccess.liveData')} tone="ok" />}
-            <Chip label={membershipStatus} tone={membershipStatus === 'ACTIVE' ? 'ok' : 'warn'} />
-          </View>
+          {view.workspace.map((r) => <Row key={r.key} label={r.label} value={r.value} />)}
         </Section>
 
         <Section title={t('screens.settingsMyAccess.yourRole')}>
-          <Row label={t('screens.settingsMyAccess.access')} value={roleLabel} />
-          <Row label={t('screens.settingsMyAccess.entryMode')} value={ENTRY_LABEL_KEY[entryMode] ? t(ENTRY_LABEL_KEY[entryMode]) : entryMode || 'BOTH'} />
-          {isOwnerOrAdmin ? (
-            <Text style={s.hint}>{t('screens.settingsMyAccess.ownerHint')}</Text>
-          ) : (
-            <Text style={s.hint}>{t('screens.settingsMyAccess.memberHint')}</Text>
-          )}
+          {view.role.map((r) => <Row key={r.key} label={r.label} value={r.value} />)}
+          <Text style={s.hint}>{view.roleHint}</Text>
         </Section>
 
         <Section title={t('screens.settingsMyAccess.modulesTitle')}>
-          <View style={s.chipRow}>
-            {moduleChecks.map((m) => (
-              <Chip
-                key={m.cap}
-                label={`${hasCapability(m.cap) ? '✓' : '✗'} ${m.label}`}
-                tone={hasCapability(m.cap) ? 'ok' : 'neutral'}
-              />
+          <View style={s.moduleGrid}>
+            {view.modules.map((m) => (
+              <View key={m.cap} style={s.moduleItem} testID={`my-access-module-${m.cap}`}>
+                <View style={s.moduleIcon}>
+                  {m.open
+                    ? <Ionicons name="checkmark" size={16} color={COLORS.positive} />
+                    : <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />}
+                </View>
+                <Text style={[s.moduleLabel, !m.open && s.moduleLabelLocked]} numberOfLines={1}>{m.label}</Text>
+              </View>
             ))}
           </View>
         </Section>
 
-        <Section title={t('screens.settingsMyAccess.capabilitiesTitle')}>
-          {capList.length === 0 ? (
-            <Text style={s.empty}>{t('screens.settingsMyAccess.noCapabilities')}</Text>
-          ) : (
-            <View style={s.chipRow}>
-              {capList.slice(0, 40).map((c) => (
-                <Chip key={c} label={c} />
-              ))}
-              {capList.length > 40 ? <Chip label={t('screens.settingsMyAccess.moreCount', { count: capList.length - 40 })} /> : null}
-            </View>
-          )}
-        </Section>
-
         <Section title={t('screens.settingsMyAccess.dataScope')}>
-          {scopeBlocks.map((b) => (
-            <View key={b.id} style={s.scopeBlock}>
-              <Text style={s.scopeTitle}>{b.title}</Text>
-              {b.open ? (
-                <Text style={s.scopeOpen}>{t('screens.settingsMyAccess.unrestricted')}</Text>
-              ) : (
-                <View style={s.chipRow}>
-                  {b.items.slice(0, 12).map((item) => (
-                    <Chip key={item} label={item} />
-                  ))}
-                  {b.items.length > 12 ? <Chip label={t('screens.settingsMyAccess.moreCount', { count: b.items.length - 12 })} /> : null}
-                </View>
-              )}
+          {view.scopes.map((b) => (b.value ? (
+            <Row key={b.key} label={b.label} value={b.value} />
+          ) : (
+            <View key={b.key} style={s.scopeBlock}>
+              <Text style={s.scopeLabel}>{b.label}</Text>
+              <View style={s.chipRow}>
+                {b.names.map((name, i) => <Chip key={`${b.key}-${i}`} label={name} />)}
+                {b.more ? <Chip label={b.more} /> : null}
+              </View>
             </View>
-          ))}
+          )))}
         </Section>
 
         <Section title={t('screens.settingsMyAccess.sensitivePolicy')}>
-          {policyRows.map((p) => (
-            <Row key={p.key} label={p.label} value={p.value} />
-          ))}
-          <Text style={s.hint}>
-            {t('screens.settingsMyAccess.policyHint')}
-          </Text>
+          {view.sensitive.map((p) => <Row key={p.key} label={p.label} value={p.value} />)}
+          <Text style={s.hint}>{view.sensitiveHint}</Text>
         </Section>
 
-        <Text style={s.footnote}>
-          {t('screens.settingsMyAccess.footnote')}
-        </Text>
+        <Text style={s.footnote}>{view.footnote}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -239,13 +179,16 @@ const s = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   chip: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.borderDefault, maxWidth: '100%',
+    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg, maxWidth: '100%',
   },
-  chipTxt: { fontSize: 11, fontWeight: '700' },
+  chipTxt: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
   hint: { marginTop: 10, fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16 },
-  empty: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
-  scopeBlock: { marginBottom: 12 },
-  scopeTitle: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 4, textTransform: 'uppercase' },
-  scopeOpen: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '600' },
+  moduleGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  moduleItem: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingRight: 8 },
+  moduleIcon: { width: 16, alignItems: 'center' },
+  moduleLabel: { flexShrink: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  moduleLabelLocked: { fontWeight: '500', color: COLORS.textTertiary },
+  scopeBlock: { paddingVertical: 6 },
+  scopeLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
   footnote: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16, paddingHorizontal: 4 },
 });

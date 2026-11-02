@@ -474,22 +474,45 @@ export interface RegisterResponse {
   success: boolean;
   data: {
     user: { id: number; name: string; phone: string; email: string; language: string };
+    workspace?: { id: string; name: string };
     access_token: string;
     refresh_token?: string;
     session_id?: string;
   };
 }
 
+export interface AccountDeletionStartResponse {
+  success: boolean;
+  data: { masked_phone: string; message: string };
+}
+
+export interface OwnedSharedWorkspace {
+  id: string;
+  name: string;
+  members: number;
+}
+
 export const sendOTP    = (phone: string): Promise<SendOTPResponse> => post<SendOTPResponse>('/auth/send-otp', { phone }, false);
 export const verifyOTP  = (phone: string, otp: string, opts?: { reset_pin?: boolean }): Promise<VerifyOTPResponse> =>
   post<VerifyOTPResponse>('/auth/verify-otp', { phone, otp, ...opts }, false);
-export const registerUser = (data: Partial<{ name: string; email: string; language: string; phone: string }>): Promise<RegisterResponse> => post<RegisterResponse>('/auth/register', data);
+export const registerUser = (data: Partial<{ name: string; email: string; language: string; phone: string; workspace_name: string }>): Promise<RegisterResponse> => post<RegisterResponse>('/auth/register', data);
 /** Sign-up email verification: a 6-digit code to the email, then confirm it. */
 export const sendSignupEmailCode   = (email: string) => post<any>('/auth/email/send-code', { email });
 export const verifySignupEmailCode = (email: string, otp: string) => post<any>('/auth/email/verify-code', { email, otp });
 export const getMe       = () => get<any>('/auth/me');
 export const updateMe    = (data: Partial<{ name: string; email: string; language: string }>) => patch<any>('/auth/me', data);
 export const logout      = (pushToken?: string) => post<any>('/auth/logout', pushToken ? { pushToken } : {});
+/** Account deletion: a WhatsApp code to the account's number, then confirm it. The server ends every session. */
+export const startAccountDeletion   = () => post<AccountDeletionStartResponse>('/auth/account/delete/start');
+export const confirmAccountDeletion = (otp: string) =>
+  post<{ success: boolean; data: { deleted: boolean } }>('/auth/account/delete/confirm', { otp });
+
+/** Workspaces with other members that block deleting the account (409 OWNS_SHARED_WORKSPACE); null for any other error. */
+export function ownedSharedWorkspaces(err: unknown): OwnedSharedWorkspace[] | null {
+  if (!(err instanceof ApiError) || err.code !== 'OWNS_SHARED_WORKSPACE') return null;
+  const list = (err.raw as any)?.error?.workspaces;
+  return Array.isArray(list) ? list : [];
+}
 
 /**
  * Server logout without the 401 → signOut interceptor (avoids a logout loop).
@@ -543,7 +566,6 @@ export const getAlertSettings         = () => get<any>('/alert-settings');
 export const updateAlertSettings      = (data: any) => patch<any>('/alert-settings', data);
 export const getIntegrationSettings   = () => get<any>('/integration-settings');
 export const updateIntegrationSettings = (data: any) => patch<any>('/integration-settings', data);
-export const updateCompanyProfile = (companyGuid: string, data: any) => patch<any>(withCompany('/company/profile', companyGuid), data);
 
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD
@@ -578,7 +600,9 @@ export const getCashflow = (companyGuid?: string, period = '7D', from?: string, 
     });
 
 export const getRecentActivity = (companyGuid?: string) => get<any>(withCompany('/dashboard/recent-activity', companyGuid));
-export const searchDashboard   = (q: string, companyGuid?: string) => get<any>(withCompany('/dashboard/search', companyGuid, { q }));
+/** Global search; `period` bounds vouchers to the selected financial year (same contract as the web portal). */
+export const searchDashboard   = (q: string, companyGuid?: string, period: { from?: string; to?: string } = {}) =>
+  get<any>(withCompany('/dashboard/search', companyGuid, { q, ...(period.from && period.to ? { from: period.from, to: period.to } : {}) }));
 
 // ══════════════════════════════════════════════════════════════
 // SALES
@@ -905,7 +929,8 @@ export const createBankLedger = (payload: {
 export const verifyPin   = (pin: string, preAuthToken: string) =>
   postWithToken<any>('/auth/verify-pin', { pin }, preAuthToken);
 
-export const setPin      = (pin: string) => post<any>('/auth/set-pin', { pin });
+export const setPin      = (pin: string, currentPin?: string) =>
+  post<any>('/auth/set-pin', currentPin ? { pin, current_pin: currentPin } : { pin });
 export const resetPin    = (pin: string, preAuthToken: string) =>
   postWithToken<any>('/auth/reset-pin', { pin }, preAuthToken);
 export const removePin   = (pin: string) => request<any>('DELETE', '/auth/remove-pin', { pin });

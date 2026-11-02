@@ -6,9 +6,10 @@ function normalizePhone(phone: string | null | undefined): string {
   return String(phone || '').replace(/\D/g, '');
 }
 
+/** SecureStore keys may only hold letters, digits, ".", "-" and "_". */
 export function biometricPinKey(phone: string | null | undefined): string {
   const digits = normalizePhone(phone);
-  return digits ? `${LEGACY_KEY}:${digits}` : LEGACY_KEY;
+  return digits ? `${LEGACY_KEY}_${digits}` : LEGACY_KEY;
 }
 
 export async function setBiometricPin(phone: string | null | undefined, pin: string): Promise<void> {

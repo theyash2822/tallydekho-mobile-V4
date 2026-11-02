@@ -496,7 +496,9 @@ const sw = StyleSheet.create({
 export default function BankFeedsScreen() {
   const { t } = useTranslation();
   // Banks are added by the Owner or an Admin only (Owner decision, 29 Oct 2026).
-  const { isOwnerOrAdmin } = useWorkspace();
+  const { hasCapability } = useWorkspace();
+  // A bank is a ledger: adding one follows ledger_master.create.
+  const isOwnerOrAdmin = hasCapability('ledger_master.create');
   const router = useRouter();
   const { company } = useAuth();
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  TextInputInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -146,7 +147,7 @@ const ds = StyleSheet.create({
 function SixDigitInput({
   code, onChange,
 }: { code: string[]; onChange: (code: string[]) => void }) {
-  const refs = useRef<(TextInput | null)[]>(Array(6).fill(null));
+  const refs = useRef<(TextInputInstance | null)[]>(Array(6).fill(null));
 
   const handleChange = (text: string, idx: number) => {
     const digit = text.replace(/\D/g, '').slice(-1);

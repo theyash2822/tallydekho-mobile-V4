@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
 } from 'react-native';
@@ -51,7 +52,7 @@ export default function CreateJournalVoucher() {
   const allowed = useRequireCapability('journal.create');
   const { t } = useTranslation();
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const narrationY = useRef(0);
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;

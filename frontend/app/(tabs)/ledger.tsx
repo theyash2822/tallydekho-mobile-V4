@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
+  ViewInstance,
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
   Platform, Linking, Alert, ActivityIndicator, Animated,
@@ -577,7 +578,7 @@ export default function LedgerScreen() {
   const TAB_BAR_CLEARANCE = 60 + Math.max(insets.bottom, 4);
   const { formatAmount, formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
-  const filterBtnRef = useRef<View>(null);
+  const filterBtnRef = useRef<ViewInstance>(null);
   const [data, setData] = useState<LedgerItem[]>([]);
   const [totalLedgers, setTotalLedgers] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -1363,7 +1364,7 @@ export default function LedgerScreen() {
               })()}
             </Text>
           </View>
-        ) : null}
+        ) : undefined}
         ListEmptyComponent={isLoading && !hasList ? (
           <View style={styles.list}>
             {Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)}

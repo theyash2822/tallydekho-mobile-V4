@@ -10,7 +10,10 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail } from '../../src/services/api';
+import {
+  updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail,
+  startAccountDeletion, confirmAccountDeletion, ownedSharedWorkspaces, type OwnedSharedWorkspace,
+} from '../../src/services/api';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useTranslation } from 'react-i18next';
 import { setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
@@ -142,124 +145,224 @@ function PinBoxes({ value, length = 4 }: { value: string; length?: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DeleteAccountModal
+// DeleteAccountModal — WhatsApp code to the account's number, then the server deletes the account
 // ─────────────────────────────────────────────────────────────────────────────
+const RESEND_SECONDS = 30;
+
 function DeleteAccountModal({
   visible,
   onClose,
-  phone,
+  onDeleted,
 }: {
   visible: boolean;
   onClose: () => void;
-  phone: string;
+  onDeleted: () => void;
 }) {
   const { t } = useTranslation();
-  const [otp, setOtp]         = useState('');
-  const [countdown, setCount] = useState(30);
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
-  const [canResend, setResend] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const startCountdown = () => {
-    timerRef.current = setInterval(() => {
-      setCount(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setResend(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const startTimer = () => {
-    setCount(30); setResend(false);
-    startCountdown();
-  };
+  // sending: first code on its way · code: code entry · blocked: owns workspaces with members · failed: no code sent
+  const [stage, setStage] = useState<'sending' | 'code' | 'blocked' | 'failed'>('sending');
+  const [sendAttempt, setSendAttempt] = useState(0);
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [blocked, setBlocked] = useState<OwnedSharedWorkspace[]>([]);
+  const [sendError, setSendError] = useState('');
+  const [otp, setOtp] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [resending, setResending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [countdown, setCount] = useState(0);
+  const canResend = countdown === 0 && !resending && !deleting;
+  const codeComplete = otp.length === OTP_LENGTH;
 
   const [prevVisible, setPrevVisible] = useState(false);
   if (visible !== prevVisible) {
     setPrevVisible(visible);
-    if (visible) { setOtp(''); setCount(30); setResend(false); }
+    if (visible) {
+      setStage('sending'); setMaskedPhone(''); setSendError('');
+      setOtp(''); setCodeError(''); setCount(0);
+    }
   }
 
+  // Opening the sheet sends the first code; Retry after a failed send asks again.
   useEffect(() => {
-    if (visible) startCountdown();
-    else clearInterval(timerRef.current!);
-    return () => clearInterval(timerRef.current!);
-  }, [visible]);
+    if (!visible) return;
+    let cancelled = false;
+    startAccountDeletion()
+      .then((res) => {
+        if (cancelled) return;
+        setMaskedPhone(res?.data?.masked_phone || '');
+        setStage('code');
+        setCount(RESEND_SECONDS);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        const owned = ownedSharedWorkspaces(err);
+        if (owned) {
+          setBlocked(owned);
+          setStage('blocked');
+        } else {
+          setSendError(err?.message || '');
+          setStage('failed');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [visible, sendAttempt]);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const id = setTimeout(() => setCount(s => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown]);
+
+  const close = () => {
+    if (!deleting) onClose();
+  };
+
+  const handleRetry = () => {
+    setStage('sending');
+    setSendError('');
+    setSendAttempt(n => n + 1);
+  };
+
+  const handleResend = async () => {
+    if (!canResend) return;
+    setResending(true);
+    setOtp('');
+    setCodeError('');
+    try {
+      const res = await startAccountDeletion();
+      if (res?.data?.masked_phone) setMaskedPhone(res.data.masked_phone);
+      setCount(RESEND_SECONDS);
+    } catch (err: any) {
+      const owned = ownedSharedWorkspaces(err);
+      if (owned) {
+        setBlocked(owned);
+        setStage('blocked');
+      } else {
+        setCodeError(err?.message || t('screens.settingsProfile.failedSendOtp'));
+      }
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleKey = (key: string) => {
+    if (resending || deleting) return;
+    setCodeError('');
     if (key === 'back') setOtp(p => p.slice(0, -1));
-    else if (otp.length < OTP_LENGTH) setOtp(p => p + key);
+    else setOtp(p => (p.length < OTP_LENGTH ? p + key : p));
   };
 
-  const handleDelete = () => {
-    if (otp.length < OTP_LENGTH) return;
-    onClose();
-    setTimeout(() =>
-      Alert.alert(t('screens.settingsProfile.accountDeleted'), t('screens.settingsProfile.accountDeletedMsg')),
-    300);
-  };
-
-  const handleResend = () => {
-    if (!canResend) return;
-    startTimer();
-    Alert.alert(t('screens.settingsProfile.otpResent'), t('screens.settingsProfile.newCodeSentWhatsApp', { phone }));
+  const handleDelete = async () => {
+    if (!codeComplete || deleting || resending) return;
+    setDeleting(true);
+    setCodeError('');
+    try {
+      await confirmAccountDeletion(otp);
+    } catch (err: any) {
+      setDeleting(false);
+      const owned = ownedSharedWorkspaces(err);
+      if (owned) {
+        setBlocked(owned);
+        setStage('blocked');
+        return;
+      }
+      // A refused code is cleared for re-entry; after a network failure the same code can be retried.
+      if (err?.status === 400) setOtp('');
+      setCodeError(err?.message || t('screens.settingsProfile.otpNoMatch'));
+      return;
+    }
+    setDeleting(false);
+    onDeleted();
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <View style={ps.modalOverlay}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={close} />
         <View style={ps.modalSheet}>
           <View style={ps.handle} />
 
           {/* Heading */}
           <Text style={ps.modalTitle}>{t('screens.settingsProfile.deleteAccountConfirmation')}</Text>
-          <Text style={ps.modalSub}>
-            {t('screens.settingsProfile.codeSentToPrefix')}
-            <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{phone}</Text>
-            {t('screens.settingsProfile.viaWhatsAppSuffix')}
-            <Text
-              style={ps.changeLink}
-              onPress={() =>
-                Alert.alert(t('screens.settingsProfile.changeNumber'), t('screens.settingsProfile.changeNumberMsg'))
-              }
-            >
-              {t('screens.settingsProfile.changeQ')}
-            </Text>
-          </Text>
+          <Text style={[ps.modalSub, ps.deleteSub]}>{t('screens.settingsProfile.deleteAccountSub')}</Text>
 
-          {/* OTP boxes */}
-          <PinBoxes value={otp} length={OTP_LENGTH} />
+          {stage === 'sending' ? (
+            <View style={ps.codeLoader}>
+              <ActivityIndicator size="small" color={COLORS.textSecondary} />
+            </View>
+          ) : null}
 
-          {/* Delete button */}
-          <TouchableOpacity
-            style={[ps.modalBtn, ps.deleteBtnColor, otp.length < OTP_LENGTH && ps.btnDisabled]}
-            onPress={handleDelete}
-            activeOpacity={0.85}
-            disabled={otp.length < OTP_LENGTH}
-          >
-            <Text style={ps.modalBtnText}>{t('profile.deleteAccount')}</Text>
-          </TouchableOpacity>
+          {stage === 'blocked' ? (
+            <>
+              <Text style={ps.deleteNotice}>
+                {t('screens.settingsProfile.deleteBlocked', { names: blocked.map(w => w.name).join(', ') })}
+              </Text>
+              <TouchableOpacity style={[ps.modalBtn, ps.confirmBtnColor]} onPress={close} activeOpacity={0.85}>
+                <Text style={ps.modalBtnText}>{t('common.close')}</Text>
+              </TouchableOpacity>
+              <View style={{ height: 16 }} />
+            </>
+          ) : null}
 
-          {/* Resend */}
-          <TouchableOpacity
-            style={ps.resendRow}
-            onPress={handleResend}
-            activeOpacity={canResend ? 0.7 : 1}
-          >
-            <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
-              {canResend ? t('auth.resendOtp') : t('auth.resendOtpTimer', { countdown })}
-            </Text>
-          </TouchableOpacity>
+          {stage === 'failed' ? (
+            <>
+              <Text style={[ps.deleteNotice, ps.deleteNoticeError]}>
+                {sendError || t('screens.settingsProfile.failedSendOtp')}
+              </Text>
+              <TouchableOpacity style={[ps.modalBtn, ps.confirmBtnColor]} onPress={handleRetry} activeOpacity={0.85}>
+                <Text style={ps.modalBtnText}>{t('common.retry')}</Text>
+              </TouchableOpacity>
+              <View style={{ height: 16 }} />
+            </>
+          ) : null}
 
-          {/* Number pad */}
-          <CustomNumPad onPress={handleKey} />
-          <View style={{ height: 12 }} />
+          {stage === 'code' ? (
+            <>
+              <Text style={ps.modalSub}>
+                {t('screens.settingsProfile.codeSentToPrefix')}
+                <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{maskedPhone}</Text>
+                {t('screens.settingsProfile.viaWhatsAppSuffix')}
+              </Text>
+
+              {/* OTP boxes */}
+              {resending ? (
+                <View style={ps.codeLoader}>
+                  <ActivityIndicator size="small" color={COLORS.textSecondary} />
+                </View>
+              ) : (
+                <PinBoxes value={otp} length={OTP_LENGTH} />
+              )}
+              {codeError ? <Text style={ps.codeError}>{codeError}</Text> : null}
+
+              {/* Delete button */}
+              <TouchableOpacity
+                style={[ps.modalBtn, ps.deleteBtnColor, !codeComplete && ps.btnDisabled]}
+                onPress={handleDelete}
+                activeOpacity={0.85}
+                disabled={!codeComplete || deleting || resending}
+              >
+                {deleting
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Text style={ps.modalBtnText}>{t('profile.deleteAccount')}</Text>}
+              </TouchableOpacity>
+
+              {/* Resend */}
+              <TouchableOpacity
+                style={ps.resendRow}
+                onPress={handleResend}
+                activeOpacity={canResend ? 0.7 : 1}
+                disabled={!canResend}
+              >
+                <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
+                  {countdown > 0 ? t('auth.resendOtpTimer', { countdown }) : t('auth.resendOtp')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Number pad */}
+              <CustomNumPad onPress={handleKey} />
+              <View style={{ height: 12 }} />
+            </>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -273,10 +376,14 @@ function CreatePasskeyModal({
   visible,
   onClose,
   onConfirm,
+  title,
+  subtitle,
 }: {
   visible: boolean;
   onClose: () => void;
   onConfirm: (pin: string) => void;
+  title?: string;
+  subtitle?: string;
 }) {
   const { t } = useTranslation();
   const [pin, setPin] = useState('');
@@ -300,8 +407,8 @@ function CreatePasskeyModal({
           <View style={ps.handle} />
 
           {/* Heading */}
-          <Text style={ps.modalTitle}>{t('screens.settingsProfile.createPasskey')}</Text>
-          <Text style={ps.modalSub}>{t('screens.settingsProfile.enterPasskey')}</Text>
+          <Text style={ps.modalTitle}>{title || t('screens.settingsProfile.createPasskey')}</Text>
+          <Text style={ps.modalSub}>{subtitle || t('screens.settingsProfile.enterPasskey')}</Text>
 
           {/* PIN boxes */}
           <PinBoxes value={pin} />
@@ -644,7 +751,7 @@ function OTPVerifySheet({
 export default function ProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { user, setUser } = useAuth();
+  const { user, setUser, signOut } = useAuth();
 
   // Form state — pre-filled from AuthContext
   const [name,  setName]  = useState(user?.name || 'Your Name');
@@ -723,6 +830,18 @@ export default function ProfileScreen() {
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showEditEmail, setShowEditEmail] = useState(false);
 
+  // The server has already ended every session, so the logout call inside signOut may fail;
+  // signOut clears this device either way.
+  const handleAccountDeleted = async () => {
+    setShowDelete(false);
+    await clearBiometricPin(phone);
+    await signOut().catch(() => {});
+    router.replace('/(auth)');
+    setTimeout(() => {
+      Alert.alert(t('screens.settingsProfile.accountDeleted'), t('screens.settingsProfile.accountDeletedMsg'));
+    }, 300);
+  };
+
   // markDirty — kept as no-op since Save button is always visible on this screen
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const markDirty = () => {};
@@ -771,23 +890,43 @@ export default function ProfileScreen() {
 
   const handlePasskeyConfirm = async (pin: string) => {
     setShowPasskey(false);
+    // With 2FA already on, this sheet confirms the existing PIN for biometric unlock rather than replacing it.
+    const confirmingExisting = twoFA;
     try {
-      await apiSetPin(pin);
-      setTwoFA(true);
-      // Store PIN securely for biometric auto-login
+      await apiSetPin(pin, confirmingExisting ? pin : undefined);
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: err?.status === 429 ? t('screens.settingsProfile.tooManyAttempts')
+          : err?.code === 'PIN_INVALID' ? t('screens.settingsProfile.incorrectPin')
+          : t('common.error'),
+        text2: err?.message || t('screens.settingsProfile.couldNotSetPasskey'),
+      });
+      return;
+    }
+    setTwoFA(true);
+
+    // Keep the PIN on this device for biometric auto-login; 2FA stays on even if that fails.
+    let savedForBiometric = false;
+    try {
       const hasHW = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
       if (hasHW && enrolled) {
         await setBiometricPin(phone, pin);
-        // Also enable biometric on server if not already enabled
-        if (!biometric) {
-          await apiSetBiometric(true).catch(() => {});
-          setBiometricState(true);
-        }
+        savedForBiometric = true;
       }
+    } catch { /* biometric unlock stays off */ }
+    if (savedForBiometric && !biometric) {
+      await apiSetBiometric(true).catch(() => {});
+      setBiometricState(true);
+    }
+
+    if (!confirmingExisting) {
       Toast.show({ type: 'success', text1: t('screens.settingsProfile.passkeySet'), text2: t('screens.settingsProfile.twoFaEnabled') });
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: t('common.error'), text2: err?.message || t('screens.settingsProfile.couldNotSetPasskey') });
+    } else if (savedForBiometric) {
+      Toast.show({ type: 'success', text1: t('profile.biometricScreenLock'), text2: t('screens.settingsProfile.biometricEnabled') });
+    } else {
+      Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsProfile.couldNotUpdateBiometric') });
     }
   };
 
@@ -984,18 +1123,22 @@ export default function ProfileScreen() {
       <DeleteAccountModal
         visible={showDelete}
         onClose={() => setShowDelete(false)}
-        phone={maskPhone(phone)}
+        onDeleted={handleAccountDeleted}
       />
       <CreatePasskeyModal
         visible={showPasskey}
         onClose={() => setShowPasskey(false)}
         onConfirm={handlePasskeyConfirm}
+        title={twoFA ? t('screens.authVerifyPin.heading') : undefined}
+        subtitle={twoFA ? t('screens.settingsProfile.enterPinOnce') : undefined}
       />
       {/* Disable 2FA — requires current PIN */}
       <CreatePasskeyModal
         visible={showDisable2FA}
         onClose={() => setShowDisable2FA(false)}
         onConfirm={handleDisable2FA}
+        title={t('screens.authVerifyPin.heading')}
+        subtitle={t('screens.settingsProfile.enterPasskeyToTurnOff')}
       />
 
       {/* ── Edit Phone — WhatsApp OTP ───────────────────────────────────── */}
@@ -1174,7 +1317,17 @@ const ps = StyleSheet.create({
     fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
     textAlign: 'center', lineHeight: 20, marginBottom: 28,
   },
-  changeLink: { color: COLORS.info, textDecorationLine: 'underline', fontWeight: '600' },
+  deleteSub: { marginBottom: 16 },
+  deleteNotice: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '600',
+    textAlign: 'center', lineHeight: 20, marginBottom: 20,
+  },
+  deleteNoticeError: { color: COLORS.negative },
+  codeLoader: { height: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
+  codeError: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.negative,
+    textAlign: 'center', marginTop: -16, marginBottom: 16,
+  },
 
   // ── PIN Boxes ─────────────────────────────────────────────────────────────
   pinRow: {

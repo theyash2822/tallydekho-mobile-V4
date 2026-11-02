@@ -10,6 +10,7 @@
  */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
 } from 'react-native';
@@ -91,7 +92,7 @@ export default function CreatePaymentVoucher() {
   const allowed = useRequireCapability('payment.create');
   const { t } = useTranslation();
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const narrationY = useRef(0);
   const scrollNarrationIntoView = () => {
     // Same pattern as Sales Invoice: wait for keyboard, then scroll field above it.

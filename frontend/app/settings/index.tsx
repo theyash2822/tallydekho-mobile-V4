@@ -236,6 +236,7 @@ export default function SettingsScreen() {
     isWorkspaceUnavailable,
     isOwnerOrAdmin,
     isOwner,
+    hasCapability,
   } = useWorkspace();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
@@ -349,8 +350,8 @@ export default function SettingsScreen() {
                   <View style={styles.subItems}>
                     {section.subItems
                       .filter((sub) => {
-                        if ((sub.id === 'ewaybill' || sub.id === 'einvoice') && !isOwnerOrAdmin) return false;
-                        if (sub.id === 'approvals' && !isOwnerOrAdmin) return false;
+                        if ((sub.id === 'ewaybill' || sub.id === 'einvoice') && !(isOwnerOrAdmin || hasCapability('integrations.configure'))) return false;
+                        if (sub.id === 'approvals' && !(isOwnerOrAdmin || hasCapability('tally.restore_replace'))) return false;
                         return true;
                       })
                       .map((sub, idx, arr) => {

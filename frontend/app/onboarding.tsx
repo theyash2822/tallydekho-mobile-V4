@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, StyleSheet, TouchableOpacity,
   Animated, ScrollView, Dimensions,
 } from 'react-native';
@@ -729,7 +730,7 @@ export default function OnboardingScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [slideH,       setSlideH]       = useState(520);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const goToIndex = useCallback((idx: number) => {
     scrollRef.current?.scrollTo({ x: idx * SW, animated: true });

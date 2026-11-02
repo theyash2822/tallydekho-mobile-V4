@@ -174,8 +174,9 @@ function SectionDivider() {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceRemindersScreen() {
   // The Owner or an Admin changes these settings; members view them (Owner decision, 29 Oct 2026).
-  const { isOwnerOrAdmin: canEditSettings } = useWorkspace();
-  const isOwnerOrAdmin = canEditSettings;
+  const { hasCapability } = useWorkspace();
+  // Workspace alert rules follow the alerts.manage permission (03-11-2026).
+  const isOwnerOrAdmin = hasCapability('alerts.manage');
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -207,7 +208,7 @@ export default function ComplianceRemindersScreen() {
 
   const save = async () => {
     if (!isOwnerOrAdmin) {
-      Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) });
+      Toast.show({ type: 'info', text1: t('common.permissionNeeded', { defaultValue: 'This needs a permission your role does not have.' }) });
       return;
     }
     try {

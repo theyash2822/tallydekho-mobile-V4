@@ -1,5 +1,5 @@
 import { VoucherPrintModel } from '../VoucherPrintModel';
-import { esc, formatInr, wrapHtmlDocument } from '../shared';
+import { addressParagraph, esc, formatInr, wrapHtmlDocument } from '../shared';
 import { voucherTitle } from '../VoucherPrintModelAdapter';
 
 /** TallyDekho Executive — MD §8. Compact premium share layout. */
@@ -13,10 +13,7 @@ export function renderTallyDekhoExecutive(model: VoucherPrintModel): string {
 
 function header(model: VoucherPrintModel): string {
   const c = model.company;
-  const line2 = [
-    ...(c.addressLines || []).slice(0, 2),
-    c.district,
-  ].filter(Boolean).join(' · ');
+  const line2 = addressParagraph(c.addressLines || [], c.district ? `Distt: ${c.district}` : null);
   const line3 = [
     c.state || c.stateName,
     c.stateCode,

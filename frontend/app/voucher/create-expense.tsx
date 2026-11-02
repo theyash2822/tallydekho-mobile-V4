@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, Modal,
 } from 'react-native';
@@ -55,7 +56,7 @@ export default function CreateExpenseVoucher() {
   const allowed = useRequireCapability('expense.create');
   const { t } = useTranslation();
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const narrationY = useRef(0);
   const { company, selectedFY } = useAuth();
   const { currencySymbol } = useSettings();

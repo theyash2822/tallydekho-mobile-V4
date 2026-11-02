@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { usesEntryMode } from '../utils/entryScope';
 import Toast from 'react-native-toast-message';
 import {
   BACKDATED_ENTRY_MESSAGE,
@@ -121,7 +122,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
   const { height: windowHeight } = useWindowDimensions();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const { selectedFY } = useAuth();
-  const { hasCapability, entryMode, isOwnerOrAdmin } = useWorkspace();
+  const { hasCapability, entryMode } = useWorkspace();
 
   const sections = useMemo(() => {
     return SECTION_DEFS.map((section) => {
@@ -129,11 +130,12 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
         .filter((item) => {
           const cap = ITEM_CAPS[item.id];
           if (cap && !hasCapability(cap)) return false;
-          // Stock items are added by the Owner or an Admin only (Owner decision, 29 Oct 2026).
-          if (item.id === 'inv-item' && !isOwnerOrAdmin) return false;
-          // Entry Mode: OPTIONAL_ONLY → Proforma only (not regular invoice); Quotation via order optional
-          if (item.id === 'sale-invoice' && (entryMode === 'OPTIONAL_ONLY' || entryMode === 'NONE')) return false;
-          if (item.id === 'sale-proforma' && (entryMode === 'REGULAR_ONLY' || entryMode === 'NONE')) return false;
+          // Entry Mode applies to every voucher type (03-11-2026). NONE (a member setting narrower than
+          // the role) allows no voucher at all; masters have no entry mode.
+          if (cap && usesEntryMode(cap) && entryMode === 'NONE') return false;
+          // OPTIONAL_ONLY → Proforma instead of a regular invoice; REGULAR_ONLY → no Proforma.
+          if (item.id === 'sale-invoice' && entryMode === 'OPTIONAL_ONLY') return false;
+          if (item.id === 'sale-proforma' && entryMode === 'REGULAR_ONLY') return false;
           return true;
         })
         .map((item) => ({

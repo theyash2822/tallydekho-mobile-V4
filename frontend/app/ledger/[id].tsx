@@ -249,7 +249,9 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
 export default function LedgerDetailScreen() {
   const { t } = useTranslation();
   // Payment reminders are sent by the Owner or an Admin only (Owner decision, 29 Oct 2026).
-  const { isOwnerOrAdmin } = useWorkspace();
+  const { hasCapability } = useWorkspace();
+  // WhatsApp payment reminders follow reminders.manage.
+  const isOwnerOrAdmin = hasCapability('reminders.manage');
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { company, selectedFY } = useAuth();

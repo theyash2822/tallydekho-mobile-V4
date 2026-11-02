@@ -6,6 +6,7 @@
 
 import { DocumentType, VoucherDocument, ItemLine, LedgerEntry } from '../../types/document';
 import { tallyWords } from './words';
+import { addressParagraph } from '../voucher-print/shared';
 
 export interface TallyRenderOptions {
   logoUri?: string | null;
@@ -68,12 +69,11 @@ const pctText = (n?: number | null): string => {
   return `${Number.isInteger(v) ? v : parseFloat(v.toFixed(2))} %`;
 };
 
-const lines = (value?: string | null): string =>
-  esc(value || '')
-    .split(/\s*,\s*|\n/)
-    .filter(Boolean)
-    .map(l => `<div>${l}</div>`)
-    .join('');
+/** An address as one paragraph that wraps over 2–3 lines, not one comma piece per line. */
+const addressHtml = (value?: string | null): string => {
+  const text = addressParagraph(String(value || '').split(/\s*,\s*|\n/));
+  return text ? `<div>${esc(text)}</div>` : '';
+};
 
 /** `State Name : Gujarat, Code : 24` */
 const stateLine = (state?: string | null, code?: string | null): string => {
@@ -221,7 +221,7 @@ function addressBlock(label: string, party: any, opts: { showGstin?: boolean } =
   return `<div style="padding:4px 6px;border-top:1px solid #000">
     <div style="font-size:8.5px">${esc(label)}</div>
     <div style="font-size:11px;font-weight:bold">${esc(party?.name || '')}</div>
-    <div style="font-size:9px">${lines(party?.address)}</div>
+    <div style="font-size:9px">${addressHtml(party?.address)}</div>
     ${showGstin && party?.gstin ? `<div style="font-size:9px">GSTIN/UIN : ${esc(party.gstin)}</div>` : ''}
     <div style="font-size:9px">${stateLine(party?.state, party?.stateCode)}</div>
   </div>`;
@@ -380,7 +380,7 @@ function renderInvoiceGrid(doc: VoucherDocument, opts: TallyRenderOptions): stri
         <div style="padding:5px 6px">
           ${opts.logoUri ? `<img src="${opts.logoUri}" style="max-height:44px;max-width:130px;object-fit:contain;display:block;margin-bottom:4px" />` : ''}
           <div style="font-size:12px;font-weight:bold">${esc(company.name || '')}</div>
-          <div style="font-size:9px">${lines(company.address)}</div>
+          <div style="font-size:9px">${addressHtml(company.address)}</div>
           ${company.gstin ? `<div style="font-size:9px">GSTIN/UIN: ${esc(company.gstin)}</div>` : ''}
           <div style="font-size:9px">${stateLine(company.state, company.stateCode)}</div>
           ${company.email ? `<div style="font-size:9px">E-Mail : ${esc(company.email)}</div>` : ''}
@@ -523,7 +523,7 @@ function renderAccountingVoucher(doc: VoucherDocument, opts: TallyRenderOptions)
     <tr>
       <td style="padding:5px 6px;vertical-align:top">
         <div style="font-size:12px;font-weight:bold">${esc(company.name || '')}</div>
-        <div style="font-size:9px">${lines(company.address)}</div>
+        <div style="font-size:9px">${addressHtml(company.address)}</div>
         ${showGstin && company.gstin ? `<div style="font-size:9px">GSTIN/UIN: ${esc(company.gstin)}</div>` : ''}
         <div style="font-size:9px">${stateLine(company.state, company.stateCode)}</div>
         ${company.email ? `<div style="font-size:9px">E-Mail : ${esc(company.email)}</div>` : ''}
@@ -636,13 +636,13 @@ export function renderTallyStatementHTML(input: StatementInput): string {
     <tr>
       <td style="padding:5px 6px;vertical-align:top;width:50%">
         <div style="font-size:12px;font-weight:bold">${esc(company.name || '')}</div>
-        <div style="font-size:9px">${lines(company.address)}</div>
+        <div style="font-size:9px">${addressHtml(company.address)}</div>
         ${company.gstin ? `<div style="font-size:9px">GSTIN/UIN: ${esc(company.gstin)}</div>` : ''}
       </td>
       <td style="padding:5px 6px;vertical-align:top;text-align:right">
         <div style="font-size:11px;font-weight:bold">${esc(input.partyName || '')}</div>
         <div style="font-size:11px;font-weight:bold">${esc(input.title)}</div>
-        <div style="font-size:9px">${lines(input.partyAddress)}</div>
+        <div style="font-size:9px">${addressHtml(input.partyAddress)}</div>
       </td>
     </tr>
   </table>
@@ -733,7 +733,7 @@ function renderStockDocument(doc: VoucherDocument, _opts: TallyRenderOptions): s
     <tr>
       <td style="padding:5px 6px;vertical-align:top">
         <div style="font-size:12px;font-weight:bold">${esc(company.name || '')}</div>
-        <div style="font-size:9px">${lines(company.address)}</div>
+        <div style="font-size:9px">${addressHtml(company.address)}</div>
       </td>
       <td style="padding:5px 6px;text-align:right;vertical-align:top;font-size:9.5px">
         <div>No. : <b>${esc(doc.documentNumber || '')}</b></div>

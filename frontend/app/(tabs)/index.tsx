@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { isAccessRefusal } from '../../src/services/apiErrors';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -23,6 +23,8 @@ import SearchBar from '../../src/components/SearchBar';
 import CashflowCard from '../../src/components/CashflowCard';
 import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
+import GlobalSearchResults from '../../src/components/GlobalSearchResults';
+import { SEARCH_PLACEHOLDERS, PLACEHOLDER_ROTATE_MS } from '../../src/utils/globalSearch';
 import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
 import PairingBanner from '../../src/components/PairingBanner';
 import RestoreRequestBanner from '../../src/components/RestoreRequestBanner';
@@ -114,21 +116,18 @@ export default function HomeScreen() {
     return () => clearInterval(t);
   }, [kpiData.length, autoScrollCarousel]);
 
-  // Filtered activity for search results
-  const filteredActivity = useMemo(() => {
-    const safeActivity = Array.isArray(activity) ? activity : [];
-    if (!searchQuery.trim()) return safeActivity;
-    const q = searchQuery.toLowerCase();
-    return safeActivity.filter((item: any) =>
-      (item.label || '').toLowerCase().includes(q) ||
-      (item.party || '').toLowerCase().includes(q) ||
-      (item.amount || '').toLowerCase().includes(q)
-    );
-  }, [searchQuery, activity]);
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  useEffect(() => {
+    if (searchQuery) return;
+    const timer = setInterval(() => setPlaceholderIdx((i) => (i + 1) % SEARCH_PLACEHOLDERS.length), PLACEHOLDER_ROTATE_MS);
+    return () => clearInterval(timer);
+  }, [searchQuery]);
+  const fyFrom = selectedFY?.startDate ? String(selectedFY.startDate).slice(0, 10) : undefined;
+  const fyTo = selectedFY?.endDate ? String(selectedFY.endDate).slice(0, 10) : undefined;
 
   const [searchDeps, setSearchDeps] = useState<unknown[] | null>(null);
-  if (!searchDeps || searchDeps[0] !== searchQuery || searchDeps[1] !== dataReady || searchDeps[2] !== companyGuid) {
-    setSearchDeps([searchQuery, dataReady, companyGuid]);
+  if (!searchDeps || searchDeps[0] !== searchQuery || searchDeps[1] !== dataReady || searchDeps[2] !== companyGuid || searchDeps[3] !== fyFrom) {
+    setSearchDeps([searchQuery, dataReady, companyGuid, fyFrom]);
     if (searchQuery.trim().length < 2 || !dataReady || !companyGuid) {
       setSearchResults([]);
       setSearchLoading(false);
@@ -141,30 +140,14 @@ export default function HomeScreen() {
     const q = searchQuery.trim();
     if (q.length < 2 || !dataReady || !companyGuid) return;
     const timer = setTimeout(() => {
-      searchDashboard(q, companyGuid)
+      searchDashboard(q, companyGuid, { from: fyFrom, to: fyTo })
         .then((res) => setSearchResults(Array.isArray(res?.data) ? res.data : []))
         .catch(() => setSearchResults([]))
         .finally(() => setSearchLoading(false));
-    }, 350);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, dataReady, companyGuid]);
+  }, [searchQuery, dataReady, companyGuid, fyFrom, fyTo]);
 
-  const searchActivities = useMemo(() => {
-    if (searchResults.length === 0) return filteredActivity;
-    return searchResults.map((r: any) => ({
-      id: r.id,
-      type: r.kind === 'voucher' ? (r.is_credit ? 'credit' : 'debit') : 'other',
-      guid: r.kind === 'voucher' ? r.guid : r.kind === 'ledger' ? r.guid : null,
-      route: r.route,
-      label: r.label,
-      party: r.party,
-      date: r.subtitle,
-      amount_raw: r.amount_raw,
-      locked: r.locked === true,
-      scope_label: r.scope_label || null,
-      is_credit: r.is_credit,
-    }));
-  }, [searchResults, filteredActivity]);
 
   // ── Data loading ─────────────────────────────────────────────────────────
   // Soft-refresh policy: full shimmer only on first load / company switch.
@@ -498,7 +481,7 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     // PTR: native RefreshControl spinner only — soft load, no full-page shimmer
     setRefreshing(true);
-    await loadData({ soft: true });
+    await Promise.all([loadData({ soft: true }), refreshContext?.().catch(() => {})]);
     setRefreshing(false);
   };
 
@@ -536,7 +519,7 @@ export default function HomeScreen() {
 
   if (homeAccess === 'locked') return <LockedScreen titleKey="nav.home" />;
 
-  const isSearching = searchQuery.trim().length > 0;
+  const isSearching = searchQuery.trim().length >= 2;
 
   // First load: all primary failed → full-page ErrorState (not empty zeros + banner)
   if (fatalError && !isLoading) {
@@ -581,7 +564,7 @@ export default function HomeScreen() {
           testID="search-bar"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder={t('dashboard.searchPlaceholder')}
+          placeholder={t(SEARCH_PLACEHOLDERS[placeholderIdx][0], { defaultValue: SEARCH_PLACEHOLDERS[placeholderIdx][1] })}
           style={{ marginTop: 8, marginBottom: 8 }}
         />
       </KeyboardAvoidingView>
@@ -591,7 +574,14 @@ export default function HomeScreen() {
         style={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
+        {isSearching ? (
+          <View style={{ paddingTop: 8 }}>
+            <GlobalSearchResults query={searchQuery} hits={searchResults} loading={searchLoading} fyFrom={fyFrom} fyTo={fyTo} />
+          </View>
+        ) : (
+        <>
         {/* Status banners */}
         {invitations?.length > 0 && (
           <TouchableOpacity
@@ -723,14 +713,6 @@ export default function HomeScreen() {
           <View style={styles.metricsCard}>
             {[0, 1, 2, 3, 4].map(i => <ActivityRowSkeleton key={i} />)}
           </View>
-        ) : isSearching ? (
-          searchLoading ? (
-            <View style={styles.metricsCard}>
-              {[0, 1, 2].map(i => <ActivityRowSkeleton key={i} />)}
-            </View>
-          ) : (
-            <RecentActivity activities={searchActivities} title={t('dashboard.searchResults')} />
-          )
         ) : (
           <RecentActivity
             activities={activity}
@@ -739,11 +721,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {isSearching && !searchLoading && searchActivities.length === 0 && (
-          <View style={styles.emptySearch}>
-            <Ionicons name="search" size={32} color={COLORS.textTertiary} />
-            <Text style={styles.emptySearchText}>{t('dashboard.noResults', { query: searchQuery })}</Text>
-          </View>
+        </>
         )}
 
         <View style={{ height: 100 }} />
@@ -830,7 +808,4 @@ const styles = StyleSheet.create({
   moduleIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   moduleLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
 
-  // ── Empty search state ────────────────────────────────────────────────────
-  emptySearch: { alignItems: 'center' as const, paddingVertical: 40, gap: 10 },
-  emptySearchText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 });

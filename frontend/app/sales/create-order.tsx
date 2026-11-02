@@ -485,7 +485,7 @@ export default function CreateSalesOrderScreen() {
   const [taxLedgers, setTaxLedgers] = useState<{ name: string; guid?: string; taxRate?: number }[]>([]);
   const [chargeLedgers, setChargeLedgers] = useState<{ ledgerName: string; guid?: string }[]>([]);
   const [roundOffLedgers, setRoundOffLedgers] = useState<{ ledgerName: string; guid?: string }[]>([]);
-  const [companyProfile, setCompanyProfile] = useState<{ address?: string; state?: string; pincode?: string; gstin?: string; pan?: string; phone?: string; email?: string } | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<{ formalName?: string; address?: string; state?: string; pincode?: string; gstin?: string; pan?: string; phone?: string; email?: string } | null>(null);
 
   // Per-item godowns (fetched when product selected)
   const [itemGodowns, setItemGodowns] = useState<Record<string, Godown[]>>({});
@@ -538,8 +538,9 @@ export default function CreateSalesOrderScreen() {
     getCompanyProfile(company.guid).then((res: any) => {
       const d = res?.data;
       if (d) setCompanyProfile({
+        formalName: d.formal_name || '',
         address: d.address || '', state: d.state || '', pincode: d.pincode || '',
-        gstin: d.gstin || '', pan: d.pan || '', phone: d.phone || '', email: d.email || '',
+        gstin: d.gstin || '', pan: d.pan || '', phone: d.phone || d.mobile || '', email: d.email || '',
       });
     }).catch(() => {});
   }, [company?.guid]);
@@ -733,7 +734,7 @@ export default function CreateSalesOrderScreen() {
       date: date ? dmyToISO(date) : '',
       documentDate: date ? dmyToISO(date) : '',
       company: {
-        name: company?.name || '',
+        name: companyProfile?.formalName || company?.name || '',
         address: companyProfile?.address || '',
         gstin: companyProfile?.gstin || '',
         pan: companyProfile?.pan || '',

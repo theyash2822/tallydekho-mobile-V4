@@ -28,7 +28,8 @@ const PROVIDERS: (DropdownOption & { labelKey?: string })[] = [
 export default function EInvoiceScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { workspaceId, isOwnerOrAdmin } = useWorkspace();
+  const { workspaceId, isOwnerOrAdmin: ownerOrAdmin, hasCapability } = useWorkspace();
+  const isOwnerOrAdmin = ownerOrAdmin || hasCapability('integrations.configure');
   const [provider, setProvider] = useState('nic');
   const [isDirty, setIsDirty] = useState(false);
   const [status, setStatus] = useState('NOT_CONFIGURED');

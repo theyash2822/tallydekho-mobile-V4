@@ -104,8 +104,9 @@ function RadioRow({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 function StockSettingsScreenContent() {
   // The Owner or an Admin changes these settings; members view them (Owner decision, 29 Oct 2026).
-  const { isOwnerOrAdmin: canEditSettings } = useWorkspace();
-  const isOwnerOrAdmin = canEditSettings;
+  const { hasCapability } = useWorkspace();
+  // Stock settings follow the inventory.settings.manage permission (03-11-2026).
+  const isOwnerOrAdmin = hasCapability('inventory.settings.manage');
   const { t } = useTranslation();
   const router = useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
@@ -244,7 +245,7 @@ function StockSettingsScreenContent() {
   // ── Save — flush any remaining drafts before sending
   const handleSave = async () => {
     if (!isOwnerOrAdmin) {
-      Toast.show({ type: 'info', text1: t('common.ownerAdminOnly', { defaultValue: 'Only the Workspace Owner or an Admin can change this.' }) });
+      Toast.show({ type: 'info', text1: t('common.permissionNeeded', { defaultValue: 'This needs a permission your role does not have.' }) });
       return;
     }
     if (!companyGuid) return;
@@ -1080,7 +1081,7 @@ const s = StyleSheet.create({
 
 /** Stock settings and barcodes are opened and used by the Owner or an Admin only (Owner decision, 29 Oct 2026). */
 export default function StockSettingsScreen() {
-  const { isOwnerOrAdmin } = useWorkspace();
-  if (!isOwnerOrAdmin) return <LockedScreen titleKey="nav.stocks" />;
+  const { hasCapability } = useWorkspace();
+  if (!hasCapability('inventory.settings.manage')) return <LockedScreen titleKey="nav.stocks" />;
   return <StockSettingsScreenContent />;
 }

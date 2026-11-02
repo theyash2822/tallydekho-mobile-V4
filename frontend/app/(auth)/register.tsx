@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { registerUser, setRefreshToken, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
+import { canProceedRegister, isValidWorkspaceName, WORKSPACE_NAME_MAX } from '../../src/utils/registerForm';
 
 const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 'Italian', 'Japanese', 'Korean'];
 const CODE_LENGTH = 6;
@@ -25,6 +26,8 @@ export default function RegisterScreen() {
   const { phone, token } = useLocalSearchParams<{ phone: string; token: string }>();
   const { signIn } = useAuth();
   const [name, setName] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceNameTouched, setWorkspaceNameTouched] = useState(false);
   const [email, setEmail] = useState('');
   const [language, setLanguage] = useState('English');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -37,8 +40,8 @@ export default function RegisterScreen() {
   const [resendIn, setResendIn] = useState(0);
   const [sendFailed, setSendFailed] = useState(false);
 
-  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
-  const canProceed = name.trim().length > 1 && isValidEmail(email) && termsAccepted;
+  const canProceed = canProceedRegister({ name, email, workspaceName, termsAccepted });
+  const workspaceNameError = workspaceNameTouched && !isValidWorkspaceName(workspaceName);
 
   // Store the token from OTP verify so register can call authenticated endpoint
   useEffect(() => {
@@ -71,6 +74,7 @@ export default function RegisterScreen() {
   };
 
   const handleContinue = async () => {
+    if (!isValidWorkspaceName(workspaceName)) { setWorkspaceNameTouched(true); return; }
     if (!canProceed) return;
     await sendCode();
   };
@@ -94,7 +98,12 @@ export default function RegisterScreen() {
     setLoading(true);
     setError('');
     try {
-      const res = await registerUser({ name: name.trim(), email: email.trim(), language });
+      const res = await registerUser({
+        name: name.trim(),
+        workspace_name: workspaceName.trim(),
+        email: email.trim(),
+        language,
+      });
       if (res?.success && res?.data?.access_token) {
         // IMPORTANT: Store token directly — do NOT call signIn() here.
         // signIn() sets isAuthenticated=true which makes _layout.tsx redirect to /(tabs)
@@ -117,6 +126,8 @@ export default function RegisterScreen() {
         setError(t('screens.authRegister.registrationFailed'));
       }
     } catch (err: any) {
+      // The fields the server refused can only be corrected on the form.
+      if (err?.code === 'VALIDATION_ERROR') setStage('form');
       setError(err?.message || t('screens.authRegister.somethingWentWrong'));
     } finally {
       setLoading(false);
@@ -126,7 +137,11 @@ export default function RegisterScreen() {
   return (
     <SafeAreaView testID="register-screen" style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
-        <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Logo */}
           <View style={styles.logoBox}>
             <AuditerMark height={26} color={COLORS.white} />
@@ -152,6 +167,24 @@ export default function RegisterScreen() {
               autoCapitalize="words"
               returnKeyType="next"
             />
+
+            {/* Workspace name */}
+            <Text style={styles.label}>{t('screens.authRegister.workspaceName')}</Text>
+            <TextInput
+              testID="workspace-name-input"
+              style={[styles.input, styles.inputWithHint]}
+              placeholder={t('screens.authRegister.workspaceNamePlaceholder')}
+              placeholderTextColor={COLORS.textTertiary}
+              value={workspaceName}
+              onChangeText={setWorkspaceName}
+              onBlur={() => setWorkspaceNameTouched(true)}
+              autoCapitalize="words"
+              maxLength={WORKSPACE_NAME_MAX}
+              returnKeyType="next"
+            />
+            <Text testID="workspace-name-hint" style={[styles.fieldHint, workspaceNameError && styles.fieldHintError]}>
+              {workspaceNameError ? t('screens.authRegister.workspaceNameInvalid') : t('screens.authRegister.workspaceNameHint')}
+            </Text>
 
             {/* Email */}
             <Text style={styles.label}>{t('screens.authRegister.emailAddress')}</Text>
@@ -280,7 +313,7 @@ export default function RegisterScreen() {
             </>
             )}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Language Modal */}
@@ -314,7 +347,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
   flex: { flex: 1 },
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.md },
+  container: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.md },
   logoBox: {
     width: 64, height: 64, borderRadius: 18,
     backgroundColor: COLORS.brandPrimary,
@@ -335,6 +368,9 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
     backgroundColor: COLORS.pageBg, marginBottom: SPACING.md,
   },
+  inputWithHint: { marginBottom: 6 },
+  fieldHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16, marginBottom: SPACING.md },
+  fieldHintError: { color: COLORS.negative },
   selector: {
     height: 48, borderWidth: 1.5, borderColor: COLORS.borderDefault,
     borderRadius: RADIUS.md, paddingHorizontal: 14,

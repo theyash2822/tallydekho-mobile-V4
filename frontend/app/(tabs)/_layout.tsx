@@ -33,15 +33,19 @@ interface Route {
 
 interface CustomTabBarProps {
   state: { index: number; routes: Route[] };
-  navigation: any;
-  descriptors: any;
+  // SDK 58's tab bar no longer receives a navigation object. Press events go
+  // through the navigator's emitter, and the switch itself is navigateToTab.
+  emitter: {
+    emit: (event: { type: string; target?: string; canPreventDefault?: boolean }) => { defaultPrevented: boolean };
+  };
+  navigateToTab: (routeKey: string) => void;
   onFabPress: () => void;
 }
 
-function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
+function CustomTabBar({ state, emitter, navigateToTab, onFabPress }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { hasCapability } = useWorkspace();
+  const { hasCapability, lockedByAccess } = useWorkspace();
   const bottomPad = Math.max(insets.bottom, 4);
 
   const routes = state.routes;
@@ -51,17 +55,19 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const handleTabPress = (route: Route, idx: number) => {
     const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (def?.capability && !hasCapability(def.capability)) {
-      Toast.show({ type: 'info', text1: t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
+      Toast.show(lockedByAccess(def.capability)
+        ? { type: 'info', text1: t('common.limitedByAccess', { defaultValue: 'Limited by your data access' }), text2: t('common.limitedByAccessHint', { defaultValue: 'Your role allows this; your access for this company does not. Ask the Workspace Owner.' }) }
+        : { type: 'info', text1: t('common.notInYourAccess', { defaultValue: 'Not in your access' }) });
       return;
     }
     const isFocused = state.index === idx;
-    const event = navigation.emit({
+    const event = emitter.emit({
       type: 'tabPress',
       target: route.key,
       canPreventDefault: true,
     });
     if (!isFocused && !event.defaultPrevented) {
-      navigation.navigate(route.name);
+      navigateToTab(route.key);
     }
   };
 

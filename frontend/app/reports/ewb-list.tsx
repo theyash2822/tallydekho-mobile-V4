@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import StatusOnlyChip from '../../src/components/StatusOnlyChip';
 import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Toast from 'react-native-toast-message';
@@ -108,6 +109,9 @@ export default function EWBListScreen() {
     }).catch(() => {}).finally(() => setLoading(false));
     return () => { cancelled = true; };
   }, [company?.guid, selectedFY, fromDate, toDate, reloadKey]);
+  const { status: statusParam } = useLocalSearchParams<{ status?: string }>();
+  const [statusOnly, setStatusOnly] = useState<string | null>(statusParam ? String(statusParam).toLowerCase() : null);
+  const shown = statusOnly ? ewbData.filter(i => String(i.status).toLowerCase() === statusOnly) : ewbData;
   const selectMode = selected.length > 0;
 
   const toggleSelect = (id: string) =>
@@ -203,18 +207,19 @@ export default function EWBListScreen() {
           <Text style={s.dateTxt}>{fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : t('screens.reportsEwbList.dates')}</Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        {statusOnly ? <View style={{ marginLeft: 8 }}><StatusOnlyChip status={statusOnly} onClear={() => { setStatusOnly(null); setSelected([]); }} /></View> : null}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
         {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
-        {ewbData.length === 0 && !loading && !loadError && (
+        {shown.length === 0 && !loading && !loadError && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
             <Ionicons name="document-text-outline" size={40} color={COLORS.textTertiary} />
             <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.reportsEwbList.emptyTitle')}</Text>
             <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.reportsEwbList.emptySub')}</Text>
           </View>
         )}
-        {ewbData.map((item) => {
+        {shown.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Active;
           const isSelected = selected.includes(item.id);
           return (
@@ -288,7 +293,7 @@ export default function EWBListScreen() {
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{t('common.selected', { count: selected.length })}</Text>
-            <TouchableOpacity onPress={() => setSelected(ewbData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => setSelected(shown.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
               <Text style={s.shareCancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>

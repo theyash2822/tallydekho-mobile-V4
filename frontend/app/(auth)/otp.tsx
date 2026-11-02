@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  TextInputInstance,
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
@@ -31,12 +32,12 @@ function OTPBox({
   filled: boolean;
   hasError: boolean;
   isFocused: boolean;
-  onSetRef: (ref: TextInput | null) => void;
+  onSetRef: (ref: TextInputInstance | null) => void;
   onChangeText: (t: string) => void;
   onKeyPress: (e: any) => void;
   onFocus: () => void;
 }) {
-  const localRef = useRef<TextInput>(null);
+  const localRef = useRef<TextInputInstance>(null);
 
   const handlePress = () => localRef.current?.focus();
 
@@ -86,7 +87,7 @@ export default function OTPScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(30);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   // Auto-focus first box on mount
   useEffect(() => {

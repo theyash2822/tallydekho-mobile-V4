@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import StatusOnlyChip from '../../src/components/StatusOnlyChip';
 import { safePush } from '../../src/utils/safeNavigation';
 import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -61,6 +62,9 @@ export default function EInvoiceListScreen() {
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
   }
+  const { status: statusParam } = useLocalSearchParams<{ status?: string }>();
+  const [statusOnly, setStatusOnly] = useState<string | null>(statusParam ? String(statusParam).toLowerCase() : null);
+  const shown = statusOnly ? invoiceData.filter(i => String(i.status).toLowerCase() === statusOnly) : invoiceData;
   const selectMode = selected.length > 0;
 
   const companyGuid = company?.guid;
@@ -244,16 +248,22 @@ export default function EInvoiceListScreen() {
         </TouchableOpacity>
       </View>
 
+      {statusOnly ? (
+        <View style={s.statusRow}>
+          <StatusOnlyChip status={statusOnly} onClear={() => { setStatusOnly(null); setSelected([]); }} />
+        </View>
+      ) : null}
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
         {loadError && <ErrorBanner message={loadError} onRetry={() => setReloadKey(k => k + 1)} />}
-        {invoiceData.length === 0 && !loading && !loadError && (
+        {shown.length === 0 && !loading && !loadError && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
             <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
             <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>{t('screens.reportsEinvoiceList.noEinvoices')}</Text>
             <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>{t('screens.reportsEinvoiceList.emptyHint')}</Text>
           </View>
         )}
-        {invoiceData.map((item) => {
+        {shown.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Generated;
           const isSelected = selected.includes(item.id);
           const isGenerating = generatingIds.includes(item.id);
@@ -340,7 +350,7 @@ export default function EInvoiceListScreen() {
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{t('common.selected', { count: selected.length })}</Text>
-            <TouchableOpacity onPress={() => setSelected(invoiceData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => setSelected(shown.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
               <Text style={s.shareCancelTxt}>{t('ledger.selectAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
@@ -418,6 +428,10 @@ const el = StyleSheet.create({
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  statusRow: {
+    paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

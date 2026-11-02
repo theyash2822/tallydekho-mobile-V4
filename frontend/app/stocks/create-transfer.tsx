@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  ScrollViewInstance,
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
   TextInput, Modal,
 } from 'react-native';
@@ -175,7 +176,7 @@ export default function CreateStockTransferScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const { company } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
