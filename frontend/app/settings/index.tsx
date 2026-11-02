@@ -65,7 +65,6 @@ const SECTIONS: Section[] = [
     icon: 'notifications-outline', iconColor: '#D97706', iconBg: '#FFFBEB',
     subItems: [
       { id: 'channels', label: 'Channels & Quiet Hours', icon: 'volume-medium-outline', route: '/settings/notification-channels' },
-      { id: 'stock_alerts', label: 'Low Stock & Expiry Alerts', icon: 'alert-circle-outline', route: '/settings/stock-alerts' },
       { id: 'compliance', label: 'Compliance Reminders', icon: 'shield-checkmark-outline', route: '/settings/compliance-reminders' },
       { id: 'payments', label: 'Payment Reminders', icon: 'card-outline', route: '/settings/payment-reminders' },
     ],
@@ -105,7 +104,6 @@ const SUBITEM_KEY: Record<string, string> = {
   voucher:      'settings.voucher',
   kpi_scroll:   'settings.kpiScroll',
   channels:     'settings.notificationChannels',
-  stock_alerts: 'settings.stockAlerts',
   compliance:   'settings.complianceReminders',
   payments:     'settings.paymentReminders',
   tally:        'settings.tallySync',

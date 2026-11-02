@@ -4,7 +4,7 @@ import { LockedScreen } from '../../src/components/LockedOverlay';
 import {
   ScrollViewInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, FlatList, Animated, Alert,
+  TextInput, Modal, Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -27,24 +27,90 @@ import { useAuth } from '../../src/context/AuthContext';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 type Channels = { email: boolean; whatsapp: boolean; sms: boolean };
+/** When a rule fires relative to the bill's due date. `days` is 0 only for 'on'. */
+type When = 'before' | 'on' | 'after';
 
-const REMINDER_PLACEHOLDER_KEYS = ['screens.settingsPaymentReminders.reminderFirst', 'screens.settingsPaymentReminders.reminderSecond', 'screens.settingsPaymentReminders.reminderThird', 'screens.settingsPaymentReminders.reminderFourth'];
+const MAX_RULES = 6;
+const REMINDER_PLACEHOLDER_KEYS = [
+  'screens.settingsPaymentReminders.reminderFirst', 'screens.settingsPaymentReminders.reminderSecond',
+  'screens.settingsPaymentReminders.reminderThird', 'screens.settingsPaymentReminders.reminderFourth',
+  'screens.settingsPaymentReminders.reminderFifth', 'screens.settingsPaymentReminders.reminderSixth',
+];
 const CHANNEL_LABEL_KEYS: Record<keyof Channels, string> = {
   email: 'screens.settingsPaymentReminders.channelEmail',
   whatsapp: 'screens.settingsPaymentReminders.channelWhatsapp',
   sms: 'screens.settingsPaymentReminders.channelSms',
 };
+const WHEN_OPTIONS: { id: When; labelKey: string }[] = [
+  { id: 'before', labelKey: 'screens.settingsPaymentReminders.whenBefore' },
+  { id: 'on',     labelKey: 'screens.settingsPaymentReminders.whenOn' },
+  { id: 'after',  labelKey: 'screens.settingsPaymentReminders.whenAfter' },
+];
 
 interface Reminder {
   id: string;
   name: string;
-  daysBefore: number;
+  when: When;
+  days: number;
   time: string;
-  onDueDate: boolean;
   enabled: boolean;
   channels: Channels;
   exceptions: string[];
   expanded: boolean;
+}
+
+/** Minutes since midnight for '10:00 AM'; rules without a time sort last within their day. */
+function timeToMinutes(t: string): number {
+  const m = String(t || '').match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+  if (!m) return 24 * 60;
+  const h = (parseInt(m[1], 10) % 12) + (m[3].toUpperCase() === 'PM' ? 12 : 0);
+  return h * 60 + parseInt(m[2], 10);
+}
+
+/** Chronological position: before (more days first), then on the due date, then after (ascending). */
+function moment(r: Reminder): number {
+  const days = Math.max(0, Number(r.days) || 0);
+  const day = r.when === 'before' ? -days : r.when === 'after' ? days : 0;
+  return day * 24 * 60 + timeToMinutes(r.time);
+}
+const sortRules = (rules: Reminder[]) => [...rules].sort((a, b) => moment(a) - moment(b));
+
+/** Accepts the server's `when`/`days` rows and the legacy `daysBefore`/`onDueDate` shape. */
+function normalizeRule(raw: any, idx: number): Reminder {
+  const when: When = raw?.when === 'on' || raw?.when === 'after' || raw?.when === 'before'
+    ? raw.when
+    : raw?.onDueDate ? 'on' : 'before';
+  const days = when === 'on' ? 0 : Math.max(1, Number(raw?.days ?? raw?.daysBefore ?? 1) || 1);
+  return {
+    id: String(raw?.id ?? `r${idx + 1}`),
+    name: String(raw?.name ?? ''),
+    when,
+    days,
+    time: String(raw?.time ?? ''),
+    enabled: raw?.enabled !== false,
+    channels: {
+      email: !!raw?.channels?.email,
+      whatsapp: !!raw?.channels?.whatsapp,
+      sms: !!raw?.channels?.sms,
+    },
+    exceptions: Array.isArray(raw?.exceptions) ? raw.exceptions.map(String) : [],
+    expanded: idx === 0,
+  };
+}
+
+/** Payload row: `when`/`days` only — the legacy `daysBefore`/`onDueDate` fields stay out. */
+function toApiRule(r: Reminder) {
+  return {
+    id: r.id,
+    name: r.name,
+    when: r.when,
+    days: r.when === 'on' ? 0 : r.days,
+    time: r.time,
+    enabled: r.enabled,
+    channels: r.channels,
+    exceptions: r.exceptions,
+    stopWhenPaid: true,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,29 +139,39 @@ const ct = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. CustomCheckbox
+// 2. WhenSegment — Before due / On due date / After due
 // ─────────────────────────────────────────────────────────────────────────────
-function CustomCheckbox({
-  value, onChange, label,
-}: { value: boolean; onChange: (v: boolean) => void; label: string }) {
+function WhenSegment({ value, onChange }: { value: When; onChange: (w: When) => void }) {
+  const { t } = useTranslation();
   return (
-    <TouchableOpacity style={cbx.row} onPress={() => onChange(!value)} activeOpacity={0.7}>
-      <View style={[cbx.box, value && cbx.boxChecked]}>
-        {value && <Ionicons name="checkmark" size={13} color={COLORS.white} />}
-      </View>
-      <Text style={cbx.label}>{label}</Text>
-    </TouchableOpacity>
+    <View style={seg.wrap}>
+      {WHEN_OPTIONS.map(opt => {
+        const active = opt.id === value;
+        return (
+          <TouchableOpacity
+            key={opt.id}
+            style={[seg.btn, active && seg.btnActive]}
+            onPress={() => onChange(opt.id)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+          >
+            <Text style={[seg.txt, active && seg.txtActive]} numberOfLines={1}>{t(opt.labelKey)}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
-const cbx = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  box: {
-    width: 22, height: 22, borderRadius: 5,
-    borderWidth: 2, borderColor: COLORS.borderStrong,
-    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+const seg = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault, padding: 3, gap: 3,
   },
-  boxChecked: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  label: { fontSize: TYPOGRAPHY.base, fontWeight: '500', color: COLORS.textPrimary, flex: 1 },
+  btn: { flex: 1, paddingVertical: 8, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
+  btnActive: { backgroundColor: COLORS.brandPrimary },
+  txt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  txtActive: { color: COLORS.white, fontWeight: '700' },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -478,8 +554,26 @@ function ReminderCard({
   const removeException = (name: string) =>
     upd({ exceptions: reminder.exceptions.filter(e => e !== name) });
 
+  // 'On due date' has no day count; switching back to before/after starts at 1 day.
+  const setWhen = (when: When) =>
+    upd({ when, days: when === 'on' ? 0 : Math.max(1, reminder.days || 1) });
+
+  const scheduleLabel =
+    reminder.when === 'on' ? t('screens.settingsPaymentReminders.whenOn')
+    : reminder.when === 'before' ? t('screens.settingsPaymentReminders.daysBeforeDue', { count: reminder.days })
+    : t('screens.settingsPaymentReminders.daysAfterDue', { count: reminder.days });
+  const channelLabels = (['whatsapp', 'email', 'sms'] as (keyof Channels)[])
+    .filter(ch => reminder.channels[ch])
+    .map(ch => t(CHANNEL_LABEL_KEYS[ch]));
+  const summary = [
+    scheduleLabel,
+    reminder.time || t('screens.settingsPaymentReminders.noTime'),
+    channelLabels.length ? channelLabels.join(', ') : t('screens.settingsPaymentReminders.noChannel'),
+  ].join(' · ');
+  const missingTime = !reminder.time;
+
   return (
-    <View style={rc.card}>
+    <View style={[rc.card, missingTime && rc.cardWarn]}>
       {/* ── Header row ── */}
       <View style={rc.hdr}>
         <Ionicons name="alarm-outline" size={16} color={COLORS.warning} />
@@ -502,42 +596,52 @@ function ReminderCard({
         </TouchableOpacity>
       </View>
 
+      {/* One-line schedule summary, e.g. "6 days before due · 10:00 AM · WhatsApp" */}
+      <Text style={[rc.summary, missingTime && rc.summaryWarn]} numberOfLines={1}>{summary}</Text>
+
       {/* ── Body (collapsible) ── */}
       {reminder.expanded && (
         <View style={rc.body}>
           <View style={rc.divider} />
 
-          {/* Day + Time row */}
-          <View style={rc.dayTimeRow}>
-            {/* Day stepper */}
-            <View style={rc.halfBox}>
-              <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.day')}</Text>
-              <View style={rc.stepper}>
-                <TouchableOpacity
-                  style={rc.stepBtn}
-                  onPress={() => upd({ daysBefore: Math.max(0, reminder.daysBefore - 1) })}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="remove" size={16} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-                <Text style={rc.stepVal}>{reminder.daysBefore}</Text>
-                <TouchableOpacity
-                  style={rc.stepBtn}
-                  onPress={() => upd({ daysBefore: reminder.daysBefore + 1 })}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add" size={16} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-              </View>
-            </View>
+          {/* When: Before due / On due date / After due */}
+          <Text style={[rc.fieldLabel, { marginTop: 12 }]}>{t('screens.settingsPaymentReminders.when')}</Text>
+          <WhenSegment value={reminder.when} onChange={setWhen} />
 
-            <View style={{ width: 12 }} />
+          {/* Days + Time row */}
+          <View style={rc.dayTimeRow}>
+            {reminder.when !== 'on' && (
+              <>
+                {/* Days stepper (hidden for On due date) */}
+                <View style={rc.halfBox}>
+                  <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.days')}</Text>
+                  <View style={rc.stepper}>
+                    <TouchableOpacity
+                      style={rc.stepBtn}
+                      onPress={() => upd({ days: Math.max(1, reminder.days - 1) })}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="remove" size={16} color={COLORS.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={rc.stepVal}>{reminder.days}</Text>
+                    <TouchableOpacity
+                      style={rc.stepBtn}
+                      onPress={() => upd({ days: reminder.days + 1 })}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={16} color={COLORS.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={{ width: 12 }} />
+              </>
+            )}
 
             {/* Time picker field */}
             <View style={rc.halfBox}>
               <Text style={rc.fieldLabel}>{t('screens.settingsPaymentReminders.time')}</Text>
               <TouchableOpacity
-                style={rc.timeField}
+                style={[rc.timeField, missingTime && rc.timeFieldWarn]}
                 onPress={() => setShowTimePicker(true)}
                 activeOpacity={0.7}
               >
@@ -545,16 +649,11 @@ function ReminderCard({
                 <Text style={rc.timeFieldTxt}>{reminder.time || '—'}</Text>
                 <Ionicons name="chevron-down" size={12} color={COLORS.textTertiary} />
               </TouchableOpacity>
+              {missingTime && (
+                <Text style={rc.hint}>{t('screens.settingsPaymentReminders.timeRequired')}</Text>
+              )}
             </View>
           </View>
-
-          {/* On Due Date checkbox */}
-          <View style={[rc.divider, { marginVertical: 12 }]} />
-          <CustomCheckbox
-            value={reminder.onDueDate}
-            onChange={v => upd({ onDueDate: v })}
-            label={t('screens.settingsPaymentReminders.onDueDate')}
-          />
 
           {/* Channels */}
           <View style={[rc.divider, { marginVertical: 12 }]} />
@@ -652,6 +751,14 @@ const rc = StyleSheet.create({
     outlineStyle: 'none',
   } as any,
   collapseBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  cardWarn: { borderColor: COLORS.warning },
+  summary: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500',
+    paddingHorizontal: SPACING.md, paddingBottom: 12, marginTop: -4,
+  },
+  summaryWarn: { color: COLORS.warning },
+  hint: { fontSize: TYPOGRAPHY.xs, color: COLORS.warning, fontWeight: '600', marginTop: 6 },
+  timeFieldWarn: { borderColor: COLORS.warning },
   body:    { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
   divider: { height: 1, backgroundColor: COLORS.borderDefault },
 
@@ -660,8 +767,8 @@ const rc = StyleSheet.create({
     color: COLORS.textSecondary, marginBottom: 8,
   },
 
-  // Day + Time side by side
-  dayTimeRow: { flexDirection: 'row', marginTop: 12 },
+  // Days + Time side by side
+  dayTimeRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 12 },
   halfBox:    { flex: 1 },
   stepper:    {
     flexDirection: 'row', alignItems: 'center',
@@ -722,14 +829,14 @@ const rc = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULT_REMINDERS: Reminder[] = [
   {
-    id: 'r1', name: 'First Reminder', daysBefore: 3, time: '10:00 AM',
-    onDueDate: false, enabled: true,
+    id: 'r1', name: 'First Reminder', when: 'before', days: 3, time: '10:00 AM',
+    enabled: true,
     channels: { email: false, whatsapp: true, sms: false },
     exceptions: [], expanded: true,
   },
   {
-    id: 'r2', name: 'Due Date Alert', daysBefore: 0, time: '09:00 AM',
-    onDueDate: true, enabled: true,
+    id: 'r2', name: 'Due Date Alert', when: 'on', days: 0, time: '09:00 AM',
+    enabled: true,
     channels: { email: true, whatsapp: false, sms: false },
     exceptions: [], expanded: false,
   },
@@ -744,48 +851,71 @@ function PaymentRemindersScreenContent() {
   const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
   const [templateName, setTemplateName] = useState('payment reminder');
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
-  const [testSending, setTestSending] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Load reminder settings from backend
+  // Load reminder settings from backend (rows arrive sorted; sort again in case of legacy rows)
   React.useEffect(() => {
     getAlertSettings().then((res: any) => {
       if (res?.data?.payment_reminders) {
         const d = res.data.payment_reminders;
         if (d.threshold) setThreshold(String(d.threshold));
-        if (d.reminders) setReminders(d.reminders);
+        if (Array.isArray(d.reminders)) {
+          const rules = sortRules(d.reminders.map(normalizeRule));
+          setReminders(rules);
+          nextId = rules.length + 1;
+        }
         if (d.template_name) setTemplateName(d.template_name);
         if (d.whatsapp_enabled !== undefined) setWhatsappEnabled(d.whatsapp_enabled);
       }
     }).catch(() => {});
   }, []);
 
-  const saveToBackend = async () => {
-    try {
-      await updateAlertSettings({ payment_reminders: { threshold: parseFloat(threshold)||0, reminders, template_name: templateName, whatsapp_enabled: whatsappEnabled } });
-    } catch {}
-  };
-
-  const sendTestReminder = async () => {
-    setTestSending(true);
-    try {
-      Alert.alert(
-        t('screens.settingsPaymentReminders.testTitle'),
-        t('screens.settingsPaymentReminders.testMsg'),
-        [{ text: t('screens.settingsPaymentReminders.gotIt') }]
-      );
-    } finally { setTestSending(false); }
-  };
-
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const partySheetRef = useRef<PartySelectorHandle>(null);
   const [partyPickerReminderId, setPartyPickerReminderId] = useState<string | null>(null);
 
-  const updateReminder = (updated: Reminder) =>
-    setReminders(prev => prev.map(r => r.id === updated.id ? updated : r));
+  // Every edit re-sorts so the list always reads top-to-bottom in time order.
+  const updateReminder = (updated: Reminder) => {
+    setReminders(prev => sortRules(prev.map(r => r.id === updated.id ? updated : r)));
+    markDirty();
+  };
 
-  const removeReminder = (id: string) =>
+  const removeReminder = (id: string) => {
     setReminders(prev => prev.filter(r => r.id !== id));
+    markDirty();
+  };
+
+  const missingTime = reminders.some(r => !r.time);
+
+  const save = async () => {
+    if (saving) return;
+    if (missingTime) {
+      // Open the first rule without a time so the inline hint is in view.
+      const firstMissing = reminders.find(r => !r.time);
+      setReminders(prev => prev.map(r => r.id === firstMissing?.id ? { ...r, expanded: true } : r));
+      Toast.show({ type: 'error', text1: t('screens.settingsPaymentReminders.timeRequiredTitle'), text2: t('screens.settingsPaymentReminders.timeRequired') });
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateAlertSettings({
+        payment_reminders: {
+          threshold: parseFloat(threshold) || 0,
+          reminders: reminders.map(toApiRule),
+          template_name: templateName,
+          whatsapp_enabled: whatsappEnabled,
+        },
+      });
+      setIsDirty(false);
+      Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsPaymentReminders.savedMsg') });
+    } catch (e: any) {
+      // The server's 400 (VALIDATION_ERROR) message names the rule and the problem.
+      Toast.show({ type: 'error', text1: t('screens.settingsPaymentReminders.saveFailed'), text2: e?.message || t('common.error'), visibilityTime: 5000 });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const openPartyPicker = useCallback((reminderId: string, current: string[]) => {
     setPartyPickerReminderId(reminderId);
@@ -802,22 +932,20 @@ function PaymentRemindersScreenContent() {
   }, [partyPickerReminderId]);
 
   const addReminder = () => {
-    if (reminders.length >= 4) return;
-    const ordinals = ['First', 'Second', 'Third', 'Fourth'];
-    setReminders(prev => [
-      ...prev,
-      {
-        id: `r${nextId++}`,
-        name: `${ordinals[prev.length]} Reminder`,
-        daysBefore: 0, time: '',
-        onDueDate: false, enabled: false,
-        channels: { email: false, whatsapp: false, sms: false },
-        exceptions: [], expanded: true,
-      },
-    ]);
+    if (reminders.length >= MAX_RULES) return;
+    const placeholderKey = REMINDER_PLACEHOLDER_KEYS[reminders.length];
+    // A new rule has no time yet: it sorts last for its day and Save asks for a time.
+    const rule: Reminder = {
+      id: `r${nextId++}`,
+      name: placeholderKey ? t(placeholderKey) : '',
+      when: 'before', days: 1, time: '',
+      enabled: false,
+      channels: { email: false, whatsapp: false, sms: false },
+      exceptions: [], expanded: true,
+    };
+    setReminders(prev => sortRules([...prev, rule]));
+    markDirty();
   };
-
-  const save = () => { saveToBackend(); Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsPaymentReminders.savedMsg') }); };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -829,10 +957,13 @@ function PaymentRemindersScreenContent() {
         <Text style={s.title}>{t('settings.paymentReminders')}</Text>
         <TouchableOpacity
           onPress={() => safePush(router, '/settings/sent-reminders' as any)}
-          style={s.back}
-          accessibilityLabel={t('screens.settingsPaymentReminders.sentReminders')}
+          style={s.historyBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('screens.settingsPaymentReminders.history')}
         >
-          <Ionicons name="time-outline" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="time-outline" size={15} color={COLORS.brandPrimary} />
+          <Text style={s.historyTxt}>{t('screens.settingsPaymentReminders.history')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -860,9 +991,13 @@ function PaymentRemindersScreenContent() {
               selectionColor={COLORS.brandPrimary}
             />
           </View>
+          <View style={s.infoRow}>
+            <Ionicons name="information-circle-outline" size={14} color={COLORS.textTertiary} />
+            <Text style={s.infoTxt}>{t('screens.settingsPaymentReminders.stopWhenPaidInfo')}</Text>
+          </View>
         </View>
 
-        {/* ── List of Reminders ────────────────────────────────── */}
+        {/* ── List of Reminders (chronological) ────────────────── */}
         <Text style={s.sectionLabel}>{t('screens.settingsPaymentReminders.listTitle')}</Text>
         {reminders.map((r, idx) => (
           <ReminderCard
@@ -871,29 +1006,37 @@ function PaymentRemindersScreenContent() {
             index={idx}
             onUpdate={updateReminder}
             onRemove={() => removeReminder(r.id)}
-            canRemove={idx > 0}
+            canRemove={reminders.length > 1}
             onOpenPartyPicker={(current) => openPartyPicker(r.id, current)}
           />
         ))}
 
         {/* ── Add Reminder button ───────────────────────────────── */}
-        {reminders.length < 4 && (
+        {reminders.length < MAX_RULES && (
           <TouchableOpacity style={s.addBtn} onPress={addReminder} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={20} color={COLORS.brandPrimary} />
             <Text style={s.addBtnTxt}>{t('screens.settingsPaymentReminders.addReminder')}</Text>
-            <Text style={s.addBtnCap}>{reminders.length}/4</Text>
+            <Text style={s.addBtnCap}>{reminders.length}/{MAX_RULES}</Text>
           </TouchableOpacity>
         )}
 
-        {reminders.length >= 4 && (
+        {reminders.length >= MAX_RULES && (
           <View style={s.maxReached}>
             <Ionicons name="information-circle-outline" size={16} color={COLORS.textTertiary} />
-            <Text style={s.maxReachedTxt}>{t('screens.settingsPaymentReminders.maxReached')}</Text>
+            <Text style={s.maxReachedTxt}>{t('screens.settingsPaymentReminders.maxReached', { max: MAX_RULES })}</Text>
           </View>
         )}
 
         {/* ── Save ─────────────────────────────────────────────── */}
-        <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.8}>
+        {missingTime && (
+          <Text style={s.saveHint}>{t('screens.settingsPaymentReminders.timeRequiredAll')}</Text>
+        )}
+        <TouchableOpacity
+          style={[s.saveBtn, (saving || missingTime || !isDirty) && { opacity: 0.6 }]}
+          onPress={save}
+          disabled={saving}
+          activeOpacity={0.8}
+        >
           <Text style={s.saveTxt}>{t('screens.settingsPaymentReminders.saveSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -920,7 +1063,17 @@ const s = StyleSheet.create({
   },
   back:  { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  // "History" tab-style pill (opens Reminder History)
+  historyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.brandPrimary + '14', marginRight: 4,
+  },
+  historyTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
   scroll:{ padding: SPACING.md, paddingBottom: 40 },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: SPACING.sm },
+  infoTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16 },
+  saveHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.warning, fontWeight: '600', textAlign: 'center', marginTop: SPACING.sm },
 
   // Threshold card
   card:     { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },

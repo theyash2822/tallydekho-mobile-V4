@@ -110,8 +110,11 @@ export default function NotificationsScreen() {
   const onRefresh = () => { setRefreshing(true); setReloadKey(k => k + 1); };
 
   const markRead = useCallback((id: string) => {
+    // Optimistic: flip to read now; put it back to unread only if the server refused.
     setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
-    markNotificationRead(id).catch(() => {});
+    markNotificationRead(id).catch(() => {
+      setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: false } : n));
+    });
   }, []);
 
   const markAllRead = useCallback(() => {

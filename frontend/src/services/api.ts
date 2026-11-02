@@ -767,7 +767,8 @@ export const getGSTReport        = (companyGuid?: string, from?: string, to?: st
 // ══════════════════════════════════════════════════════════════
 
 export const getNotifications       = (companyGuid?: string) => get<any>(withCompany('/notifications', companyGuid));
-export const markNotificationRead   = (id: string) => patch<any>(`/notifications/${id}/read`, {});
+// Notification ids carry percent-encoded characters, so the id must be encoded in the path.
+export const markNotificationRead   = (id: string) => patch<any>(`/notifications/${encodeURIComponent(id)}/read`, {});
 export const markAllNotificationsRead = (companyGuid?: string) => patch<any>(withCompany('/notifications/read-all', companyGuid), {});
 
 // ══════════════════════════════════════════════════════════════
@@ -1141,16 +1142,6 @@ export const unpairWorkspaceTally = (workspaceId: string) =>
 export const getSeatPlan = (workspaceId: string) => get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/seat-plan`);
 export const getBillingNotices = () => get<any>('/billing/notices');
 export const getCreditHistory = (limit = 5) => get<any>(`/billing/history?limit=${limit}`);
-
-// One-off Owner approvals (RBC-04)
-export const createVoucherRequest = (body: { companyGuid?: string; voucherGuid: string; reason?: string }) =>
-  post<any>('/voucher-requests', body);
-export const getVoucherRequests = (status?: string) =>
-  get<any>(`/voucher-requests${status ? `?status=${encodeURIComponent(status)}` : ''}`);
-export const approveVoucherRequest = (id: string, body: { allowExport?: boolean; ledgerGuid?: string } = {}) =>
-  post<any>(`/voucher-requests/${encodeURIComponent(id)}/approve`, body);
-export const rejectVoucherRequest = (id: string) =>
-  post<any>(`/voucher-requests/${encodeURIComponent(id)}/reject`, {});
 
 export const getWorkspaceApprovals = (workspaceId: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/approvals`);

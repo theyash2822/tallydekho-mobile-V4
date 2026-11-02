@@ -41,7 +41,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({
   companyName = 'YK Industries Pvt. Ltd.',
   fyYear = 'FY 2025-26',
-  notificationCount = 1,
+  notificationCount = 0,
   lastSyncTime,
   userName = 'Ashish Agarwal',
   onNotificationPress,

@@ -469,14 +469,18 @@ export default function HomeScreen() {
     }).catch(() => {});
   }, [dataReady, lastSyncAt]);
 
-  // ── Fetch real notification count ─────────────────────────────
-  useEffect(() => {
+  // ── Fetch the unread notification count (bell badge) ───────────
+  // Re-run on focus so coming back from the notifications screen drops the badge.
+  const loadNotifCount = useCallback(() => {
     if (!dataReady || !companyGuid) return;
     getNotifications(companyGuid).then((res: any) => {
       const notifs = res?.data ?? res ?? [];
-      setNotifCount(Array.isArray(notifs) ? notifs.length : 0);
+      setNotifCount(Array.isArray(notifs) ? notifs.filter((n: any) => !n?.read).length : 0);
     }).catch(() => {});
   }, [dataReady, companyGuid]);
+
+  useEffect(() => { loadNotifCount(); }, [loadNotifCount]);
+  useFocusEffect(useCallback(() => { loadNotifCount(); }, [loadNotifCount]));
 
   const onRefresh = async () => {
     // PTR: native RefreshControl spinner only — soft load, no full-page shimmer

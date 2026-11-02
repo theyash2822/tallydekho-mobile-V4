@@ -1126,14 +1126,10 @@
       "email": "ઇમેઇલ",
       "emailSub": "ઇમેઇલ દ્વારા સૂચના મેળવો",
       "whatsappSub": "WhatsApp પર એલર્ટ",
-      "sms": "SMS",
-      "smsSub": "ટેક્સ્ટ મેસેજ એલર્ટ",
       "push": "પુશ નોટિફિકેશન",
       "pushSub": "ઇન-એપ પુશ એલર્ટ",
       "settingsUpdated": "નોટિફિકેશન સેટિંગ્સ અપડેટ થઈ.",
       "couldNotSave": "સેટિંગ્સ સાચવી શકાઈ નહીં.",
-      "settingsSaved": "સેટિંગ્સ સાચવી",
-      "prefsUpdated": "નોટિફિકેશન પસંદગીઓ અપડેટ થઈ.",
       "notificationChannels": "નોટિફિકેશન ચેનલ",
       "quietHours": "શાંત કલાકો",
       "startTime": "શરૂઆતનો સમય",
@@ -1577,13 +1573,9 @@
       "notApplicableTo": "{{label}} ને લાગુ પડતું નથી"
     },
     "settingsSentReminders": {
-      "loadFailed": "મોકલેલાં રિમાઇન્ડર લોડ થઈ શક્યાં નહીં",
       "dueOn": " · નિયત {{date}}",
       "failed": "નિષ્ફળ",
-      "sent": "મોકલ્યું",
-      "title": "મોકલેલાં રિમાઇન્ડર",
-      "emptyTitle": "હજી કોઈ રિમાઇન્ડર મોકલ્યું નથી",
-      "emptySubtitle": "તમારા ગ્રાહકોને મોકલાતા આપોઆપ ચુકવણી રિમાઇન્ડર અહીં દેખાશે."
+      "sent": "મોકલ્યું"
     },
     "componentsDocumentVoucherPreviewScreen": {
       "missingReference": "દસ્તાવેજ સંદર્ભ ખૂટે છે",
@@ -1717,12 +1709,7 @@
       "noDesktop": "આ વર્કસ્પેસ સાથે હાલમાં કોઈ ડેસ્કટોપ જોડાયેલ નથી.",
       "companies": "કંપનીઓ (દરેક ફોલ્ડરના બધા વર્ષ)",
       "noBackups": "હજી કોઈ ક્લાઉડ બેકઅપ નથી. જોડાયેલા ડેસ્કટોપ પર Backup Now ચલાવો.",
-      "restoreRejected": "રિસ્ટોર વિનંતી નકારી.",
-      "voucherRequests": "વાઉચર વિનંતીઓ",
-      "noVoucherRequests": "કોઈ વાઉચર વિનંતી બાકી નથી.",
-      "openOneVoucher": "એક વાઉચર ખોલો",
-      "createOneEntry": "એક એન્ટ્રી બનાવો",
-      "chooseLedgerOnWeb": "વેબ પોર્ટલ પર લેજર પસંદ કરીને મંજૂર કરો (સેટિંગ્સ → વિનંતીઓ)."
+      "restoreRejected": "રિસ્ટોર વિનંતી નકારી."
     },
     "componentsFormsEinvoiceQrPreviewSheet": {
       "replaceInvNo": "વેન્ડર ઇન્વૉઇસ નં. \"{{value}}\"",
@@ -2924,32 +2911,23 @@
       "reminderThird": "ત્રીજું રિમાઇન્ડર",
       "reminderFourth": "ચોથું રિમાઇન્ડર",
       "channelEmail": "ઇમેઇલ",
-      "channelWhatsapp": "WhatsApp",
-      "channelSms": "SMS",
       "selectParties": "અપવાદ પાર્ટીઓ પસંદ કરો",
       "searchParties": "પાર્ટીઓ શોધો…",
       "loadingParties": "પાર્ટીઓ લોડ થઈ રહી છે…",
       "noPartiesFor": "\"{{search}}\" માટે કોઈ પાર્ટી નથી",
       "noParties": "કોઈ પાર્ટી મળી નથી",
       "doneCount": "થઈ ગયું ({{n}})",
-      "day": "દિવસ",
       "time": "સમય",
-      "onDueDate": "નિયત તારીખે",
       "channels": "ચેનલ",
       "exceptionsCount": "અપવાદ સૂચિ ({{n}})",
       "exceptions": "અપવાદ સૂચિ",
       "removeReminder": "રિમાઇન્ડર દૂર કરો",
       "selectSendTime": "મોકલવાનો સમય પસંદ કરો",
-      "testTitle": "ટેસ્ટ રિમાઇન્ડર",
-      "testMsg": "ટેસ્ટ કરવા, ફોન નંબરવાળા કોઈપણ લેજર પર જાઓ અને લીલું WhatsApp \"Remind\" બટન ટેપ કરો. રિમાઇન્ડર તમારા ગોઠવેલા ટેમ્પલેટથી મોકલાશે.",
-      "gotIt": "સમજાઈ ગયું",
       "savedMsg": "ચુકવણી રિમાઇન્ડર સેટિંગ્સ અપડેટ થઈ.",
-      "sentReminders": "મોકલેલાં રિમાઇન્ડર",
       "threshold": "મર્યાદા",
       "thresholdSub": "આનાથી ઓછી રકમના ઇન્વૉઇસ માટે રિમાઇન્ડર ન મોકલો",
       "listTitle": "રિમાઇન્ડરની સૂચિ",
       "addReminder": "રિમાઇન્ડર ઉમેરો",
-      "maxReached": "મહત્તમ 4 રિમાઇન્ડર થઈ ગયાં",
       "saveSettings": "સેટિંગ્સ સાચવો"
     },
     "purchaseCreateDebitNote": {
@@ -4788,10 +4766,6 @@
     },
     "ledgerRestricted": {
       "title": "પ્રતિબંધિત વાઉચર",
-      "body": "આ વાઉચરની બીજી બાજુ તમારી ઍક્સેસની બહાર છે. તમે વર્કસ્પેસ માલિક પાસે આ એક વાઉચર એક કલાક માટે ખોલવાની પરવાનગી માગી શકો છો.",
-      "ask": "માલિકને પૂછો",
-      "sentTitle": "વિનંતી મોકલાઈ",
-      "sentBody": "વર્કસ્પેસ માલિક પાસે નિર્ણય માટે 30 મિનિટ છે. મંજૂર થાય તો તમે આ વાઉચર એક કલાક ખોલી શકશો.",
       "line": "પ્રતિબંધિત ખાતું"
     }
   }

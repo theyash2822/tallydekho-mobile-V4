@@ -1126,14 +1126,10 @@
       "email": "ਈਮੇਲ",
       "emailSub": "ਈਮੇਲ ਰਾਹੀਂ ਸੂਚਨਾ ਪ੍ਰਾਪਤ ਕਰੋ",
       "whatsappSub": "WhatsApp 'ਤੇ ਅਲਰਟ",
-      "sms": "SMS",
-      "smsSub": "ਟੈਕਸਟ ਮੈਸੇਜ ਅਲਰਟ",
       "push": "ਪੁਸ਼ ਸੂਚਨਾ",
       "pushSub": "ਐਪ ਵਿੱਚ ਪੁਸ਼ ਅਲਰਟ",
       "settingsUpdated": "ਸੂਚਨਾ ਸੈਟਿੰਗਾਂ ਅੱਪਡੇਟ ਹੋਈਆਂ।",
       "couldNotSave": "ਸੈਟਿੰਗਾਂ ਸੇਵ ਨਹੀਂ ਹੋ ਸਕੀਆਂ।",
-      "settingsSaved": "ਸੈਟਿੰਗਾਂ ਸੇਵ ਹੋਈਆਂ",
-      "prefsUpdated": "ਸੂਚਨਾ ਤਰਜੀਹਾਂ ਅੱਪਡੇਟ ਹੋਈਆਂ।",
       "notificationChannels": "ਸੂਚਨਾ ਚੈਨਲ",
       "quietHours": "ਸ਼ਾਂਤ ਸਮਾਂ",
       "startTime": "ਸ਼ੁਰੂ ਸਮਾਂ",
@@ -1577,13 +1573,9 @@
       "notApplicableTo": "{{label}} 'ਤੇ ਲਾਗੂ ਨਹੀਂ"
     },
     "settingsSentReminders": {
-      "loadFailed": "ਭੇਜੇ ਗਏ ਰਿਮਾਈਂਡਰ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ",
       "dueOn": " · ਨਿਯਤ ਮਿਤੀ {{date}}",
       "failed": "ਅਸਫਲ",
-      "sent": "ਭੇਜਿਆ",
-      "title": "ਭੇਜੇ ਗਏ ਰਿਮਾਈਂਡਰ",
-      "emptyTitle": "ਹਾਲੇ ਕੋਈ ਰਿਮਾਈਂਡਰ ਨਹੀਂ ਭੇਜਿਆ",
-      "emptySubtitle": "ਤੁਹਾਡੇ ਗਾਹਕਾਂ ਨੂੰ ਆਟੋਮੈਟਿਕ ਭੁਗਤਾਨ ਰਿਮਾਈਂਡਰ ਇੱਥੇ ਦਿਖਾਈ ਦੇਣਗੇ।"
+      "sent": "ਭੇਜਿਆ"
     },
     "componentsDocumentVoucherPreviewScreen": {
       "missingReference": "ਦਸਤਾਵੇਜ਼ ਹਵਾਲਾ ਗੁੰਮ ਹੈ",
@@ -1717,12 +1709,7 @@
       "noDesktop": "ਇਸ ਵਰਕਸਪੇਸ ਨਾਲ ਹੁਣ ਕੋਈ ਡੈਸਕਟਾਪ ਜੁੜਿਆ ਨਹੀਂ ਹੈ।",
       "companies": "ਕੰਪਨੀਆਂ (ਹਰ ਫੋਲਡਰ ਦੇ ਸਾਰੇ ਸਾਲ)",
       "noBackups": "ਅਜੇ ਕੋਈ ਕਲਾਊਡ ਬੈਕਅੱਪ ਨਹੀਂ ਹੈ। ਜੁੜੇ ਡੈਸਕਟਾਪ 'ਤੇ Backup Now ਚਲਾਓ।",
-      "restoreRejected": "ਰੀਸਟੋਰ ਬੇਨਤੀ ਰੱਦ ਕੀਤੀ ਗਈ।",
-      "voucherRequests": "ਵਾਊਚਰ ਬੇਨਤੀਆਂ",
-      "noVoucherRequests": "ਕੋਈ ਵਾਊਚਰ ਬੇਨਤੀ ਬਾਕੀ ਨਹੀਂ।",
-      "openOneVoucher": "ਇੱਕ ਵਾਊਚਰ ਖੋਲ੍ਹੋ",
-      "createOneEntry": "ਇੱਕ ਐਂਟਰੀ ਬਣਾਓ",
-      "chooseLedgerOnWeb": "ਵੈੱਬ ਪੋਰਟਲ 'ਤੇ ਲੇਜਰ ਚੁਣ ਕੇ ਮਨਜ਼ੂਰ ਕਰੋ (ਸੈਟਿੰਗਾਂ → ਬੇਨਤੀਆਂ)।"
+      "restoreRejected": "ਰੀਸਟੋਰ ਬੇਨਤੀ ਰੱਦ ਕੀਤੀ ਗਈ।"
     },
     "componentsFormsEinvoiceQrPreviewSheet": {
       "replaceInvNo": "ਵਿਕਰੇਤਾ ਇਨਵੌਇਸ ਨੰ. \"{{value}}\"",
@@ -2924,32 +2911,23 @@
       "reminderThird": "ਤੀਜਾ ਰਿਮਾਈਂਡਰ",
       "reminderFourth": "ਚੌਥਾ ਰਿਮਾਈਂਡਰ",
       "channelEmail": "ਈਮੇਲ",
-      "channelWhatsapp": "WhatsApp",
-      "channelSms": "SMS",
       "selectParties": "ਅਪਵਾਦ ਪਾਰਟੀਆਂ ਚੁਣੋ",
       "searchParties": "ਪਾਰਟੀਆਂ ਖੋਜੋ…",
       "loadingParties": "ਪਾਰਟੀਆਂ ਲੋਡ ਹੋ ਰਹੀਆਂ ਹਨ…",
       "noPartiesFor": "\"{{search}}\" ਲਈ ਕੋਈ ਪਾਰਟੀ ਨਹੀਂ",
       "noParties": "ਕੋਈ ਪਾਰਟੀ ਨਹੀਂ ਮਿਲੀ",
       "doneCount": "ਹੋ ਗਿਆ ({{n}})",
-      "day": "ਦਿਨ",
       "time": "ਸਮਾਂ",
-      "onDueDate": "ਨਿਯਤ ਮਿਤੀ 'ਤੇ",
       "channels": "ਚੈਨਲ",
       "exceptionsCount": "ਅਪਵਾਦ ਸੂਚੀ ({{n}})",
       "exceptions": "ਅਪਵਾਦ ਸੂਚੀ",
       "removeReminder": "ਰਿਮਾਈਂਡਰ ਹਟਾਓ",
       "selectSendTime": "ਭੇਜਣ ਦਾ ਸਮਾਂ ਚੁਣੋ",
-      "testTitle": "ਟੈਸਟ ਰਿਮਾਈਂਡਰ",
-      "testMsg": "ਟੈਸਟ ਕਰਨ ਲਈ, ਫ਼ੋਨ ਨੰਬਰ ਵਾਲੇ ਕਿਸੇ ਵੀ ਲੇਜਰ 'ਤੇ ਜਾਓ ਅਤੇ ਹਰੇ WhatsApp \"ਯਾਦ ਕਰਾਓ\" ਬਟਨ 'ਤੇ ਟੈਪ ਕਰੋ। ਰਿਮਾਈਂਡਰ ਤੁਹਾਡੇ ਸੈੱਟ ਕੀਤੇ ਟੈਂਪਲੇਟ ਨਾਲ ਭੇਜਿਆ ਜਾਵੇਗਾ।",
-      "gotIt": "ਸਮਝ ਗਿਆ",
       "savedMsg": "ਭੁਗਤਾਨ ਰਿਮਾਈਂਡਰ ਸੈਟਿੰਗਾਂ ਅੱਪਡੇਟ ਹੋਈਆਂ।",
-      "sentReminders": "ਭੇਜੇ ਗਏ ਰਿਮਾਈਂਡਰ",
       "threshold": "ਸੀਮਾ",
       "thresholdSub": "ਇਸ ਤੋਂ ਘੱਟ ਦੇ ਇਨਵੌਇਸਾਂ ਲਈ ਰਿਮਾਈਂਡਰ ਨਾ ਭੇਜੋ",
       "listTitle": "ਰਿਮਾਈਂਡਰਾਂ ਦੀ ਸੂਚੀ",
       "addReminder": "ਰਿਮਾਈਂਡਰ ਜੋੜੋ",
-      "maxReached": "ਵੱਧ ਤੋਂ ਵੱਧ 4 ਰਿਮਾਈਂਡਰ ਪੂਰੇ ਹੋ ਗਏ",
       "saveSettings": "ਸੈਟਿੰਗਾਂ ਸੇਵ ਕਰੋ"
     },
     "purchaseCreateDebitNote": {
@@ -4788,10 +4766,6 @@
     },
     "ledgerRestricted": {
       "title": "ਪਾਬੰਦੀਸ਼ੁਦਾ ਵਾਊਚਰ",
-      "body": "ਇਸ ਵਾਊਚਰ ਦਾ ਦੂਜਾ ਪੱਖ ਤੁਹਾਡੀ ਪਹੁੰਚ ਤੋਂ ਬਾਹਰ ਹੈ। ਤੁਸੀਂ ਵਰਕਸਪੇਸ ਮਾਲਕ ਤੋਂ ਇਹ ਇੱਕ ਵਾਊਚਰ ਇੱਕ ਘੰਟੇ ਲਈ ਖੋਲ੍ਹਣ ਦੀ ਇਜਾਜ਼ਤ ਮੰਗ ਸਕਦੇ ਹੋ।",
-      "ask": "ਮਾਲਕ ਨੂੰ ਪੁੱਛੋ",
-      "sentTitle": "ਬੇਨਤੀ ਭੇਜੀ ਗਈ",
-      "sentBody": "ਫ਼ੈਸਲੇ ਲਈ ਵਰਕਸਪੇਸ ਮਾਲਕ ਕੋਲ 30 ਮਿੰਟ ਹਨ। ਮਨਜ਼ੂਰ ਹੋਣ 'ਤੇ ਤੁਸੀਂ ਇਹ ਵਾਊਚਰ ਇੱਕ ਘੰਟੇ ਲਈ ਖੋਲ੍ਹ ਸਕਦੇ ਹੋ।",
       "line": "ਪਾਬੰਦੀਸ਼ੁਦਾ ਖਾਤਾ"
     }
   }

@@ -18,8 +18,7 @@ import { shareStatementPdf } from '../../src/utils/voucherPdf';
 import { shareVouchersAsMultiPagePdf } from '../../src/utils/multiShare';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
-import { getLedgerDetail, getLedgerStatement, sendPaymentReminder, createVoucherRequest } from '../../src/services/api';
-import { toastRbasError } from '../../src/utils/rbasErrors';
+import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -735,18 +734,8 @@ export default function LedgerDetailScreen() {
                           // The other side of this voucher is outside the member's access.
                           Alert.alert(
                             t('screens.ledgerRestricted.title'),
-                            t('screens.ledgerRestricted.body'),
-                            [
-                              { text: t('common.cancel'), style: 'cancel' },
-                              {
-                                text: t('screens.ledgerRestricted.ask'),
-                                onPress: () => {
-                                  createVoucherRequest({ companyGuid, voucherGuid: txn.guid })
-                                    .then(() => Alert.alert(t('screens.ledgerRestricted.sentTitle'), t('screens.ledgerRestricted.sentBody')))
-                                    .catch((e: any) => toastRbasError(e) || Alert.alert(t('common.error'), String(e?.message || '')));
-                                },
-                              },
-                            ],
+                            t('screens.ledgerRestricted.bodyPlain'),
+                            [{ text: t('common.ok') }],
                           );
                         } else {
                           openVoucherPreview(router, { guid: txn.guid, docType: TX_TO_DOC_TYPE[txn.type] });

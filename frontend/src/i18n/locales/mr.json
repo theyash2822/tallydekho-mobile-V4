@@ -1126,14 +1126,10 @@
       "email": "ईमेल",
       "emailSub": "ईमेलद्वारे सूचना मिळवा",
       "whatsappSub": "WhatsApp वर अलर्ट",
-      "sms": "SMS",
-      "smsSub": "मजकूर संदेश अलर्ट",
       "push": "पुश सूचना",
       "pushSub": "अ‍ॅपमधील पुश अलर्ट",
       "settingsUpdated": "सूचना सेटिंग्ज अपडेट झाल्या.",
       "couldNotSave": "सेटिंग्ज सेव्ह करता आल्या नाहीत.",
-      "settingsSaved": "सेटिंग्ज सेव्ह झाल्या",
-      "prefsUpdated": "सूचना प्राधान्ये अपडेट झाली.",
       "notificationChannels": "सूचना माध्यमे",
       "quietHours": "शांत वेळ",
       "startTime": "सुरुवातीची वेळ",
@@ -1577,13 +1573,9 @@
       "notApplicableTo": "{{label}} साठी लागू नाही"
     },
     "settingsSentReminders": {
-      "loadFailed": "पाठवलेली स्मरणपत्रे लोड करता आली नाहीत",
       "dueOn": " · देय {{date}}",
       "failed": "अयशस्वी",
-      "sent": "पाठवले",
-      "title": "पाठवलेली स्मरणपत्रे",
-      "emptyTitle": "अजून कोणतेही स्मरणपत्र पाठवलेले नाही",
-      "emptySubtitle": "तुमच्या ग्राहकांना पाठवलेली स्वयंचलित पेमेंट स्मरणपत्रे येथे दिसतील."
+      "sent": "पाठवले"
     },
     "componentsDocumentVoucherPreviewScreen": {
       "missingReference": "दस्तऐवज संदर्भ नाही",
@@ -1717,12 +1709,7 @@
       "noDesktop": "या वर्कस्पेसशी सध्या कोणताही डेस्कटॉप जोडलेला नाही.",
       "companies": "कंपन्या (प्रत्येक फोल्डरमधील सर्व वर्षे)",
       "noBackups": "अजून कोणताही क्लाउड बॅकअप नाही. जोडलेल्या डेस्कटॉपवर Backup Now चालवा.",
-      "restoreRejected": "रिस्टोअर विनंती नाकारली.",
-      "voucherRequests": "व्हाउचर विनंत्या",
-      "noVoucherRequests": "कोणतीही व्हाउचर विनंती प्रलंबित नाही.",
-      "openOneVoucher": "एक व्हाउचर उघडा",
-      "createOneEntry": "एक नोंद तयार करा",
-      "chooseLedgerOnWeb": "वेब पोर्टलवर लेजर निवडून मंजूर करा (सेटिंग्ज → विनंत्या)."
+      "restoreRejected": "रिस्टोअर विनंती नाकारली."
     },
     "componentsFormsEinvoiceQrPreviewSheet": {
       "replaceInvNo": "विक्रेता इनव्हॉइस क्र. \"{{value}}\"",
@@ -2924,32 +2911,23 @@
       "reminderThird": "तिसरे स्मरणपत्र",
       "reminderFourth": "चौथे स्मरणपत्र",
       "channelEmail": "ईमेल",
-      "channelWhatsapp": "WhatsApp",
-      "channelSms": "SMS",
       "selectParties": "अपवाद पार्टी निवडा",
       "searchParties": "पार्टी शोधा…",
       "loadingParties": "पार्टी लोड होत आहेत…",
       "noPartiesFor": "\"{{search}}\" साठी पार्टी नाहीत",
       "noParties": "कोणतीही पार्टी सापडली नाही",
       "doneCount": "झाले ({{n}})",
-      "day": "दिवस",
       "time": "वेळ",
-      "onDueDate": "देय तारखेला",
       "channels": "माध्यमे",
       "exceptionsCount": "अपवाद यादी ({{n}})",
       "exceptions": "अपवाद यादी",
       "removeReminder": "स्मरणपत्र काढा",
       "selectSendTime": "पाठवण्याची वेळ निवडा",
-      "testTitle": "चाचणी स्मरणपत्र",
-      "testMsg": "चाचणीसाठी, फोन नंबर असलेल्या कोणत्याही लेजरवर जा आणि हिरव्या WhatsApp \"आठवण करा\" बटणावर टॅप करा. स्मरणपत्र तुमच्या कॉन्फिगर केलेल्या टेम्पलेटने पाठवले जाईल.",
-      "gotIt": "समजले",
       "savedMsg": "पेमेंट स्मरणपत्र सेटिंग्ज अपडेट झाल्या.",
-      "sentReminders": "पाठवलेली स्मरणपत्रे",
       "threshold": "मर्यादा",
       "thresholdSub": "यापेक्षा कमी रकमेच्या इनव्हॉइससाठी स्मरणपत्रे पाठवू नका",
       "listTitle": "स्मरणपत्रांची यादी",
       "addReminder": "स्मरणपत्र जोडा",
-      "maxReached": "कमाल 4 स्मरणपत्रे पूर्ण झाली",
       "saveSettings": "सेटिंग्ज सेव्ह करा"
     },
     "purchaseCreateDebitNote": {
@@ -4788,10 +4766,6 @@
     },
     "ledgerRestricted": {
       "title": "प्रतिबंधित व्हाउचर",
-      "body": "या व्हाउचरची दुसरी बाजू तुमच्या प्रवेशाबाहेर आहे. हे एक व्हाउचर एक तास उघडण्याची परवानगी तुम्ही वर्कस्पेस मालकाकडे मागू शकता.",
-      "ask": "मालकाला विचारा",
-      "sentTitle": "विनंती पाठवली",
-      "sentBody": "निर्णयासाठी वर्कस्पेस मालकाकडे 30 मिनिटे आहेत. मंजूर झाल्यास तुम्ही हे व्हाउचर एक तास उघडू शकता.",
       "line": "प्रतिबंधित खाते"
     }
   }

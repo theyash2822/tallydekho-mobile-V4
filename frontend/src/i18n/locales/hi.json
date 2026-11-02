@@ -1126,14 +1126,10 @@
       "email": "ईमेल",
       "emailSub": "ईमेल से सूचना पाएं",
       "whatsappSub": "WhatsApp पर अलर्ट",
-      "sms": "SMS",
-      "smsSub": "टेक्स्ट मैसेज अलर्ट",
       "push": "पुश नोटिफिकेशन",
       "pushSub": "ऐप में पुश अलर्ट",
       "settingsUpdated": "नोटिफिकेशन सेटिंग्स अपडेट हुईं।",
       "couldNotSave": "सेटिंग्स सेव नहीं हो सकीं।",
-      "settingsSaved": "सेटिंग्स सेव हुईं",
-      "prefsUpdated": "नोटिफिकेशन प्राथमिकताएं अपडेट हुईं।",
       "notificationChannels": "नोटिफिकेशन चैनल",
       "quietHours": "शांत समय",
       "startTime": "प्रारंभ समय",
@@ -1577,13 +1573,9 @@
       "notApplicableTo": "{{label}} पर लागू नहीं"
     },
     "settingsSentReminders": {
-      "loadFailed": "भेजे गए रिमाइंडर लोड नहीं हो सके",
       "dueOn": " · नियत {{date}}",
       "failed": "विफल",
-      "sent": "भेजा गया",
-      "title": "भेजे गए रिमाइंडर",
-      "emptyTitle": "अभी तक कोई रिमाइंडर नहीं भेजा गया",
-      "emptySubtitle": "आपके ग्राहकों को भेजे गए स्वचालित भुगतान रिमाइंडर यहां दिखेंगे।"
+      "sent": "भेजा गया"
     },
     "componentsDocumentVoucherPreviewScreen": {
       "missingReference": "दस्तावेज़ संदर्भ गायब है",
@@ -1717,12 +1709,7 @@
       "noDesktop": "इस वर्कस्पेस से अभी कोई डेस्कटॉप जुड़ा नहीं है।",
       "companies": "कंपनियाँ (हर फ़ोल्डर के सभी वर्ष)",
       "noBackups": "अभी कोई क्लाउड बैकअप नहीं है। जुड़े डेस्कटॉप पर Backup Now चलाएँ।",
-      "restoreRejected": "रीस्टोर अनुरोध अस्वीकार किया गया।",
-      "voucherRequests": "वाउचर अनुरोध",
-      "noVoucherRequests": "कोई वाउचर अनुरोध लंबित नहीं है।",
-      "openOneVoucher": "एक वाउचर खोलें",
-      "createOneEntry": "एक एंट्री बनाएं",
-      "chooseLedgerOnWeb": "वेब पोर्टल पर लेजर चुनकर स्वीकृत करें (सेटिंग्स → अनुरोध)।"
+      "restoreRejected": "रीस्टोर अनुरोध अस्वीकार किया गया।"
     },
     "componentsFormsEinvoiceQrPreviewSheet": {
       "replaceInvNo": "विक्रेता इनवॉइस नं. \"{{value}}\"",
@@ -2924,32 +2911,23 @@
       "reminderThird": "तीसरा रिमाइंडर",
       "reminderFourth": "चौथा रिमाइंडर",
       "channelEmail": "ईमेल",
-      "channelWhatsapp": "WhatsApp",
-      "channelSms": "SMS",
       "selectParties": "अपवाद पार्टियां चुनें",
       "searchParties": "पार्टियां खोजें…",
       "loadingParties": "पार्टियां लोड हो रही हैं…",
       "noPartiesFor": "\"{{search}}\" के लिए कोई पार्टी नहीं",
       "noParties": "कोई पार्टी नहीं मिली",
       "doneCount": "हो गया ({{n}})",
-      "day": "दिन",
       "time": "समय",
-      "onDueDate": "नियत तारीख पर",
       "channels": "चैनल",
       "exceptionsCount": "अपवाद सूची ({{n}})",
       "exceptions": "अपवाद सूची",
       "removeReminder": "रिमाइंडर हटाएं",
       "selectSendTime": "भेजने का समय चुनें",
-      "testTitle": "टेस्ट रिमाइंडर",
-      "testMsg": "टेस्ट करने के लिए, फ़ोन नंबर वाले किसी भी लेजर पर जाएं और हरे WhatsApp \"रिमाइंड करें\" बटन पर टैप करें। रिमाइंडर आपके कॉन्फ़िगर किए गए टेम्पलेट से भेजा जाएगा।",
-      "gotIt": "समझ गया",
       "savedMsg": "भुगतान रिमाइंडर सेटिंग्स अपडेट हुईं।",
-      "sentReminders": "भेजे गए रिमाइंडर",
       "threshold": "सीमा",
       "thresholdSub": "इससे कम राशि के इनवॉइस पर रिमाइंडर न भेजें",
       "listTitle": "रिमाइंडर की सूची",
       "addReminder": "रिमाइंडर जोड़ें",
-      "maxReached": "अधिकतम 4 रिमाइंडर हो चुके हैं",
       "saveSettings": "सेटिंग्स सेव करें"
     },
     "purchaseCreateDebitNote": {
@@ -4788,10 +4766,6 @@
     },
     "ledgerRestricted": {
       "title": "प्रतिबंधित वाउचर",
-      "body": "इस वाउचर का दूसरा पक्ष आपकी पहुंच से बाहर है। आप वर्कस्पेस ओनर से यह एक वाउचर एक घंटे के लिए खोलने की अनुमति मांग सकते हैं।",
-      "ask": "ओनर से पूछें",
-      "sentTitle": "अनुरोध भेजा गया",
-      "sentBody": "वर्कस्पेस ओनर के पास निर्णय के लिए 30 मिनट हैं। स्वीकृत होने पर आप यह वाउचर एक घंटे तक खोल सकते हैं।",
       "line": "प्रतिबंधित खाता"
     }
   }

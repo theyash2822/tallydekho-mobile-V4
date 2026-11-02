@@ -4,13 +4,12 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Animated, Modal,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNotificationSettings, updateNotificationSettings } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,10 +286,10 @@ const tp = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification channel data
 // ─────────────────────────────────────────────────────────────────────────────
+// SMS is no longer a user channel: push, email and WhatsApp only.
 const CHANNELS = [
   { id:'email',    labelKey:'screens.settingsNotificationChannels.email',    icon:'mail-outline',          subKey:'screens.settingsNotificationChannels.emailSub' },
   { id:'whatsapp', label:'WhatsApp',          icon:'logo-whatsapp',         subKey:'screens.settingsNotificationChannels.whatsappSub' },
-  { id:'sms',      labelKey:'screens.settingsNotificationChannels.sms',      icon:'chatbox-outline',       subKey:'screens.settingsNotificationChannels.smsSub' },
   { id:'push',     labelKey:'screens.settingsNotificationChannels.push',     icon:'notifications-outline', subKey:'screens.settingsNotificationChannels.pushSub' },
 ] as { id: string; label?: string; labelKey?: string; icon: string; subKey: string }[];
 
@@ -299,23 +298,12 @@ const CHANNELS = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NotificationChannelsScreen() {
   const { t } = useTranslation();
-  const saveAll = async () => {
-    try {
-      await updateNotificationSettings({
-        push_enabled: enabled.push, email_enabled: enabled.email,
-        whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
-        quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
-      });
-      Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsNotificationChannels.settingsUpdated') });
-    } catch { Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsNotificationChannels.couldNotSave') }); }
-  };
-
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [isDirty, setIsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [enabled, setEnabled] = useState<Record<string,boolean>>({
-    email:true, whatsapp:true, sms:false, push:true,
+    email:true, whatsapp:true, push:true,
   });
   const [quietHours,     setQuietHours]     = useState(false);
   const [startTime,      setStartTime]      = useState('10:00 PM');
@@ -330,27 +318,40 @@ export default function NotificationChannelsScreen() {
     getNotificationSettings().then((res: any) => {
       if (res?.data) {
         const d = res.data;
-        if (d.push_enabled !== undefined || d.email_enabled !== undefined || d.whatsapp_enabled !== undefined || d.sms_enabled !== undefined) {
+        if (d.push_enabled !== undefined || d.email_enabled !== undefined || d.whatsapp_enabled !== undefined) {
           setEnabled({
             push: d.push_enabled ?? true,
             email: d.email_enabled ?? true,
             whatsapp: d.whatsapp_enabled ?? true,
-            sms: d.sms_enabled ?? false,
           });
         }
-        if (d.quiet_enabled !== undefined) setQuietHours(d.quiet_enabled);
+        if (d.quiet_enabled !== undefined) setQuietHours(!!d.quiet_enabled);
         if (d.quiet_from) setStartTime(d.quiet_from);
         if (d.quiet_to) setEndTime(d.quiet_to);
+        if (d.quiet_saturday !== undefined) setSaturday(!!d.quiet_saturday);
+        if (d.quiet_sunday !== undefined) setSunday(!!d.quiet_sunday);
       }
     }).catch(() => {});
   }, []);
 
-  const save = () => {
-    Toast.show({
-      type: 'success',
-      text1: t('screens.settingsNotificationChannels.settingsSaved'),
-      text2: t('screens.settingsNotificationChannels.prefsUpdated'),
-    });
+  // Save persists every field on this screen; the dirty flag clears only after the PATCH succeeds.
+  const saveAll = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateNotificationSettings({
+        push_enabled: enabled.push, email_enabled: enabled.email,
+        whatsapp_enabled: enabled.whatsapp,
+        quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
+        quiet_saturday: saturday, quiet_sunday: sunday,
+      });
+      setIsDirty(false);
+      Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsNotificationChannels.settingsUpdated') });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: t('common.error'), text2: e?.message || t('screens.settingsNotificationChannels.couldNotSave') });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -367,11 +368,8 @@ export default function NotificationChannelsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
         {/* ── Notification Channels ──────────────────────────────────── */}
+        <Text style={s.sectionLabel}>{t('screens.settingsNotificationChannels.notificationChannels')}</Text>
         <View style={s.card}>
-          <View style={s.cardHdr}>
-            <Ionicons name="notifications-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>{t('screens.settingsNotificationChannels.notificationChannels')}</Text>
-          </View>
           {CHANNELS.map((ch, idx) => (
             <View key={ch.id} style={[s.row, idx > 0 && s.rowBorder]}>
               <View style={s.chIcon}>
@@ -390,11 +388,15 @@ export default function NotificationChannelsScreen() {
         </View>
 
         {/* ── Quiet Hours ────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>{t('screens.settingsNotificationChannels.quietHours')}</Text>
         <View style={s.card}>
-          <View style={[s.row, { paddingVertical: 14 }]}>
-            <View style={s.cardHdr}>
+          <View style={s.row}>
+            <View style={s.chIcon}>
               <Ionicons name="moon-outline" size={18} color={COLORS.textSecondary} />
-              <Text style={s.cardTitle}>{t('screens.settingsNotificationChannels.quietHours')}</Text>
+            </View>
+            <View style={s.rowInfo}>
+              <Text style={s.rowLabel}>{t('screens.settingsNotificationChannels.quietHoursToggle')}</Text>
+              <Text style={s.rowSub}>{t('screens.settingsNotificationChannels.quietHoursSub')}</Text>
             </View>
             <CustomToggle value={quietHours} onChange={v => { setQuietHours(v); markDirty(); }} />
           </View>
@@ -454,9 +456,13 @@ export default function NotificationChannelsScreen() {
             </View>
           )}
         </View>
+        <View style={s.noteRow}>
+          <Ionicons name="information-circle-outline" size={14} color={COLORS.textTertiary} />
+          <Text style={s.noteTxt}>{t('screens.settingsNotificationChannels.quietHoursNote')}</Text>
+        </View>
 
         {isDirty && (
-        <TouchableOpacity style={s.saveBtn} onPress={() => { save(); setIsDirty(false); }} activeOpacity={0.8}>
+        <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={saveAll} disabled={saving} activeOpacity={0.8}>
           <Text style={s.saveTxt}>{t('screens.settingsNotificationChannels.saveSettings')}</Text>
         </TouchableOpacity>
         )}
@@ -498,11 +504,17 @@ const s = StyleSheet.create({
 
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    padding: SPACING.md, marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.md, paddingVertical: 4, marginBottom: SPACING.sm,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  cardHdr:  { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  cardTitle:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  // Section headers sit above their card (uppercase, small), so they do not read as rows.
+  sectionLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: SPACING.sm, marginTop: SPACING.sm, marginLeft: 4,
+  },
+  noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingHorizontal: 4, marginBottom: SPACING.md },
+  noteTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16 },
 
   row:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rowBorder:{ borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
@@ -515,7 +527,7 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
   rowSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
 
-  quietBody: { borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: SPACING.md },
+  quietBody: { borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: SPACING.md, paddingBottom: SPACING.sm },
   timeRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: SPACING.md },
   timeBox:   { flex: 1 },
   timeLabel: {
