@@ -1,3 +1,7 @@
+## 2026-11-03 (16:00) — Fix sheet: IRN_CANCELLED explanation (branch `28-10-2026`)
+
+- `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapIrnCancelled`: no e-way bill from an invoice whose e-invoice was cancelled; raise a fresh invoice in Tally.
+
 ## 2026-11-03 (14:15) — Fix sheet: LEDGER_HSN_MISSING explanation (branch `28-10-2026`)
 
 - `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapLedgerHsn`: accounting-mode invoice — set HSN/SAC and GST rate on the named sales ledgers in Tally, then sync.

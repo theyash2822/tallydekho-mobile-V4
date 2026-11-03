@@ -2638,6 +2638,7 @@
       "fromPlace": "From place",
       "fromState": "From state",
       "gapDispatch": "Add the dispatch details in the Generate step; nothing changes in Tally.",
+      "gapIrnCancelled": "The e-invoice of this invoice was cancelled, so no e-way bill can be made from it. If the goods still move, raise a fresh invoice in Tally and register that.",
       "gapIrnFirst": "E-invoicing is active for this company, so the invoice needs an IRN before an e-way bill.",
       "generateBulkTitle": "Generate {{count}} e-way bills",
       "generateFailed": "Could not generate",

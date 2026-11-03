@@ -80,6 +80,8 @@ export default function FixGapSheet({ visible, row, companyGuid, companyName, on
           defaultValue: 'No stock items here, so each sales ledger line goes with the HSN/SAC of the ledger. Set HSN/SAC and GST rate in the GST details of {{ledgers}} in Tally, then sync.',
           ledgers: (Array.isArray(g.fix?.ledgers) ? g.fix.ledgers : []).map((l: any) => l?.name).filter(Boolean).join(', '),
         });
+      case 'IRN_CANCELLED':
+        return t('screens.reportsEwbList.gapIrnCancelled', { defaultValue: 'The e-invoice of this invoice was cancelled, so no e-way bill can be made from it. If the goods still move, raise a fresh invoice in Tally and register that.' });
       case 'FUTURE_DATED':
         return t('screens.reportsEinvoiceList.gapFutureDated', { defaultValue: 'The portal accepts a document only from its own date. This invoice is dated after today; it moves to Ready on that date.' });
       default:
