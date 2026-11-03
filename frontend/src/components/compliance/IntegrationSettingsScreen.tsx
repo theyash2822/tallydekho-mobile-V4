@@ -1,8 +1,10 @@
 /**
- * Settings → E-invoice / E-way bill: one row per company in the workspace with
- * Configure / Activate / Remove / Test (spec 2026-11-03 §2.1, §4).
- * Credentials and the one-time activation are per company; the screen shows the company
- * chosen in the header. Rates are not shown here (Owner decision 2026-11-03).
+ * Settings → E-invoice / E-way bill for the company chosen in the header (spec 2026-11-03 §2.1, §4;
+ * settings move 03-11-2026):
+ *   Generated in: TallyPrime (Auditer shows what Tally generated after sync; no credentials, nothing to pay)
+ *              or Auditer (PeriOne with the company's portal API user: Configure / Test / Activate / Remove).
+ *   After activation the Owner/Admin picks Manual or Auto (generation stays Manual until chosen) and can
+ *   opt the company out ("Not applicable"). Rates are not shown here (Owner decision 2026-11-03).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking, ActivityIndicator, RefreshControl } from 'react-native';
@@ -14,7 +16,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import {
   getWorkspaceIntegration, saveWorkspaceIntegration, activateWorkspaceIntegration, testWorkspaceIntegration, removeWorkspaceIntegration,
-  ApiError, type IntegrationCompanyRow, type WorkspaceIntegrationResponse,
+  saveComplianceConfig, ApiError, type IntegrationCompanyRow, type WorkspaceIntegrationResponse,
 } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -36,6 +38,37 @@ type Props = {
   portalLabel: string;
   howTo: string;
 };
+
+/** Generation settings per domain (same wording as the web portal's Integration pages). */
+const GEN = {
+  einvoice: {
+    prefix: 'e_invoice',
+    doc: 'e-invoice',
+    modeTitle: 'IRN generation',
+    modes: [{ key: 'manual', label: 'Manual' }, { key: 'auto', label: 'Auto after Tally sync' }],
+    modeHelp: {
+      manual: 'Invoices wait in Reports → E-Invoice → Ready until someone taps Register.',
+      auto: 'Every new sales invoice is registered on sync, from today on. 2 credits each, refunded when the portal refuses; failures go to Needs attention.',
+    } as Record<string, string>,
+    optOutHelp: 'For a company below the ₹5 Cr e-invoicing threshold, for example one that only needs e-way bills. Blocks IRN generation and lifts the "IRN first" rule for its e-way bills.',
+    tallyHelp: 'You generate IRNs in TallyPrime. After each sync Auditer shows them under Reports → E-Invoice → Generated, with the acknowledgement and the signed QR; nothing is registered or charged from here.',
+    auditerHelp: 'Through PeriOne with this company\u2019s portal API user: save the credentials, activate once, then choose Manual or Auto.',
+  },
+  eway: {
+    prefix: 'e_way_bill',
+    doc: 'e-way bill',
+    modeTitle: 'E-way bill generation',
+    modes: [{ key: 'manual', label: 'Manual' }, { key: 'auto', label: 'Auto when details ready' }, { key: 'ask_after_irn', label: 'Ask after IRN' }],
+    modeHelp: {
+      manual: 'Invoices wait in Reports → E-Way Bill → Ready until someone taps Generate.',
+      auto: 'Generated on sync when the invoice carries dispatch, ship-to and vehicle or transporter details, from today on. 2 credits each, refunded when the portal refuses.',
+      ask_after_irn: 'Right after an IRN is registered you are asked whether to generate the e-way bill now.',
+    } as Record<string, string>,
+    optOutHelp: 'For a company that never moves goods, for example a services company. Blocks e-way bill generation.',
+    tallyHelp: 'You generate e-way bills in TallyPrime. After each sync Auditer shows them under Reports → E-Way Bill → Generated; Part B, extensions and cancellations are done in Tally.',
+    auditerHelp: 'Through PeriOne with this company\u2019s portal API user: save the credentials, activate once, then choose Manual or Auto.',
+  },
+} as const;
 
 export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl, portalLabel, howTo }: Props) {
   const router = useRouter();
@@ -76,6 +109,44 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
   // The server computes status from the stored credentials (complianceCredentials.integrationStatus); `secretsSet`
   // is a per-key map, so its presence alone says nothing. Same rule as the web portal.
   const hasCreds = (c: IntegrationCompanyRow) => !!(c.useSandboxLogin || c.config_json?.useSandboxLogin) || String(c.status || 'NOT_CONFIGURED').toUpperCase() !== 'NOT_CONFIGURED';
+
+  // Source / mode / opt-out: one key at a time (partial save on the compliance config), then reload.
+  const gen = GEN[domain];
+  const genOf = (c: IntegrationCompanyRow) => ({
+    source: c.compliance?.source === 'tally' ? 'tally' : 'auditer',
+    mode: c.compliance?.mode || null,
+    optedOut: c.compliance?.applicable === 'not_applicable',
+    autoSince: c.compliance?.auto_since || null,
+  });
+  const saveSetting = async (c: IntegrationCompanyRow, patch: Record<string, string | null>, okText?: string) => {
+    if (!c.company_guid) return;
+    setBusyId(idOf(c));
+    try {
+      await saveComplianceConfig(c.company_guid, patch);
+      if (okText) Toast.show({ type: 'success', text1: t('common.saved'), text2: okText });
+      refetch();
+    } catch (e) {
+      toastRbasError(e) || Alert.alert(t('common.error'), (e as any)?.message || t(`${ns}.settingNotSaved`, { defaultValue: 'Could not save this setting.' }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const setSource = (c: IntegrationCompanyRow, source: 'tally' | 'auditer') => {
+    if (source === genOf(c).source) return;
+    saveSetting(c, { [`${gen.prefix}_source`]: source }, source === 'tally'
+      ? t(`${ns}.sourceTallySaved`, { defaultValue: 'Generated in TallyPrime; Auditer shows what Tally generates.' })
+      : t(`${ns}.sourceAuditerSaved`, { defaultValue: 'Generated through Auditer. Save the API user and activate.' }));
+  };
+  const setMode = (c: IntegrationCompanyRow, mode: string) => {
+    if (mode === genOf(c).mode) return;
+    saveSetting(c, { [`${gen.prefix}_mode`]: mode }, `${t(`${ns}.modeTitle`, { defaultValue: gen.modeTitle })}: ${t(`${ns}.mode_${mode}`, { defaultValue: gen.modes.find((m) => m.key === mode)?.label || mode })}`);
+  };
+  const setOptOut = (c: IntegrationCompanyRow, on: boolean) => {
+    const value = on ? 'not_applicable' : (c.activated_at ? 'applicable_configured' : 'applicable_not_configured');
+    saveSetting(c, { [`${gen.prefix}_applicable`]: value }, on
+      ? t(`${ns}.optedOut`, { defaultValue: 'Marked Not applicable for this company.' })
+      : t(`${ns}.optedIn`, { defaultValue: 'Applies to this company again.' }));
+  };
 
   const activate = (c: IntegrationCompanyRow) => {
     if (!workspaceId) return;
@@ -220,35 +291,92 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
             const st = String(c.status || 'NOT_CONFIGURED').toUpperCase();
             const creds = hasCreds(c);
             const tr = testResult[id];
+            const g = genOf(c);
+            const active = st === 'ACTIVE' || !!c.activated_at;
+            const ms = (sec: number | string | null | undefined) => (sec ? Number(sec) * (Number(sec) < 1e12 ? 1000 : 1) : NaN);
             return (
-              <View key={id} style={s.card}>
-                <View style={s.rowHead}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.coName}>{c.name}</Text>
-                    <Text style={s.note}>{[c.config_json?.gstin || c.gstin, c.activated_at ? `${t(`${ns}.activatedOn`, { defaultValue: 'Activated' })} ${new Date(Number(c.activated_at) || c.activated_at).toLocaleDateString()}` : ''].filter(Boolean).join(' · ') || ' '}</Text>
+              <View key={id}>
+                <View style={s.card}>
+                  <View style={s.rowHead}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.coName}>{c.name}</Text>
+                      <Text style={s.note}>{[g.source === 'auditer' ? (c.config_json?.gstin || c.gstin) : c.gstin, g.source === 'auditer' && c.activated_at ? `${t(`${ns}.activatedOn`, { defaultValue: 'Activated' })} ${new Date(ms(c.activated_at)).toLocaleDateString()}` : ''].filter(Boolean).join(' · ') || ' '}</Text>
+                    </View>
+                    {g.source === 'auditer' ? statusChip(c) : <StatusChip label={t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })} tone="none" />}
                   </View>
-                  {statusChip(c)}
+
+                  {/* Generated in: TallyPrime | Auditer */}
+                  <Text style={s.fieldLabel}>{t(`${ns}.generatedIn`, { defaultValue: 'Generated in' })}</Text>
+                  <View style={s.chips}>
+                    {([['tally', t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })], ['auditer', t(`${ns}.sourceAuditer`, { defaultValue: 'Auditer' })]] as const).map(([key, label]) => (
+                      <TouchableOpacity key={key} style={[s.chip, g.source === key && s.chipActive]} onPress={() => setSource(c, key)} disabled={busy} activeOpacity={0.7}>
+                        <Text style={[s.chipTxt, g.source === key && s.chipTxtActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={s.note}>{t(`${ns}.${g.source === 'tally' ? 'tallyHelp' : 'auditerHelp'}`, { defaultValue: g.source === 'tally' ? gen.tallyHelp : gen.auditerHelp })}</Text>
+
+                  {g.source === 'auditer' && (
+                    <>
+                      {!!tr && <Text style={[s.note, { color: tr.ok ? COLORS.positive : COLORS.negative }]}>{tr.text}</Text>}
+                      <View style={s.btnRow}>
+                        <TouchableOpacity style={s.outBtn} onPress={() => setConfigRow(c)} disabled={busy} activeOpacity={0.7}>
+                          <Text style={s.outTxt}>{t(`${ns}.configure`, { defaultValue: 'Configure' })}</Text>
+                        </TouchableOpacity>
+                        {creds && (
+                          <TouchableOpacity style={s.outBtn} onPress={() => testLogin(c)} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
+                            {busy ? <ActivityIndicator size="small" color={COLORS.info} /> : <Text style={s.outTxt}>{t(`${ns}.testLoginBtn`, { defaultValue: 'Test login' })}</Text>}
+                          </TouchableOpacity>
+                        )}
+                        {st !== 'ACTIVE' && !c.activated_at && creds && (
+                          <TouchableOpacity style={s.primaryBtn} onPress={() => activate(c)} disabled={busy} activeOpacity={0.8}>
+                            <Text style={s.primaryTxt}>{t(`${ns}.activate`)}</Text>
+                          </TouchableOpacity>
+                        )}
+                        {creds && (
+                          <TouchableOpacity style={s.iconBtn} onPress={() => remove(c)} disabled={busy} activeOpacity={0.7} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                            <Ionicons name="trash-outline" size={18} color={COLORS.negative} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </>
+                  )}
                 </View>
-                {!!tr && <Text style={[s.note, { color: tr.ok ? COLORS.positive : COLORS.negative }]}>{tr.text}</Text>}
-                <View style={s.btnRow}>
-                  <TouchableOpacity style={s.outBtn} onPress={() => setConfigRow(c)} disabled={busy} activeOpacity={0.7}>
-                    <Text style={s.outTxt}>{t(`${ns}.configure`, { defaultValue: 'Configure' })}</Text>
-                  </TouchableOpacity>
-                  {creds && (
-                    <TouchableOpacity style={s.outBtn} onPress={() => testLogin(c)} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
-                      {busy ? <ActivityIndicator size="small" color={COLORS.info} /> : <Text style={s.outTxt}>{t(`${ns}.testLoginBtn`, { defaultValue: 'Test login' })}</Text>}
-                    </TouchableOpacity>
-                  )}
-                  {st !== 'ACTIVE' && !c.activated_at && creds && (
-                    <TouchableOpacity style={s.primaryBtn} onPress={() => activate(c)} disabled={busy} activeOpacity={0.8}>
-                      <Text style={s.primaryTxt}>{t(`${ns}.activate`)}</Text>
-                    </TouchableOpacity>
-                  )}
-                  {creds && (
-                    <TouchableOpacity style={s.iconBtn} onPress={() => remove(c)} disabled={busy} activeOpacity={0.7} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <Ionicons name="trash-outline" size={18} color={COLORS.negative} />
-                    </TouchableOpacity>
-                  )}
+
+                {/* Manual / Auto — only once the company is active here and has not opted out. */}
+                {g.source === 'auditer' && active && !g.optedOut && (
+                  <View style={s.card}>
+                    <Text style={s.fieldLabel}>{t(`${ns}.modeTitle`, { defaultValue: gen.modeTitle })}</Text>
+                    <View style={s.chips}>
+                      {gen.modes.map((m) => (
+                        <TouchableOpacity key={m.key} style={[s.chip, g.mode === m.key && s.chipActive]} onPress={() => setMode(c, m.key)} disabled={busy} activeOpacity={0.7}>
+                          <Text style={[s.chipTxt, g.mode === m.key && s.chipTxtActive]}>{t(`${ns}.mode_${m.key}`, { defaultValue: m.label })}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {g.mode ? (
+                      <Text style={s.note}>
+                        {t(`${ns}.modeHelp_${g.mode}`, { defaultValue: gen.modeHelp[g.mode] || '' })}
+                        {g.mode === 'auto' && g.autoSince ? ` ${t(`${ns}.autoSince`, { defaultValue: 'Auto since' })} ${g.autoSince}.` : ''}
+                      </Text>
+                    ) : (
+                      <View style={s.warnBox}>
+                        <Ionicons name="alert-circle-outline" size={16} color={COLORS.warning} />
+                        <Text style={s.warnTxt}>{t(`${ns}.chooseMode`, { doc: gen.doc, defaultValue: 'Choose how the {{doc}} is generated. Until you pick, nothing is generated on its own: invoices wait in Ready for a tap.' })}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Opt-out */}
+                <View style={s.card}>
+                  <View style={s.switchRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.switchLabel}>{t(`${ns}.notApplicable`, { defaultValue: 'Not applicable' })}</Text>
+                      <Text style={s.note}>{t(`${ns}.optOutHelp`, { defaultValue: gen.optOutHelp })}</Text>
+                    </View>
+                    <BrandSwitch value={g.optedOut} onValueChange={(v: boolean) => setOptOut(c, v)} disabled={busy} />
+                  </View>
                 </View>
               </View>
             );
@@ -351,4 +479,12 @@ const s = StyleSheet.create({
   portalTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, marginBottom: SPACING.sm },
   switchLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 2 },
+  fieldLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginTop: 4, marginBottom: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  chipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  chipTxtActive: { color: COLORS.white },
+  warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.warningBg, borderRadius: RADIUS.md, padding: 10 },
+  warnTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, lineHeight: 20 },
 });

@@ -308,10 +308,7 @@ export default function VoucherConfigScreen() {
 
   // ── Compliance Config State ────────────────────────────────────────────────────────
   const [numberingPolicy, setNumberingPolicy]       = useState<'tally_prime_series'|'tallydekho_series'>('tally_prime_series');
-  const [eInvoiceApplicable, setEInvoiceApplicable] = useState<'not_applicable'|'applicable_not_configured'|'applicable_configured'>('not_applicable');
-  const [eInvoiceMode, setEInvoiceMode]             = useState<'manual'|'auto'>('manual');
-  const [eWayBillApplicable, setEWayBillApplicable] = useState<'not_applicable'|'applicable_not_configured'|'applicable_configured'>('not_applicable');
-  const [eWayBillMode, setEWayBillMode]             = useState<'manual'|'auto'|'ask_after_irn'>('manual');
+  // E-invoice / e-way bill generation settings live on Settings → E-Invoice / E-Way Bill; only numbering is kept here.
   const [complianceDirty, setComplianceDirty]       = useState(false);
   const [complianceOpen, setComplianceOpen]         = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
@@ -388,26 +385,15 @@ export default function VoucherConfigScreen() {
     if (!company?.guid) return;
     getComplianceConfig(company.guid).then((res: any) => {
       const d = res?.data;
-      if (d) {
-        setNumberingPolicy(d.numbering_policy || 'tally_prime_series');
-        setEInvoiceApplicable(d.e_invoice_applicable || 'not_applicable');
-        setEInvoiceMode(d.e_invoice_mode || 'manual');
-        setEWayBillApplicable(d.e_way_bill_applicable || 'not_applicable');
-        setEWayBillMode(d.e_way_bill_mode || 'manual');
-      }
+      if (d) setNumberingPolicy(d.numbering_policy || 'tally_prime_series');
     }).catch(() => {});
   }, [company?.guid]);
 
   const saveComplianceSettings = async () => {
     if (!company?.guid) return;
     try {
-      await saveComplianceConfig(company.guid, {
-        numbering_policy: numberingPolicy,
-        e_invoice_applicable: eInvoiceApplicable,
-        e_invoice_mode: eInvoiceMode,
-        e_way_bill_applicable: eWayBillApplicable,
-        e_way_bill_mode: eWayBillMode,
-      });
+      // Partial save: the e-document settings on the Integration screens are untouched.
+      await saveComplianceConfig(company.guid, { numbering_policy: numberingPolicy });
       setComplianceDirty(false);
       Toast.show({ type: 'success', text1: t('screens.settingsVoucherConfig.settingsSaved') });
     } catch {
@@ -638,12 +624,6 @@ export default function VoucherConfigScreen() {
 
   const bankLabel = (id: string) => bankOpts.find(b => b.value === configs[id].bank)?.label || configs[id].bank || t('screens.settingsVoucherConfig.selectBank');
 
-  const applicabilityStatus = (v: 'not_applicable' | 'applicable_not_configured' | 'applicable_configured') => {
-    if (v === 'not_applicable') return { label: t('screens.settingsVoucherConfig.notApplicable'), bg: COLORS.activeBg, fg: COLORS.textSecondary };
-    if (v === 'applicable_configured') return { label: t('screens.settingsVoucherConfig.configured'), bg: COLORS.positiveBg, fg: COLORS.positive };
-    return { label: t('screens.settingsVoucherConfig.notConfigured'), bg: COLORS.warningBg, fg: COLORS.warning };
-  };
-
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header */}
@@ -712,141 +692,22 @@ export default function VoucherConfigScreen() {
           )}
         </View>
 
-        {/* ── Section 2: E-Invoice Configuration ── */}
-        <View style={s.section}>
-          <TouchableOpacity
-            style={s.sectionHdr}
-            onPress={() => setComplianceOpen(complianceOpen === 'einvoice' ? null : 'einvoice')}
-            activeOpacity={0.7}
-          >
-            <View style={s.typeIcon}>
-              <Ionicons name="document-attach-outline" size={18} color={COLORS.textSecondary} />
-            </View>
-            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">{t('settings.eInvoice')}</Text>
-            {(() => { const st = applicabilityStatus(eInvoiceApplicable); return (
-              <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
-                <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
-              </View>
-            ); })()}
-            <Ionicons name={complianceOpen === 'einvoice' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-
-          {complianceOpen === 'einvoice' && (
-            <View style={s.sectionBody}>
-              <Text style={cs.sectionSub}>{t('screens.settingsVoucherConfig.einvoiceSub')}</Text>
-
-              {[
-                { value: 'not_applicable',            label: t('screens.settingsVoucherConfig.notApplicable'),            sub: t('screens.settingsVoucherConfig.einvoiceNotRequired') },
-                { value: 'applicable_not_configured', label: t('screens.settingsVoucherConfig.applicableNotConfigured'), sub: t('screens.settingsVoucherConfig.einvoiceNotSetUp') },
-                { value: 'applicable_configured',     label: t('screens.settingsVoucherConfig.applicableConfigured'),    sub: t('screens.settingsVoucherConfig.einvoiceEnabled') },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[cs.optRow, eInvoiceApplicable === opt.value && cs.optRowActive]}
-                  onPress={() => { setEInvoiceApplicable(opt.value as any); setComplianceDirty(true); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={cs.optRadio}>
-                    {eInvoiceApplicable === opt.value && <View style={cs.optRadioDot} />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={cs.optLabel}>{opt.label}</Text>
-                    <Text style={cs.optSub}>{opt.sub}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-
-              {eInvoiceApplicable === 'applicable_configured' && (
-                <View style={cs.modeRow}>
-                  <Text style={cs.modeLabel}>{t('screens.settingsVoucherConfig.irnMode')}</Text>
-                  <View style={cs.modeChips}>
-                    {[{v:'manual',l:t('screens.settingsVoucherConfig.manual')},{v:'auto',l:t('screens.settingsVoucherConfig.autoAfterSync')}].map(m => (
-                      <TouchableOpacity key={m.v}
-                        style={[cs.modeChip, eInvoiceMode === m.v && cs.modeChipActive]}
-                        onPress={() => { setEInvoiceMode(m.v as any); setComplianceDirty(true); }}
-                        activeOpacity={0.7}>
-                        <Text style={[cs.modeChipTxt, eInvoiceMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TouchableOpacity
-                    style={cs.configLink}
-                    onPress={() => safePush(router, '/settings/einvoice' as any)}
-                    activeOpacity={0.7}>
-                    <Ionicons name="settings-outline" size={14} color={COLORS.brandPrimary} />
-                    <Text style={cs.configLinkTxt}>{t('screens.settingsVoucherConfig.configureIrp')}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
+        {/* E-invoice / e-way bill generation settings moved to Settings → E-Invoice / E-Way Bill (03-11-2026). */}
+        <View style={cs.movedNote}>
+          <Ionicons name="information-circle-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={cs.movedTxt}>
+            {t('screens.settingsVoucherConfig.edocsMoved', { defaultValue: 'E-invoice and e-way bill generation (who generates, manual or automatic, not applicable) is set under Settings → E-Invoice and E-Way Bill.' })}
+          </Text>
         </View>
-
-        {/* ── Section 3: E-Way Bill Configuration ── */}
-        <View style={s.section}>
-          <TouchableOpacity
-            style={s.sectionHdr}
-            onPress={() => setComplianceOpen(complianceOpen === 'ewaybill' ? null : 'ewaybill')}
-            activeOpacity={0.7}
-          >
-            <View style={s.typeIcon}>
-              <Ionicons name="car-outline" size={18} color={COLORS.textSecondary} />
-            </View>
-            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">{t('screens.settingsVoucherConfig.eWayBill')}</Text>
-            {(() => { const st = applicabilityStatus(eWayBillApplicable); return (
-              <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
-                <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
-              </View>
-            ); })()}
-            <Ionicons name={complianceOpen === 'ewaybill' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
+        <View style={cs.movedLinks}>
+          <TouchableOpacity style={cs.configLink} onPress={() => safePush(router, '/settings/einvoice' as any)} activeOpacity={0.7}>
+            <Ionicons name="document-attach-outline" size={14} color={COLORS.brandPrimary} />
+            <Text style={cs.configLinkTxt}>{t('settings.eInvoice')}</Text>
           </TouchableOpacity>
-
-          {complianceOpen === 'ewaybill' && (
-            <View style={s.sectionBody}>
-              <Text style={cs.sectionSub}>{t('screens.settingsVoucherConfig.ewbSub')}</Text>
-
-              {[
-                { value: 'not_applicable',            label: t('screens.settingsVoucherConfig.notApplicable'),            sub: t('screens.settingsVoucherConfig.ewbNotRequired') },
-                { value: 'applicable_not_configured', label: t('screens.settingsVoucherConfig.applicableNotConfigured'), sub: t('screens.settingsVoucherConfig.ewbNotSetUp') },
-                { value: 'applicable_configured',     label: t('screens.settingsVoucherConfig.applicableConfigured'),    sub: t('screens.settingsVoucherConfig.ewbEnabled') },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[cs.optRow, eWayBillApplicable === opt.value && cs.optRowActive]}
-                  onPress={() => { setEWayBillApplicable(opt.value as any); setComplianceDirty(true); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={cs.optRadio}>
-                    {eWayBillApplicable === opt.value && <View style={cs.optRadioDot} />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={cs.optLabel}>{opt.label}</Text>
-                    <Text style={cs.optSub}>{opt.sub}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-
-              {eWayBillApplicable === 'applicable_configured' && (
-                <View style={cs.modeRow}>
-                  <Text style={cs.modeLabel}>{t('screens.settingsVoucherConfig.ewbMode')}</Text>
-                  <View style={cs.modeChips}>
-                    {[
-                      {v:'manual',l:t('screens.settingsVoucherConfig.manual')},
-                      {v:'auto',l:t('screens.settingsVoucherConfig.autoWhenReady')},
-                      {v:'ask_after_irn',l:t('screens.settingsVoucherConfig.askAfterIrn')},
-                    ].map(m => (
-                      <TouchableOpacity key={m.v}
-                        style={[cs.modeChip, eWayBillMode === m.v && cs.modeChipActive]}
-                        onPress={() => { setEWayBillMode(m.v as any); setComplianceDirty(true); }}
-                        activeOpacity={0.7}>
-                        <Text style={[cs.modeChipTxt, eWayBillMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
+          <TouchableOpacity style={cs.configLink} onPress={() => safePush(router, '/settings/ewb' as any)} activeOpacity={0.7}>
+            <Ionicons name="car-outline" size={14} color={COLORS.brandPrimary} />
+            <Text style={cs.configLinkTxt}>{t('screens.settingsVoucherConfig.eWayBill')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Save compliance config button — show only if dirty */}
@@ -1280,6 +1141,9 @@ const cs = StyleSheet.create({
   modeChipTxtActive: { color: COLORS.white },
   configLink:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
   configLinkTxt:  { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  movedNote:      { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 4, marginTop: 4, marginBottom: 8 },
+  movedTxt:       { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20 },
+  movedLinks:     { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: 4, marginBottom: 16 },
   saveBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14, marginBottom: SPACING.md },
   saveBtnTxt:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });

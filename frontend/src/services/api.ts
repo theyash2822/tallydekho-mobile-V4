@@ -1270,6 +1270,8 @@ export interface IntegrationCompanyRow {
   /** Per secret key (`{ password: true }`): managers learn a secret is saved, never its value. */
   secretsSet?: Record<string, boolean>;
   useSandboxLogin?: boolean;
+  /** Generation settings for this domain: source 'tally' | 'auditer', mode NULL until chosen, opt-out, auto_since. */
+  compliance?: { source?: 'tally' | 'auditer' | string; mode?: string | null; applicable?: string | null; auto_since?: string | null } | null;
 }
 export interface WorkspaceIntegrationResponse {
   gateway?: { provider: string; env: string; configured: boolean; sandboxLogin: { gstin: string; username: string } | null } | null;
