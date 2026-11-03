@@ -1158,6 +1158,8 @@ export const getWorkspaceIntegration = (workspaceId: string, domain: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`);
 export const saveWorkspaceIntegration = (workspaceId: string, domain: string, config: object) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`, config);
+export const testWorkspaceIntegration = (workspaceId: string, domain: string, body: object = {}) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/test`, body);
 export const activateWorkspaceIntegration = (workspaceId: string, domain: string) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/activate`);
 

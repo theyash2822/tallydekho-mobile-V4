@@ -9,36 +9,27 @@ import {
   getWorkspaceIntegration,
   saveWorkspaceIntegration,
   activateWorkspaceIntegration,
+  testWorkspaceIntegration,
   ApiError,
 } from '../../src/services/api';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import { toastRbasError } from '../../src/utils/rbasErrors';
 import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
-
-const PROVIDERS: (DropdownOption & { labelKey?: string })[] = [
-  { label: 'NIC (Government)', labelKey: 'screens.settingsEinvoice.providerNic', value: 'nic' },
-  { label: 'Cygnet', value: 'cygnet' },
-  { label: 'Clear (formerly ClearTax)', labelKey: 'screens.settingsEinvoice.providerClear', value: 'clear' },
-  { label: 'EY Tax Tech', value: 'ey' },
-  { label: 'IRIS Business', value: 'iris' },
-  { label: 'Masterindia', value: 'masterindia' },
-];
 
 export default function EInvoiceScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { workspaceId, isOwnerOrAdmin: ownerOrAdmin, hasCapability } = useWorkspace();
   const isOwnerOrAdmin = ownerOrAdmin || hasCapability('integrations.configure');
-  const [provider, setProvider] = useState('nic');
   const [isDirty, setIsDirty] = useState(false);
   const [status, setStatus] = useState('NOT_CONFIGURED');
   const [gstin, setGstin] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [clientId, setClientId] = useState('');
-  const [secret, setSecret] = useState('');
+  const [gateway, setGateway] = useState<{ provider: string; env: string; configured: boolean; sandboxLogin: { gstin: string; username: string } | null } | null>(null);
+  const [usesSandboxLogin, setUsesSandboxLogin] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [reloadKey, setReloadKey] = useState(0);
@@ -55,8 +46,8 @@ export default function EInvoiceScreen() {
         const cfg = d?.config_json || d?.config || {};
         if (cfg.gstin) setGstin(cfg.gstin);
         if (cfg.username) setUsername(cfg.username);
-        if (cfg.provider) setProvider(cfg.provider);
-        if (cfg.client_id) setClientId(cfg.client_id);
+        setUsesSandboxLogin(!!cfg.useSandboxLogin);
+        setGateway(d?.gateway || null);
         setLoadState('ready');
       })
       .catch(() => { if (!cancelled) setLoadState('error'); });
@@ -86,10 +77,9 @@ export default function EInvoiceScreen() {
     if (!workspaceId) return;
     setBusy(true);
     try {
-      await saveWorkspaceIntegration(workspaceId, 'einvoice', {
-        gstin, username, password, client_id: clientId, client_secret: secret, provider,
-      });
+      await saveWorkspaceIntegration(workspaceId, 'einvoice', { provider: 'perione', gstin, username, password });
       setStatus('CONFIGURED');
+      setUsesSandboxLogin(false);
       setIsDirty(false);
       Alert.alert(t('common.saved'), t('screens.settingsEinvoice.savedMsg'));
     } catch (e) {
@@ -120,6 +110,38 @@ export default function EInvoiceScreen() {
     }
   };
 
+  // Signs in at the IRP with what is typed (or saved) and generates nothing.
+  const testLogin = async () => {
+    if (!workspaceId) return;
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const res: any = await testWorkspaceIntegration(workspaceId, 'einvoice', { gstin, username, password });
+      const d = res?.data ?? res ?? {};
+      setTestResult({ ok: true, text: `${t('screens.settingsEinvoice.signedInAs', { defaultValue: 'Signed in as' })} ${d.username} · ${d.gstin}${d.usingSandboxLogin ? ` (${t('screens.settingsEinvoice.sandboxLogin', { defaultValue: 'sandbox test login' })})` : ''}` });
+    } catch (e) {
+      setTestResult({ ok: false, text: (e as any)?.message || t('screens.settingsEinvoice.loginRejected', { defaultValue: 'The portal did not accept this login' }) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const useSandboxLogin = async () => {
+    if (!workspaceId) return;
+    setBusy(true);
+    try {
+      await saveWorkspaceIntegration(workspaceId, 'einvoice', { provider: 'perione', useSandboxLogin: true });
+      setStatus('CONFIGURED');
+      setUsesSandboxLogin(true);
+      setIsDirty(false);
+    } catch (e) {
+      toastRbasError(e) || Alert.alert(t('common.error'), t('screens.settingsEinvoice.couldNotSave'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sandbox = gateway?.env === 'sandbox';
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
@@ -145,31 +167,40 @@ export default function EInvoiceScreen() {
               {t('screens.settingsEinvoice.statusLabel', { status })}
             </Text>
           </View>
-          <View style={s.card}>
-            <View style={s.cardHdr}>
-              <Ionicons name="server-outline" size={18} color={COLORS.info} />
-              <Text style={s.cardTitle}>{t('screens.settingsEinvoice.irpProvider')}</Text>
+          {gateway && (
+            <View style={s.card}>
+              <View style={s.cardHdr}>
+                <Ionicons name="server-outline" size={18} color={COLORS.info} />
+                <Text style={s.cardTitle}>{t('screens.settingsEinvoice.gateway', { defaultValue: 'Gateway' })}</Text>
+              </View>
+              <Text style={s.note}>
+                {gateway.provider} · {t(!gateway.configured ? 'screens.settingsEinvoice.gatewayMissing' : sandbox ? 'screens.settingsEinvoice.gatewaySandbox' : 'screens.settingsEinvoice.gatewayLive', { defaultValue: !gateway.configured ? 'not configured on the server' : sandbox ? 'Sandbox' : 'Live' })}
+              </Text>
+              {sandbox && (
+                <Text style={s.note}>
+                  {t('screens.settingsEinvoice.sandboxNote', { defaultValue: 'Nothing reaches the real portal; only PeriOne\u2019s test GSTINs are accepted.' })}
+                  {gateway.sandboxLogin ? ` ${t('screens.settingsEinvoice.testLogin', { defaultValue: 'Test login' })}: ${gateway.sandboxLogin.username} · ${gateway.sandboxLogin.gstin}.` : ''}
+                </Text>
+              )}
+              {sandbox && gateway.sandboxLogin && (usesSandboxLogin ? (
+                <Text style={[s.note, { color: COLORS.positive }]}>{t('screens.settingsEinvoice.usesSandboxLogin', { defaultValue: 'This workspace uses the sandbox test login.' })}</Text>
+              ) : (
+                <TouchableOpacity onPress={useSandboxLogin} disabled={busy} activeOpacity={0.7}>
+                  <Text style={[s.note, { color: COLORS.info, fontWeight: '700' }]}>{t('screens.settingsEinvoice.useSandboxLogin', { defaultValue: 'Use the test login for this workspace' })}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <FormDropdown
-              label={t('screens.settingsEinvoice.provider')}
-              value={provider}
-              options={PROVIDERS.map(p => (p.labelKey ? { label: t(p.labelKey), value: p.value } : p))}
-              onSelect={(o) => { setProvider(o.value); markDirty(); }}
-              placeholder={t('screens.settingsEinvoice.selectIrp')}
-              containerStyle={{ marginBottom: 0 }}
-            />
-          </View>
+          )}
           <View style={s.card}>
             <View style={s.cardHdr}>
               <Ionicons name="key-outline" size={18} color={'#7C3AED'} />
               <Text style={s.cardTitle}>{t('screens.settingsEinvoice.credentials')}</Text>
             </View>
+            <Text style={s.note}>{t('screens.settingsEinvoice.howTo', { defaultValue: 'On the e-Invoice portal go to API Registration → User Credentials → Create API User, choose "Through GSP", select PeriOne, then enter that API user here.' })}</Text>
             {[
               { l: 'GSTIN', label: t('company.gstin'), v: gstin, set: (v: string) => setGstin(v.toUpperCase()), ph: t('screens.settingsEinvoice.gstinPh'), sec: false },
               { l: 'Username', label: t('screens.settingsEinvoice.username'), v: username, set: setUsername, ph: t('screens.settingsEinvoice.usernamePh'), sec: false },
               { l: 'Password', label: t('screens.settingsEinvoice.password'), v: password, set: setPassword, ph: t('screens.settingsEinvoice.passwordPh'), sec: true },
-              { l: 'Client ID', label: t('screens.settingsEinvoice.clientId'), v: clientId, set: setClientId, ph: t('screens.settingsEinvoice.clientIdPh'), sec: false },
-              { l: 'Client Secret', label: t('screens.settingsEinvoice.clientSecret'), v: secret, set: setSecret, ph: t('screens.settingsEinvoice.clientSecretPh'), sec: false },
             ].map((f) => (
               <View key={f.l} style={s.field}>
                 <Text style={s.fLabel}>{f.label}</Text>
@@ -191,6 +222,14 @@ export default function EInvoiceScreen() {
                 </View>
               </View>
             ))}
+            {testResult && (
+              <Text style={[s.note, { color: testResult.ok ? COLORS.positive : COLORS.negative, marginBottom: 0 }]}>{testResult.text}</Text>
+            )}
+          </View>
+          <View style={s.btnRow}>
+            <TouchableOpacity style={s.outBtn} onPress={testLogin} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
+              <Text style={[s.outTxt, { color: COLORS.info }]}>{t('screens.settingsEinvoice.testLoginBtn', { defaultValue: 'Test login' })}</Text>
+            </TouchableOpacity>
           </View>
           <View style={s.btnRow}>
             {isDirty && (
@@ -225,6 +264,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  note: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.sm, lineHeight: 20 },
   field: { marginBottom: SPACING.md },
   fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
   fRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },

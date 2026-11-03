@@ -1,3 +1,9 @@
+## 2026-11-03 (06:05–06:20) — Settings → E-Invoice / E-Way Bill on the PeriOne gateway (branch `29-10-2026`)
+
+- `app/settings/einvoice.tsx`, `app/settings/ewb.tsx`: provider dropdown and client id / secret removed; GSTIN, API username, API password only, saved with `provider: 'perione'`. New Gateway card (PeriOne · Sandbox / Live), sandbox note with the test login and "Use the test login for this workspace" (`useSandboxLogin: true`), "Test login" button (`testWorkspaceIntegration`) with the result line, portal how-to text. Strings use `defaultValue` so every language shows English until translated.
+- `src/services/api.ts`: `testWorkspaceIntegration`.
+- tsc clean on the touched files; `npm test` green.
+
 ## 2026-11-03 (04:15–04:50) — Notification badge, channels save, payment reminder rules, Reminder History, Approvals without voucher requests (branch `28-10-2026`, local only)
 
 - **Bell badge:** Home counts only unread alerts (`filter(n => !n.read)`), reloads on `[dataReady, companyGuid]` and on every focus, so returning from Notifications drops the number; `Header` defaults to 0 instead of 1. `markNotificationRead` now `encodeURIComponent`s the id (ids carry `%`), so marking read actually reaches the server; the optimistic flip on the Notifications screen is reverted to unread if the PATCH fails.

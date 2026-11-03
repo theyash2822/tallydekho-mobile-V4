@@ -9,6 +9,7 @@ import {
   getWorkspaceIntegration,
   saveWorkspaceIntegration,
   activateWorkspaceIntegration,
+  testWorkspaceIntegration,
   ApiError,
 } from '../../src/services/api';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
@@ -55,8 +56,9 @@ export default function EWBIntegrationScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [clientId, setClientId] = useState('');
-  const [secret, setSecret] = useState('');
+  const [gateway, setGateway] = useState<{ provider: string; env: string; configured: boolean; sandboxLogin: { gstin: string; username: string } | null } | null>(null);
+  const [usesSandboxLogin, setUsesSandboxLogin] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [reloadKey, setReloadKey] = useState(0);
@@ -73,7 +75,8 @@ export default function EWBIntegrationScreen() {
         const cfg = d?.config_json || d?.config || {};
         if (cfg.gstin) setGstin(cfg.gstin);
         if (cfg.username) setUsername(cfg.username);
-        if (cfg.client_id) setClientId(cfg.client_id);
+        setUsesSandboxLogin(!!cfg.useSandboxLogin);
+        setGateway(d?.gateway || null);
         setLoadState('ready');
       })
       .catch(() => { if (!cancelled) setLoadState('error'); });
@@ -103,10 +106,9 @@ export default function EWBIntegrationScreen() {
     if (!workspaceId) return;
     setBusy(true);
     try {
-      await saveWorkspaceIntegration(workspaceId, 'eway', {
-        gstin, username, password, client_id: clientId, client_secret: secret,
-      });
+      await saveWorkspaceIntegration(workspaceId, 'eway', { provider: 'perione', gstin, username, password });
       setStatus('CONFIGURED');
+      setUsesSandboxLogin(false);
       setIsDirty(false);
       Alert.alert(t('common.saved'), t('screens.settingsEwb.savedMsg'));
     } catch (e) {
@@ -137,6 +139,38 @@ export default function EWBIntegrationScreen() {
     }
   };
 
+  // Signs in at the portal with what is typed (or saved) and generates nothing.
+  const testLogin = async () => {
+    if (!workspaceId) return;
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const res: any = await testWorkspaceIntegration(workspaceId, 'eway', { gstin, username, password });
+      const d = res?.data ?? res ?? {};
+      setTestResult({ ok: true, text: `${t('screens.settingsEwb.signedInAs', { defaultValue: 'Signed in as' })} ${d.username} · ${d.gstin}${d.usingSandboxLogin ? ` (${t('screens.settingsEwb.sandboxLogin', { defaultValue: 'sandbox test login' })})` : ''}` });
+    } catch (e) {
+      setTestResult({ ok: false, text: (e as any)?.message || t('screens.settingsEwb.loginRejected', { defaultValue: 'The portal did not accept this login' }) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const useSandboxLogin = async () => {
+    if (!workspaceId) return;
+    setBusy(true);
+    try {
+      await saveWorkspaceIntegration(workspaceId, 'eway', { provider: 'perione', useSandboxLogin: true });
+      setStatus('CONFIGURED');
+      setUsesSandboxLogin(true);
+      setIsDirty(false);
+    } catch (e) {
+      toastRbasError(e) || Alert.alert(t('common.error'), t('screens.settingsEwb.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sandbox = gateway?.env === 'sandbox';
   const fieldProps = {
     showPass,
     onToggleShowPass: () => setShowPass((p) => !p),
@@ -169,17 +203,47 @@ export default function EWBIntegrationScreen() {
               {status === 'ACTIVE' ? t('screens.settingsEwb.activeForWorkspace') : t('screens.settingsEwb.statusLabel', { status })}
             </Text>
           </View>
+          {gateway && (
+            <View style={s.card}>
+              <View style={s.cardHdr}>
+                <Ionicons name="server-outline" size={18} color={COLORS.info} />
+                <Text style={s.cardTitle}>{t('screens.settingsEwb.gateway', { defaultValue: 'Gateway' })}</Text>
+              </View>
+              <Text style={s.portalRow}>
+                {gateway.provider} · {t(!gateway.configured ? 'screens.settingsEwb.gatewayMissing' : sandbox ? 'screens.settingsEwb.gatewaySandbox' : 'screens.settingsEwb.gatewayLive', { defaultValue: !gateway.configured ? 'not configured on the server' : sandbox ? 'Sandbox' : 'Live' })}
+              </Text>
+              {sandbox && (
+                <Text style={s.portalRow}>
+                  {t('screens.settingsEwb.sandboxNote', { defaultValue: 'Nothing reaches the real portal; only PeriOne\u2019s test GSTINs are accepted.' })}
+                  {gateway.sandboxLogin ? ` ${t('screens.settingsEwb.testLogin', { defaultValue: 'Test login' })}: ${gateway.sandboxLogin.username} · ${gateway.sandboxLogin.gstin}.` : ''}
+                </Text>
+              )}
+              {sandbox && gateway.sandboxLogin && (usesSandboxLogin ? (
+                <Text style={[s.portalRow, { color: COLORS.positive }]}>{t('screens.settingsEwb.usesSandboxLogin', { defaultValue: 'This workspace uses the sandbox test login.' })}</Text>
+              ) : (
+                <TouchableOpacity onPress={useSandboxLogin} disabled={busy} activeOpacity={0.7}>
+                  <Text style={[s.portalRow, { color: COLORS.info, fontWeight: '700' }]}>{t('screens.settingsEwb.useSandboxLogin', { defaultValue: 'Use the test login for this workspace' })}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           <View style={s.card}>
             <View style={s.cardHdr}>
               <Ionicons name="key-outline" size={18} color={COLORS.info} />
               <Text style={s.cardTitle}>{t('screens.settingsEwb.credentials')}</Text>
             </View>
-            <Text style={s.portalRow}>{t('screens.settingsEwb.portalRow')}</Text>
+            <Text style={s.portalRow}>{t('screens.settingsEwb.howTo', { defaultValue: 'On the E-Way Bill portal go to Registration → For GSP, select PeriOne and create the API user, then enter it here.' })}</Text>
             <Field {...fieldProps} label="GSTIN" value={gstin} set={(v) => setGstin(v.toUpperCase())} placeholder={t('screens.settingsEwb.gstinPh')} />
             <Field {...fieldProps} label={t('screens.settingsEwb.username')} value={username} set={setUsername} placeholder={t('screens.settingsEwb.usernamePh')} />
             <Field {...fieldProps} label={t('screens.settingsEwb.password')} value={password} set={setPassword} secure placeholder={t('screens.settingsEwb.passwordPh')} />
-            <Field {...fieldProps} label={t('screens.settingsEwb.clientId')} value={clientId} set={setClientId} placeholder={t('screens.settingsEwb.clientIdPh')} />
-            <Field {...fieldProps} label={t('screens.settingsEwb.clientSecret')} value={secret} set={setSecret} secure placeholder={t('screens.settingsEwb.clientSecretPh')} />
+            {testResult && (
+              <Text style={[s.portalRow, { color: testResult.ok ? COLORS.positive : COLORS.negative, marginBottom: 0 }]}>{testResult.text}</Text>
+            )}
+          </View>
+          <View style={s.btnRow}>
+            <TouchableOpacity style={s.outBtn} onPress={testLogin} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
+              <Text style={[s.outTxt, { color: COLORS.info }]}>{t('screens.settingsEwb.testLoginBtn', { defaultValue: 'Test login' })}</Text>
+            </TouchableOpacity>
           </View>
           <View style={s.btnRow}>
             {isDirty && (
