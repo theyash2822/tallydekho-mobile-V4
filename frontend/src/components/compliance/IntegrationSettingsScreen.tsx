@@ -1,8 +1,8 @@
 /**
  * Settings → E-invoice / E-way bill: one row per company in the workspace with
  * Configure / Activate / Remove / Test (spec 2026-11-03 §2.1, §4).
- * Credentials and the one-time activation (100 credits) are per company; every
- * generation costs 2 credits.
+ * Credentials and the one-time activation are per company; the screen shows the company
+ * chosen in the header. Rates are not shown here (Owner decision 2026-11-03).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking, ActivityIndicator, RefreshControl } from 'react-native';
@@ -17,6 +17,7 @@ import {
   ApiError, type IntegrationCompanyRow, type WorkspaceIntegrationResponse,
 } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
 import { toastRbasError } from '../../utils/rbasErrors';
 import { LoadingState, ErrorState } from '../ApiStateViews';
 import { BottomModalShell } from '../forms/BottomModalShell';
@@ -40,6 +41,7 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
   const router = useRouter();
   const { t } = useTranslation();
   const { workspaceId, isOwnerOrAdmin: ownerOrAdmin, hasCapability } = useWorkspace();
+  const { company: selectedCompany } = useAuth();
   const canConfigure = ownerOrAdmin || hasCapability('integrations.configure');
   const [data, setData] = useState<WorkspaceIntegrationResponse | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
@@ -66,8 +68,9 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
 
   const gateway = data?.gateway || null;
   const sandbox = gateway?.env === 'sandbox';
-  const rate = { activation: data?.rate?.activation ?? 100, generate: data?.rate?.generate ?? 2 };
-  const companies: IntegrationCompanyRow[] = Array.isArray(data?.companies) ? data!.companies! : [];
+  const allCompanies: IntegrationCompanyRow[] = Array.isArray(data?.companies) ? data!.companies! : [];
+  // Only the company chosen in the header: settings, activation and credentials are per company.
+  const companies = allCompanies.filter((c) => !!selectedCompany?.guid && c.company_guid === selectedCompany.guid);
 
   const idOf = (c: IntegrationCompanyRow) => String(c.company_id);
   // The server computes status from the stored credentials (complianceCredentials.integrationStatus); `secretsSet`
@@ -78,7 +81,7 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
     if (!workspaceId) return;
     Alert.alert(
       t(`${ns}.activate`),
-      t(`${ns}.activateConfirm`, { company: c.name, activation: rate.activation, generate: rate.generate, defaultValue: '{{activation}} credits once for {{company}}, then {{generate}} credits per generation.' }),
+      t(`${ns}.activateConfirmPlain`, { company: c.name, defaultValue: 'The activation fee is charged once from the workspace credits for {{company}}; each generation is charged as it happens.' }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -204,15 +207,12 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
                   {gateway.sandboxLogin ? ` ${t(`${ns}.testLogin`, { defaultValue: 'Test login' })}: ${gateway.sandboxLogin.username} · ${gateway.sandboxLogin.gstin}.` : ''}
                 </Text>
               )}
-              <Text style={[s.note, { marginBottom: 0 }]}>
-                {t(`${ns}.rates`, { activation: rate.activation, generate: rate.generate, defaultValue: 'Activation {{activation}} credits per company, once. {{generate}} credits per generation.' })}
-              </Text>
             </View>
           )}
 
-          <Text style={s.sectionLabel}>{t(`${ns}.companies`, { defaultValue: 'Companies' })}</Text>
+          <Text style={s.sectionLabel}>{t(`${ns}.thisCompany`, { defaultValue: 'This company' })}</Text>
           {companies.length === 0 && (
-            <View style={s.card}><Text style={s.note}>{t(`${ns}.noCompanies`, { defaultValue: 'No companies in this workspace yet.' })}</Text></View>
+            <View style={s.card}><Text style={s.note}>{t(`${ns}.selectCompany`, { defaultValue: 'Select a company from the header; its settings are kept per company.' })}</Text></View>
           )}
           {companies.map((c) => {
             const id = idOf(c);
