@@ -17,7 +17,13 @@ import {
 import { fromTallyVoucher } from '../../src/utils/voucherDocumentAdapter';
 import { isAccountingVoucherType } from '../../src/utils/voucher-print';
 import { isCommercialDocumentType } from '../../src/utils/commercial-print';
-import { COLORS } from '../../src/constants/colors';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../src/constants/colors';
+import { safePush } from '../../src/utils/safeNavigation';
+import { IrnChip, EwbChip } from '../../src/components/compliance/ComplianceChips';
+import { irnStatusOf, ewbStatusOf, type IrnStatus, type EwbStatus } from '../../src/components/compliance/complianceShared';
+
+const COMPLIANCE_DOC_TYPES = new Set<DocumentType>(['sales_invoice', 'credit_note', 'debit_note']);
+const COMPLIANCE_THRESHOLD = 50000;
 
 // Convert ISO '2025-04-04' → '04 Apr 2025'
 function isoToDocDate(iso: string): string {
@@ -94,6 +100,8 @@ export default function DocumentPage() {
   const routeType = resolveDocTypeFromParam(params.type);
 
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
+  // IRN / EWB status for the compliance bar (spec 2026-11-03 §4): chips open the compliance record.
+  const [compliance, setCompliance] = useState<{ irn: IrnStatus; ewb: EwbStatus } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +120,12 @@ export default function DocumentPage() {
       .then((res: any) => {
         if (res?.data?.voucher) {
           try {
+            const v = res.data.voucher;
+            const merged = { ...v, irn: v.irn || res.data.e_invoice?.irn, einvoice_status: res.data.e_invoice?.status, ewb_number: v.ewb_number || res.data.e_way_bill?.ewb_no, ewb_status: res.data.e_way_bill?.status, ewb_valid_till: res.data.e_way_bill?.valid_till };
+            const small = Math.abs(+v.amount || 0) < COMPLIANCE_THRESHOLD;
+            const irnSt = irnStatusOf(merged);
+            const ewbSt = ewbStatusOf(merged);
+            setCompliance(v.is_cancelled ? null : { irn: irnSt === 'pending' && small ? 'none' : irnSt, ewb: ewbSt === 'pending' && small ? 'none' : ewbSt });
             setDoc(apiVoucherToDoc(res.data, companyName, routeType));
           } catch (e: any) {
             setError(t('screens.documentId.parseFailed', { message: e?.message || t('screens.documentId.unknownError') }));
@@ -151,9 +165,35 @@ export default function DocumentPage() {
     );
   }
 
-  return <DocumentPreviewPage document={doc} />;
+  const showCompliance = !!compliance && COMPLIANCE_DOC_TYPES.has(doc.documentType as DocumentType) && (compliance.irn !== 'none' || compliance.ewb !== 'none');
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
+        <DocumentPreviewPage document={doc} />
+      </View>
+      {showCompliance && (
+        <TouchableOpacity
+          style={s.complianceBar}
+          activeOpacity={0.8}
+          onPress={() => safePush(router, `/reports/compliance-detail?voucherGuid=${encodeURIComponent(String(params.id))}&domain=${compliance!.ewb !== 'none' && compliance!.irn === 'none' ? 'ewaybill' : 'einvoice'}` as any)}
+        >
+          <IrnChip status={compliance!.irn} />
+          <EwbChip status={compliance!.ewb} />
+          <View style={{ flex: 1 }} />
+          <Text style={s.complianceLink}>{t('screens.reportsEinvoiceList.complianceLink', { defaultValue: 'Compliance' })}</Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 }
 
 const s = StyleSheet.create({
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  complianceBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  complianceLink: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
 });

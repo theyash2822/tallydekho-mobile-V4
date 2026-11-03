@@ -792,6 +792,110 @@ export const getEInvoicePending   = (companyGuid?: string, params?: any) => get<
 export const getEInvoiceGenerated = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/generated', companyGuid, params));
 export const generateEInvoice     = (payload: any) => post<any>('/einvoice/generate', payload);
 export const cancelEInvoice       = (payload: any) => post<any>('/einvoice/cancel',   payload);
+// ── Compliance rework (2026-11-03 spec §2) — e-Invoice / e-Way Bill through PeriOne ──
+export type ComplianceDomain = 'einvoice' | 'ewaybill';
+/** Keys follow the server's mergeDispatchDetails (Tally EWAYBILLDETAILS spelling). */
+export interface DispatchDetails {
+  dispatch_from?: string;
+  ship_to?: string;
+  /** 'Road' | 'Rail' | 'Air' | 'Ship' (or the NIC code '1'–'4'). */
+  transport_mode?: string;
+  distance?: string | number;
+  vehicle_number?: string;
+  transporter_id?: string;
+  transporter_name?: string;
+  transport_doc_no?: string;
+  transport_doc_date?: string;
+}
+export interface ReadinessGap { code: string; message: string; fix?: any }
+export interface ReadinessRow {
+  guid: string;
+  voucher_number?: string;
+  voucher_type?: string;
+  date?: string;
+  party_name?: string;
+  party_gstin?: string;
+  amount?: number;
+  preview?: any;
+  gaps?: ReadinessGap[];
+  irn?: string;
+  ack_no?: string;
+  ack_date?: string;
+  status?: string;
+  ewb_number?: string;
+  ewb_valid_till?: string;
+  vehicle_no?: string;
+  transporter_id?: string;
+  error_message?: string;
+  last_event_at?: string | number;
+  [k: string]: any;
+}
+export interface ReadinessResponse {
+  data: { ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] };
+  counts?: Record<string, number>;
+}
+/** GET /einvoice/readiness — Ready / Needs attention / Generated for the period (+ coverage counts). */
+export const fetchEinvoiceReadiness = (companyGuid: string, params?: Record<string, string | undefined>) =>
+  get<ReadinessResponse>(withCompany('/einvoice/readiness', companyGuid, params));
+/** POST /einvoice/generate — 2 credits; `alsoEwb` adds an e-way bill (2 more) with `dispatchDetails`. */
+export const generateEinvoice = (payload: { companyGuid: string; voucherGuid: string; alsoEwb?: boolean; dispatchDetails?: DispatchDetails }) =>
+  post<any>('/einvoice/generate', payload);
+export const generateEinvoiceBulk = (payload: { companyGuid: string; voucherGuids: string[]; alsoEwb?: boolean }) =>
+  post<any>('/einvoice/generate-bulk', payload);
+/** GET /einvoice/:voucherGuid — { voucher, einvoice, ewaybill, history }. */
+export const getEinvoiceRecord = (companyGuid: string, voucherGuid: string) =>
+  get<any>(withCompany(`/einvoice/${encodeURIComponent(voucherGuid)}`, companyGuid));
+/** GET /einvoice/:voucherGuid/signed-json — the signed payload as text (shared as IRN-<irn>.json). */
+export const getEinvoiceSignedJson = (companyGuid: string, voucherGuid: string) =>
+  request<string>('GET', withCompany(`/einvoice/${encodeURIComponent(voucherGuid)}/signed-json`, companyGuid), undefined, true, 'api', true, 'text');
+export const verifyEinvoice = (companyGuid: string, voucherGuid: string) =>
+  post<any>(`/einvoice/${encodeURIComponent(voucherGuid)}/verify`, { companyGuid });
+export const refreshEinvoice = (companyGuid: string, voucherGuid: string) =>
+  post<any>(`/einvoice/${encodeURIComponent(voucherGuid)}/refresh`, { companyGuid });
+export const fetchEwbReadiness = (companyGuid: string, params?: Record<string, string | undefined>) =>
+  get<ReadinessResponse>(withCompany('/ewaybills/readiness', companyGuid, params));
+export const generateEwb = (payload: { companyGuid: string; voucherGuid: string; dispatchDetails?: DispatchDetails }) =>
+  post<any>('/ewaybills/generate', payload);
+export const generateEwbBulk = (payload: { companyGuid: string; voucherGuids: string[]; dispatchDetails?: DispatchDetails }) =>
+  post<any>('/ewaybills/generate-bulk', payload);
+export const getEwbRecord = (companyGuid: string, voucherGuid: string) =>
+  get<any>(withCompany(`/ewaybills/${encodeURIComponent(voucherGuid)}`, companyGuid));
+/** POST /ewaybills/:voucherGuid/vehicle — Part B / vehicle update (reasonCode 4 = first time). */
+export const updateEwbVehicle = (companyGuid: string, voucherGuid: string, body: {
+  vehicleNo: string; fromPlace: string; fromState: string; reasonCode: string | number; reasonRem?: string;
+  transMode: string | number; transDocNo?: string; transDocDate?: string;
+}) => post<any>(`/ewaybills/${encodeURIComponent(voucherGuid)}/vehicle`, { companyGuid, ...body });
+export const updateEwbTransporter = (companyGuid: string, voucherGuid: string, transporterId: string) =>
+  post<any>(`/ewaybills/${encodeURIComponent(voucherGuid)}/transporter`, { companyGuid, transporterId });
+export const extendEwb = (companyGuid: string, voucherGuid: string, body: {
+  vehicleNo: string; fromPlace: string; fromState: string; fromPincode: string; remainingDistance: string | number;
+  transMode: string | number; extendRsnCode: string | number; extendRemarks: string; consignmentStatus: 'M' | 'T';
+  transitType?: string; addressLine1?: string;
+}) => post<any>(`/ewaybills/${encodeURIComponent(voucherGuid)}/extend`, { companyGuid, ...body });
+export const refreshEwb = (companyGuid: string, voucherGuid: string) =>
+  post<any>(`/ewaybills/${encodeURIComponent(voucherGuid)}/refresh`, { companyGuid });
+export const createConsolidatedEwb = (payload: {
+  companyGuid: string; ewbNos: string[]; fromPlace: string; fromState: string; vehicleNo: string;
+  transMode: string | number; transDocNo?: string; transDocDate?: string;
+}) => post<any>('/ewaybills/consolidated', payload);
+export const listConsolidatedEwbs = (companyGuid: string) =>
+  get<any>(withCompany('/ewaybills/consolidated', companyGuid));
+/** GET /ewaybills/incoming?date=dd/mm/yyyy — bills others generated on this GSTIN. */
+export const listIncomingEwbs = (companyGuid: string, date: string) =>
+  get<any>(withCompany('/ewaybills/incoming', companyGuid, { date }));
+export const acceptIncomingEwb = (companyGuid: string, ewbNo: string) =>
+  post<any>(`/ewaybills/incoming/${encodeURIComponent(ewbNo)}/accept`, { companyGuid });
+export const rejectIncomingEwb = (companyGuid: string, ewbNo: string) =>
+  post<any>(`/ewaybills/incoming/${encodeURIComponent(ewbNo)}/reject`, { companyGuid });
+/** POST /compliance/event — records share / print / download_pdf (the PDF itself is built on the device). */
+export const recordComplianceEvent = (payload: { companyGuid: string; voucherGuid: string; domain: ComplianceDomain; action: 'download_pdf' | 'print' | 'share'; detail?: any }) =>
+  post<any>('/compliance/event', payload);
+export const getComplianceHistory = (companyGuid: string, voucherGuid: string) =>
+  get<any>(withCompany('/compliance/history', companyGuid, { voucherGuid }));
+/** POST /tally/master/party-alter — GSTIN / pincode / state written back to the Tally ledger. */
+export const alterParty = (payload: { companyGuid: string; ledgerGuid?: string; ledgerName?: string; gstin?: string; pincode?: string; state?: string; address?: string }) =>
+  tallyPost<any>('/master/party-alter', payload);
+
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));
 export const getGSTSummary       = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-summary', companyGuid, params));
 
@@ -1154,12 +1258,38 @@ export const approveRestoreRequest = (requestId: string, body: { backupId: strin
   post<any>(`/restore-sessions/${encodeURIComponent(requestId)}/approve`, body);
 export const rejectRestoreSession = (sessionId: string) =>
   post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/reject`);
+// Integrations are per company since 2026-11-03: every write carries `companyId`.
+export interface IntegrationCompanyRow {
+  company_id: number | string;
+  company_guid?: string;
+  name: string;
+  gstin?: string | null;
+  status: 'NOT_CONFIGURED' | 'CONFIGURED' | 'ACTIVE' | string;
+  activated_at?: number | string | null;
+  config_json?: { gstin?: string; username?: string; useSandboxLogin?: boolean; provider?: string } | null;
+  /** Per secret key (`{ password: true }`): managers learn a secret is saved, never its value. */
+  secretsSet?: Record<string, boolean>;
+  useSandboxLogin?: boolean;
+}
+export interface WorkspaceIntegrationResponse {
+  gateway?: { provider: string; env: string; configured: boolean; sandboxLogin: { gstin: string; username: string } | null } | null;
+  rate?: { activation: number; generate: number } | null;
+  companies?: IntegrationCompanyRow[];
+  /** Legacy workspace-level row (older servers). */
+  status?: string;
+  config_json?: any;
+}
+/** GET /workspaces/:id/integrations/:domain → { gateway, rate, companies[] }. */
 export const getWorkspaceIntegration = (workspaceId: string, domain: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`);
-export const saveWorkspaceIntegration = (workspaceId: string, domain: string, config: object) =>
+export const saveWorkspaceIntegration = (workspaceId: string, domain: string, config: { companyId: number | string; gstin?: string; username?: string; password?: string; useSandboxLogin?: boolean; provider?: string }) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`, config);
-export const testWorkspaceIntegration = (workspaceId: string, domain: string, body: object = {}) =>
+export const testWorkspaceIntegration = (workspaceId: string, domain: string, body: { companyId: number | string; gstin?: string; username?: string; password?: string }) =>
   post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/test`, body);
-export const activateWorkspaceIntegration = (workspaceId: string, domain: string) =>
-  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/activate`);
+/** Charges the one-time activation (100 credits) for that company; idempotent once activated. */
+export const activateWorkspaceIntegration = (workspaceId: string, domain: string, companyId: number | string) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/activate`, { companyId });
+/** DELETE ?companyId= — wipes the credentials, keeps the paid activation. */
+export const removeWorkspaceIntegration = (workspaceId: string, domain: string, companyId: number | string) =>
+  del<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}?companyId=${encodeURIComponent(String(companyId))}`);
 

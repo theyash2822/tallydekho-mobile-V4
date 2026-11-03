@@ -338,7 +338,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 2. E-Way Bill ─────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="car-outline" title={t('screens.reportsCompliance.ewayBill')} onPress={() => safePush(router, '/reports/ewb-compliance' as any)} />
+          <CardHeader icon="car-outline" title={t('screens.reportsCompliance.ewayBill')} onPress={() => safePush(router, '/reports/ewb-list' as any)} />
           <Divider />
 
           <View style={s.ewbBody}>
@@ -374,7 +374,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 3. E-Invoicing ────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="receipt-outline" title={t('screens.reportsCompliance.eInvoicing')} onPress={() => safePush(router, '/reports/einvoice-compliance' as any)} />
+          <CardHeader icon="receipt-outline" title={t('screens.reportsCompliance.eInvoicing')} onPress={() => safePush(router, '/reports/einvoice-list' as any)} />
           <Divider />
 
           <View style={s.progressBody}>

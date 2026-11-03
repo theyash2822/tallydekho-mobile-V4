@@ -111,11 +111,12 @@ const sb = StyleSheet.create({
 // 3. ChannelChips
 // ─────────────────────────────────────────────────────────────────────────────
 type Channels = { push: boolean; email: boolean; whatsapp: boolean; sms: boolean };
-const CHANNEL_LIST: { key: keyof Channels; label?: string; labelKey?: string }[] = [
-  { key: 'push',      labelKey: 'screens.settingsComplianceReminders.channelPush'  },
-  { key: 'email',     labelKey: 'screens.settingsComplianceReminders.channelEmail' },
-  { key: 'whatsapp',  label: 'WhatsApp'  },
-  { key: 'sms',       labelKey: 'screens.settingsComplianceReminders.channelSms'   },
+// Per-send cost under each chip (spec 2026-11-03 §3.5): WhatsApp 1, Email 0.5, SMS 0.5, push free.
+const CHANNEL_LIST: { key: keyof Channels; label?: string; labelKey?: string; costKey: string; costDefault: string }[] = [
+  { key: 'push',      labelKey: 'screens.settingsComplianceReminders.channelPush',  costKey: 'screens.settingsComplianceReminders.costPush',     costDefault: 'Free' },
+  { key: 'email',     labelKey: 'screens.settingsComplianceReminders.channelEmail', costKey: 'screens.settingsComplianceReminders.costEmail',    costDefault: '0.5 credits' },
+  { key: 'whatsapp',  label: 'WhatsApp',                                            costKey: 'screens.settingsComplianceReminders.costWhatsapp', costDefault: '1 credit' },
+  { key: 'sms',       labelKey: 'screens.settingsComplianceReminders.channelSms',   costKey: 'screens.settingsComplianceReminders.costSms',      costDefault: '0.5 credits' },
 ];
 
 function ChannelChips({
@@ -127,6 +128,7 @@ function ChannelChips({
   return (
     <View style={cc.wrap}>
       <Text style={cc.label}>{t('screens.settingsComplianceReminders.channel')}</Text>
+      <Text style={cc.costNote}>{t('screens.settingsComplianceReminders.costNote', { defaultValue: 'Charged per send: WhatsApp 1 credit, email 0.5, SMS 0.5. In-app push is free.' })}</Text>
       <View style={cc.row}>
         {CHANNEL_LIST.map(ch => {
           const active = value[ch.key];
@@ -138,6 +140,7 @@ function ChannelChips({
               activeOpacity={0.7}
             >
               <Text style={[cc.chipTxt, active && cc.chipTxtActive]}>{ch.labelKey ? t(ch.labelKey) : ch.label}</Text>
+              <Text style={[cc.chipCost, active && cc.chipCostActive]}>{t(ch.costKey, { defaultValue: ch.costDefault })}</Text>
             </TouchableOpacity>
           );
         })}
@@ -153,6 +156,7 @@ const cc = StyleSheet.create({
   },
   row:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
+    alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg,
     borderWidth: 1.5, borderColor: COLORS.borderDefault,
@@ -160,6 +164,9 @@ const cc = StyleSheet.create({
   chipActive:   { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   chipTxt:      { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
   chipTxtActive:{ color: COLORS.white, fontWeight: '700' },
+  chipCost:     { fontSize: 9, color: COLORS.textTertiary, marginTop: 1, textAlign: 'center' },
+  chipCostActive:{ color: COLORS.white, opacity: 0.85 },
+  costNote:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: SPACING.sm, lineHeight: 16 },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

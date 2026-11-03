@@ -286,12 +286,13 @@ const tp = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification channel data
 // ─────────────────────────────────────────────────────────────────────────────
-// SMS is no longer a user channel: push, email and WhatsApp only.
+// Paid channels show their per-send cost (spec 2026-11-03 §1.5 / §3.5); in-app push is free.
 const CHANNELS = [
-  { id:'email',    labelKey:'screens.settingsNotificationChannels.email',    icon:'mail-outline',          subKey:'screens.settingsNotificationChannels.emailSub' },
-  { id:'whatsapp', label:'WhatsApp',          icon:'logo-whatsapp',         subKey:'screens.settingsNotificationChannels.whatsappSub' },
-  { id:'push',     labelKey:'screens.settingsNotificationChannels.push',     icon:'notifications-outline', subKey:'screens.settingsNotificationChannels.pushSub' },
-] as { id: string; label?: string; labelKey?: string; icon: string; subKey: string }[];
+  { id:'whatsapp', label:'WhatsApp',          icon:'logo-whatsapp',         subKey:'screens.settingsNotificationChannels.whatsappSub', costKey:'screens.settingsNotificationChannels.whatsappCost', costDefault:'1 credit per message' },
+  { id:'email',    labelKey:'screens.settingsNotificationChannels.email',    icon:'mail-outline',          subKey:'screens.settingsNotificationChannels.emailSub',    costKey:'screens.settingsNotificationChannels.emailCost',    costDefault:'0.5 credits per email' },
+  { id:'sms',      labelKey:'screens.settingsNotificationChannels.sms',      icon:'chatbox-outline',       subKey:'screens.settingsNotificationChannels.smsSub',      costKey:'screens.settingsNotificationChannels.smsCost',      costDefault:'0.5 credits per SMS' },
+  { id:'push',     labelKey:'screens.settingsNotificationChannels.push',     icon:'notifications-outline', subKey:'screens.settingsNotificationChannels.pushSub',     costKey:'screens.settingsNotificationChannels.pushCost',     costDefault:'Free' },
+] as { id: string; label?: string; labelKey?: string; icon: string; subKey: string; costKey: string; costDefault: string }[];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
@@ -303,7 +304,7 @@ export default function NotificationChannelsScreen() {
   const [saving, setSaving] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [enabled, setEnabled] = useState<Record<string,boolean>>({
-    email:true, whatsapp:true, push:true,
+    email:true, whatsapp:true, sms:true, push:true,
   });
   const [quietHours,     setQuietHours]     = useState(false);
   const [startTime,      setStartTime]      = useState('10:00 PM');
@@ -318,11 +319,12 @@ export default function NotificationChannelsScreen() {
     getNotificationSettings().then((res: any) => {
       if (res?.data) {
         const d = res.data;
-        if (d.push_enabled !== undefined || d.email_enabled !== undefined || d.whatsapp_enabled !== undefined) {
+        if (d.push_enabled !== undefined || d.email_enabled !== undefined || d.whatsapp_enabled !== undefined || d.sms_enabled !== undefined) {
           setEnabled({
             push: d.push_enabled ?? true,
             email: d.email_enabled ?? true,
             whatsapp: d.whatsapp_enabled ?? true,
+            sms: d.sms_enabled !== false,
           });
         }
         if (d.quiet_enabled !== undefined) setQuietHours(!!d.quiet_enabled);
@@ -341,7 +343,7 @@ export default function NotificationChannelsScreen() {
     try {
       await updateNotificationSettings({
         push_enabled: enabled.push, email_enabled: enabled.email,
-        whatsapp_enabled: enabled.whatsapp,
+        whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
         quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
         quiet_saturday: saturday, quiet_sunday: sunday,
       });
@@ -376,8 +378,9 @@ export default function NotificationChannelsScreen() {
                 <Ionicons name={ch.icon as any} size={18} color={COLORS.textSecondary} />
               </View>
               <View style={s.rowInfo}>
-                <Text style={s.rowLabel}>{ch.labelKey ? t(ch.labelKey) : ch.label}</Text>
-                <Text style={s.rowSub}>{t(ch.subKey)}</Text>
+                <Text style={s.rowLabel}>{ch.labelKey ? t(ch.labelKey, { defaultValue: ch.id === 'sms' ? 'SMS' : undefined }) : ch.label}</Text>
+                <Text style={s.rowSub}>{t(ch.subKey, { defaultValue: ch.id === 'sms' ? 'Text messages to your number' : undefined })}</Text>
+                <Text style={s.rowCost}>{t(ch.costKey, { defaultValue: ch.costDefault })}</Text>
               </View>
               <CustomToggle
                 value={enabled[ch.id]}
@@ -526,6 +529,7 @@ const s = StyleSheet.create({
   rowInfo:  { flex: 1 },
   rowLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
   rowSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  rowCost:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '600' },
 
   quietBody: { borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: SPACING.md, paddingBottom: SPACING.sm },
   timeRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: SPACING.md },

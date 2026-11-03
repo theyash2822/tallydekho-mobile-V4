@@ -28,6 +28,11 @@ import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { AlertBannerCarousel } from '../../src/components/AlertBannerCarousel';
 import { useRequireCapability } from '../../src/components/RequireCapability';
+import { IrnChip, EwbChip } from '../../src/components/compliance/ComplianceChips';
+import { irnStatusOf, ewbStatusOf } from '../../src/components/compliance/complianceShared';
+
+// Sales below this value need no IRN / e-way bill, so no pending chip is shown for them.
+const COMPLIANCE_THRESHOLD = 50000;
 
 const { width: SW } = Dimensions.get('window');
 
@@ -78,6 +83,9 @@ export default function SalesScreen() {
             docType: r.doc_type || classifyVoucherDocType('sales', r),
             voucherType: r.voucher_type,
             isOptional: !!r.is_optional,
+            // IRN / EWB chips (spec 2026-11-03 §3.3 / §4); pending only above the threshold.
+            irnStatus: r.is_cancelled ? 'none' : (irnStatusOf(r) === 'pending' && Math.abs(+r.amount || 0) < COMPLIANCE_THRESHOLD ? 'none' : irnStatusOf(r)),
+            ewbStatus: r.is_cancelled ? 'none' : (ewbStatusOf(r) === 'pending' && Math.abs(+r.amount || 0) < COMPLIANCE_THRESHOLD ? 'none' : ewbStatusOf(r)),
           })));
           const partyMap: Record<string, number> = {};
           rows.forEach((r: any) => {
@@ -92,9 +100,9 @@ export default function SalesScreen() {
             name,
             amount: formatAmount(Math.round(+total)),
           })));
-          const pendingIRN = rows.filter((r: any) => !r.irn).length;
+          const pendingIRN = rows.filter((r: any) => !r.irn && !r.is_cancelled && Math.abs(+r.amount || 0) >= COMPLIANCE_THRESHOLD).length;
           setLiveBanners(pendingIRN > 0
-            ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow') }]
+            ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow'), onAction: () => safePush(router, '/reports/einvoice-list?tab=ready' as any) }]
             : []);
         } else {
           setLiveRecent([]);
@@ -124,7 +132,7 @@ export default function SalesScreen() {
         }
       }
     }).finally(() => setIsLoading(false));
-  }, [companyGuid, fyStart, fyEnd, formatAmount, t]);
+  }, [companyGuid, fyStart, fyEnd, formatAmount, t, router]);
 
   useEffect(() => { load({ soft: hasSalesDataRef.current }); }, [load]);
 
@@ -276,6 +284,12 @@ export default function SalesScreen() {
                     voucherType={inv.voucherType}
                     isOptional={inv.isOptional}
                   />
+                  {(inv.irnStatus !== 'none' || inv.ewbStatus !== 'none') && !!inv.guid && (
+                    <View style={s.chipRow}>
+                      <IrnChip status={inv.irnStatus} onPress={() => safePush(router, `/reports/compliance-detail?voucherGuid=${encodeURIComponent(inv.guid)}&domain=einvoice` as any)} />
+                      <EwbChip status={inv.ewbStatus} onPress={() => safePush(router, `/reports/compliance-detail?voucherGuid=${encodeURIComponent(inv.guid)}&domain=ewaybill` as any)} />
+                    </View>
+                  )}
                 </ListTileShell>
               ))
             )}
@@ -363,4 +377,5 @@ const s = StyleSheet.create({
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
   emptyBox:   { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+  chipRow:    { flexDirection: 'row', gap: 6, marginTop: 6 },
 });

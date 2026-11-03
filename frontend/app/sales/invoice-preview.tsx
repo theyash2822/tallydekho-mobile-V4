@@ -21,7 +21,8 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
 import { COLORS, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getInvoicePreview, getActiveWorkspaceId } from '../../src/services/api';
+import { getInvoicePreview, getActiveWorkspaceId, getEinvoiceRecord, getVoucherById } from '../../src/services/api';
+import { safePush } from '../../src/utils/safeNavigation';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
 import { subscribePostingEvents } from '../../src/services/socketService';
@@ -50,6 +51,9 @@ export default function InvoicePreviewScreen() {
   const [canConvertProforma, setCanConvertProforma] = useState(false);
   const [converting, setConverting] = useState(false);
   const [rawData, setRawData] = useState<any>(null);
+  // Auto-IRN (spec 2026-11-03 §2.7): once Tally assigns the number, poll the e-invoice record and show the result.
+  // 'idle' while polling (the bar shows "Registering…"), 'timeout' hides the bar after ~90 s without a result.
+  const [autoIrnResult, setAutoIrnResult] = useState<{ state: 'idle' | 'done' | 'failed' | 'timeout'; irn?: string; message?: string; voucherGuid?: string }>({ state: 'idle' });
 
   const loadPreview = useCallback(() => {
     const guid = company?.guid;
@@ -108,6 +112,68 @@ export default function InvoicePreviewScreen() {
   }, [tdkRef, company?.guid, rawData, router]);
 
   useEffect(() => { loadPreview(); }, [loadPreview]);
+
+  // The preview snapshot has no voucher guid; once the Tally number is final, /vouchers/:id resolves it by number.
+  const [resolvedGuid, setResolvedGuid] = useState<{ number: string; guid: string } | null>(null);
+  const tallyNumber: string | null = rawData && !isProvisional && !rawData.numberPending ? String(rawData.documentNumber || '') || null : null;
+  const autoIrnDocType = rawData?.documentType || routeType;
+  const autoIrnWanted = !!tallyNumber && autoIrnDocType === 'sales_invoice' && !rawData?.isCancelled && !rawData?.is_cancelled;
+  useEffect(() => {
+    if (!autoIrnWanted || !company?.guid || !tallyNumber) return;
+    if (rawData?.tallyGuid || rawData?.tally_guid) return;
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      try {
+        const res: any = await getVoucherById(company.guid!, tallyNumber);
+        const guid = res?.data?.voucher?.guid;
+        if (cancelled) return;
+        if (guid) { setResolvedGuid({ number: tallyNumber, guid: String(guid) }); return; }
+      } catch {
+        // The voucher row lands with the next Tally sync; keep trying for a while.
+      }
+      if (attempts < 12) timer = setTimeout(tick, 5000);
+      else setAutoIrnResult({ state: 'timeout' });
+    };
+    timer = setTimeout(tick, 1000);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [autoIrnWanted, tallyNumber, company?.guid, rawData?.tallyGuid, rawData?.tally_guid]);
+  const autoIrnVoucherGuid: string | null = autoIrnWanted
+    ? (String(rawData?.tallyGuid || rawData?.tally_guid || '') || (resolvedGuid && resolvedGuid.number === tallyNumber ? resolvedGuid.guid : '') || null)
+    : null;
+  const autoIrnApplies = autoIrnWanted;
+  useEffect(() => {
+    if (!autoIrnApplies || !company?.guid || !autoIrnVoucherGuid) return;
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      try {
+        const res: any = await getEinvoiceRecord(company.guid!, autoIrnVoucherGuid);
+        const ein = res?.data?.einvoice ?? res?.einvoice ?? {};
+        if (cancelled) return;
+        if (ein.irn) { setAutoIrnResult({ state: 'done', irn: String(ein.irn), voucherGuid: autoIrnVoucherGuid }); return; }
+        if (ein.error_message || String(ein.status || '').toLowerCase() === 'failed') {
+          setAutoIrnResult({ state: 'failed', message: String(ein.error_message || ''), voucherGuid: autoIrnVoucherGuid });
+          return;
+        }
+      } catch {
+        // Not a compliance company / record not there yet: keep polling quietly.
+      }
+      if (attempts >= 18) { setAutoIrnResult({ state: 'timeout' }); return; }
+      timer = setTimeout(tick, 5000);
+    };
+    timer = setTimeout(tick, 1500);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [autoIrnApplies, autoIrnVoucherGuid, company?.guid]);
+  const autoIrn = autoIrnApplies && autoIrnResult.state !== 'timeout'
+    ? { ...autoIrnResult, state: autoIrnResult.state === 'idle' ? 'waiting' as const : autoIrnResult.state, voucherGuid: autoIrnResult.voucherGuid || autoIrnVoucherGuid || undefined }
+    : { state: 'none' as const, voucherGuid: undefined as string | undefined, irn: undefined as string | undefined, message: undefined as string | undefined };
 
   // WebSocket: auto-refresh when Tally posts the invoice
   useEffect(() => {
@@ -171,6 +237,23 @@ export default function InvoicePreviewScreen() {
           isProvisional={isProvisional}
         />
       </View>
+      {autoIrn.state !== 'none' && (
+        <TouchableOpacity
+          style={s.irnBar}
+          activeOpacity={0.8}
+          disabled={!autoIrn.voucherGuid}
+          onPress={() => autoIrn.voucherGuid && safePush(router, `/reports/compliance-detail?voucherGuid=${encodeURIComponent(autoIrn.voucherGuid)}&domain=einvoice` as any)}
+        >
+          {autoIrn.state === 'waiting' ? <ActivityIndicator size="small" color={COLORS.textSecondary} />
+            : <Ionicons name={autoIrn.state === 'done' ? 'checkmark-circle' : 'alert-circle'} size={16} color={autoIrn.state === 'done' ? COLORS.positive : COLORS.negative} />}
+          <Text style={[s.irnBarTxt, autoIrn.state === 'failed' && { color: COLORS.negative }]} numberOfLines={2}>
+            {autoIrn.state === 'waiting' ? t('screens.salesInvoicePreview.irnWaiting', { defaultValue: 'Registering e-invoice…' })
+              : autoIrn.state === 'done' ? `${t('screens.salesInvoicePreview.irnDone', { defaultValue: 'IRN generated' })} · ${String(autoIrn.irn).slice(0, 20)}…`
+                : `${t('screens.salesInvoicePreview.irnFailed', { defaultValue: 'E-invoice not registered' })}${autoIrn.message ? ` · ${autoIrn.message}` : ''}`}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      )}
       {canConvertProforma && (
         <SafeAreaView edges={['bottom']} style={s.convertBar}>
           <TouchableOpacity
@@ -211,4 +294,10 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14,
   },
   convertBtnTxt: { fontSize: 15, fontWeight: '700', color: COLORS.white },
+  irnBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  irnBarTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
 });
