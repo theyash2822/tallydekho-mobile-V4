@@ -1,3 +1,10 @@
+## 2026-11-03 (20:10–21:30) — E-document settings on Settings → E-Invoice / E-Way Bill; lists trimmed; From Tally (branch `28-10-2026`, local, not pushed)
+
+- `src/components/compliance/IntegrationSettingsScreen.tsx`: per company — **Generated in** TallyPrime | Auditer chips (TallyPrime hides Configure / Test / Activate / Remove), then once Active a **mode card** (IRN: Manual | Auto after Tally sync; e-way bill: Manual | Auto when details ready | Ask after IRN) with a "choose" box while nothing is chosen and the explanation + Auto since once chosen, and a **Not applicable** switch with the ₹5 Cr / services text. Each change is one partial save (`saveComplianceConfig`). `app/settings/voucher-config.tsx`: sections 2–3 (E-Invoice / E-Way Bill) removed; note + links to the two settings screens; only numbering is saved. `services/api.ts`: `IntegrationCompanyRow.compliance`, `ReadinessRow.source / pending_in_tally`, `ReadinessResponse.integration`.
+- `app/reports/einvoice-list.tsx`, `ewb-list.tsx`: action sheet trimmed to View · Acknowledgement (was Share PDF) · [Part B / transporter / extend] · Generate e-way bill · Refresh status · Cancel · History; signed JSON / Verify dropped from the sheet. "From Tally" badge on documents TallyPrime generated, and those rows offer View · Acknowledgement · History only. TallyPrime mode: the Ready tab reads "Pending in Tally", rows show the badge instead of Generate. List screens otherwise unchanged (Owner: minimal mobile scope).
+- Print engine copies (`src/utils/pdf/tallyLayout.ts`, `src/utils/commercial-print/*`, `src/types/document.ts`): IRN band with the signed QR image + e-way bill line, `compliance` block on the commercial model, byte-identical with the web portal (the app does not yet turn the JWT into a QR image, so its prints show the band without the image).
+- tsc 0 errors; `npm test` (verify scripts) all pass.
+
 ## 2026-11-03 (16:00) — Fix sheet: IRN_CANCELLED explanation (branch `28-10-2026`)
 
 - `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapIrnCancelled`: no e-way bill from an invoice whose e-invoice was cancelled; raise a fresh invoice in Tally.
