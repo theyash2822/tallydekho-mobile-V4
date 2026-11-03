@@ -11,7 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getEWBList, getEWBPending } from '../../src/services/api';
+import { getEWBList, getEWBPending, generateEWayBill } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
@@ -118,6 +118,26 @@ export default function EWBListScreen() {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   const cancelSelect = () => setSelected([]);
+
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  // Uses the dispatch details synced from Tally or saved on the app invoice; the server says what is missing.
+  const handleGenerate = async (item: any) => {
+    if (!company?.guid || !item.guid) return;
+    setGeneratingId(item.id);
+    try {
+      const result: any = await generateEWayBill({ companyGuid: company.guid, voucherGuid: item.guid });
+      if (result?.success) {
+        Toast.show({ type: 'success', text1: t('screens.reportsEwbList.generated', { defaultValue: 'E-way bill generated' }), text2: String(result.data?.ewbNo || '') });
+        setReloadKey(k => k + 1);
+      } else {
+        Alert.alert(t('screens.reportsEwbList.generateFailed', { defaultValue: 'Could not generate' }), result?.error?.message || t('screens.reportsEwbList.unknownError', { defaultValue: 'Unknown error' }));
+      }
+    } catch (err: any) {
+      Alert.alert(t('screens.reportsEwbList.generateFailed', { defaultValue: 'Could not generate' }), err?.message || t('screens.reportsEwbList.unknownError', { defaultValue: 'Unknown error' }));
+    } finally {
+      setGeneratingId(null);
+    }
+  };
 
   const handleSharePdf = async (item: any) => {
     setSharingId(item.id);
@@ -265,6 +285,23 @@ export default function EWBListScreen() {
                 <Text style={s.amount}>{'\u20b9'}{item.amount}</Text>
               </View>
 
+              {!item.ewbNo && !!item.guid && (
+                <TouchableOpacity
+                  style={s.rowShareBtn}
+                  onPress={() => handleGenerate(item)}
+                  activeOpacity={0.85}
+                  disabled={generatingId === item.id}
+                >
+                  {generatingId === item.id ? (
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="flash-outline" size={14} color={COLORS.brandPrimary} />
+                      <Text style={s.rowShareTxt}>{t('screens.reportsEwbList.generate', { defaultValue: 'Generate EWB' })}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
               {!!item.ewbNo && (
                 <TouchableOpacity
                   style={s.rowShareBtn}
