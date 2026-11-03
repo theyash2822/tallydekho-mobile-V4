@@ -69,6 +69,36 @@ export function renderTitleRibbon(model: CommercialPrintModel): string {
   </div>`;
 }
 
+/**
+ * The compliance band under the title: IRN, Ack No./Date and the signed QR of an e-invoice, and the e-way bill
+ * number / date / validity. Empty when the document carries neither, so an ordinary invoice prints as before.
+ */
+export function renderComplianceBand(model: CommercialPrintModel): string {
+  const c = model.compliance;
+  if (!c || (!c.irn && !c.eWayBillNo)) return '';
+  const pair = (label: string, value?: string | null) => (value ? `${esc(label)} : <b>${esc(value)}</b>` : '');
+  const lines: string[] = [];
+  if (c.irn) {
+    lines.push(`<div style="word-break:break-all">IRN : <b>${esc(c.irn)}</b></div>`);
+    const ack = [pair('Ack No.', c.ackNo), pair('Ack Date', c.ackDate)].filter(Boolean).join(' &nbsp;&nbsp; ');
+    if (ack) lines.push(`<div style="margin-top:2px">${ack}</div>`);
+  }
+  if (c.eWayBillNo) {
+    const ewb = [pair('e-Way Bill No.', c.eWayBillNo), pair('Date', c.eWayBillDate), pair('Valid upto', c.eWayBillValidTill)].filter(Boolean).join(' &nbsp;&nbsp; ');
+    lines.push(`<div style="margin-top:2px">${ewb}</div>`);
+  }
+  const qr = c.irn && c.qrImage
+    ? `<td style="width:78px;padding:3px 6px;text-align:right;vertical-align:top"><img src="${c.qrImage}" style="width:66px;height:66px;object-fit:contain;display:block;margin-left:auto" alt="Signed QR" /></td>`
+    : '';
+  return `
+  <table style="width:100%;border-top:1px solid #000">
+    <tr>
+      <td style="padding:3px 6px;font-size:9px;vertical-align:top">${lines.join('')}</td>
+      ${qr}
+    </tr>
+  </table>`;
+}
+
 export function renderPartyBlock(party: CommercialPrintModel['parties'][number]): string {
   const lines = [
     `<div style="font-size:9px;font-weight:bold">${esc(party.label)}</div>`,
@@ -781,6 +811,7 @@ function renderTallyPrimeCoreLayout(model: CommercialPrintModel): string {
   const body = `
 <div style="border:1px solid #000">
   ${renderTitleRibbon(model)}
+  ${renderComplianceBand(model)}
   <table style="width:100%;border-top:1px solid #000">
     <tr>
       <td style="width:50%;vertical-align:top;padding:0;border-right:1px solid #000">${leftStack}</td>

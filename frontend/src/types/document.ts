@@ -180,6 +180,8 @@ export interface TallyMetadata {
   irn?: string;
   ackNo?: string;
   ackDate?: string;
+  /** The IRP's signed QR as an image (data URL); printed beside the IRN band so the invoice carries the acknowledgement. */
+  irnQrImage?: string;
   // Stock family
   sourceGodown?: string;
   destinationGodown?: string;

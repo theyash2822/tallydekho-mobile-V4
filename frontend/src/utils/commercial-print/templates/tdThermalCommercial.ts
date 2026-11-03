@@ -68,10 +68,16 @@ function renderBody(model: CommercialPrintModel, w: ThermalPaperWidth): string {
     })
     .join(sep(w));
 
+  const cp = model.compliance;
   const metaBits = [
     kv(model.flags?.documentNumberLabel || 'No.', id.documentNumber),
     kv('Date', id.date),
-    kv('e-Way Bill', r.eWayBillNo),
+    cp?.irn ? `<div class="muted">IRN</div><div class="b" style="word-break:break-all">${esc(cp.irn)}</div>` : '',
+    kv('Ack No.', cp?.ackNo),
+    kv('Ack Date', cp?.ackDate),
+    cp?.irn && cp?.qrImage ? `<div class="c" style="margin:4px 0"><img src="${cp.qrImage}" style="width:${w === 58 ? 96 : 120}px;height:${w === 58 ? 96 : 120}px" alt="Signed QR" /></div>` : '',
+    kv('e-Way Bill', r.eWayBillNo || cp?.eWayBillNo),
+    kv('EWB Valid upto', cp?.eWayBillValidTill),
     kv('Payment Terms', r.paymentTerms),
     kv('Reference', [r.referenceNo, r.referenceDate].filter(Boolean).join(' / ') || null),
     kv("Buyer's Order", [r.buyerOrderNo, r.buyerOrderDate].filter(Boolean).join(' / ') || null),

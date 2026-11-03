@@ -99,6 +99,21 @@ export type CommercialPrintModel = {
     extra?: Array<{ label: string; value: string }>;
   };
 
+  /**
+   * What the portals gave for this document, printed as a band under the title so the invoice itself carries the
+   * e-invoice acknowledgement (IRN, Ack No./Date, signed QR) and the e-way bill. Null when neither exists.
+   */
+  compliance?: {
+    irn?: string | null;
+    ackNo?: string | null;
+    ackDate?: string | null;
+    /** Signed QR as an image (data URL). */
+    qrImage?: string | null;
+    eWayBillNo?: string | null;
+    eWayBillDate?: string | null;
+    eWayBillValidTill?: string | null;
+  } | null;
+
   items: Array<{
     sequence: number;
     itemGuid?: string | null;

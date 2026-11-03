@@ -6,6 +6,7 @@ import {
   renderTaxSummaryTable,
   renderTotalsBlock,
   renderAmountInWords,
+  renderComplianceBand,
   wrapCommercialHtmlDocument,
 } from './tallyClassicCommercial';
 
@@ -196,6 +197,7 @@ export function renderTdExecutiveCommercial(model: CommercialPrintModel): string
   const body = `
 ${executiveHeader(model)}
 ${executiveMetaStrip(model)}
+${renderComplianceBand(model).replace('border-top:1px solid #000', 'border:1px solid #ddd;border-radius:6px;margin:8px 0')}
 ${executivePartyRow(model)}
 ${executiveLogisticsGrid(model)}
 ${renderItemsTable(model)}

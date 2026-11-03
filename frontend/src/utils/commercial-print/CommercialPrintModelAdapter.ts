@@ -269,6 +269,23 @@ function mapReferences(
   };
 }
 
+/** The IRN band (and e-way bill) from tallyMeta; null when the document carries neither. */
+function mapCompliance(doc: VoucherDocument): CommercialPrintModel['compliance'] {
+  const tally = (doc.tallyMeta || {}) as Record<string, any>;
+  const irn = tally.irn || (doc.metadata as any)?.irn || null;
+  const eWayBillNo = tally.ewayBillNo || doc.metadata?.eway || null;
+  if (!irn && !eWayBillNo) return null;
+  return {
+    irn: irn ? String(irn) : null,
+    ackNo: tally.ackNo ? String(tally.ackNo) : null,
+    ackDate: tally.ackDate ? String(tally.ackDate) : null,
+    qrImage: tally.irnQrImage ? String(tally.irnQrImage) : null,
+    eWayBillNo: eWayBillNo ? String(eWayBillNo) : null,
+    eWayBillDate: tally.ewayBillDate ? String(tally.ewayBillDate) : null,
+    eWayBillValidTill: tally.ewayBillValidTill ? String(tally.ewayBillValidTill) : null,
+  };
+}
+
 function mapItems(items: ItemLine[] = []): CommercialPrintModel['items'] {
   return items.map((item, idx) => {
     const ext = item as ItemLine & {
@@ -519,6 +536,7 @@ export function toCommercialPrintModel(
     },
     parties,
     references: mapReferences(doc, printType),
+    compliance: mapCompliance(doc),
     items: mappedItems,
     charges: mapCharges(doc),
     taxSummary: mapTaxSummary(doc.hsnSummary, doc.taxes),

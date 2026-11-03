@@ -441,17 +441,33 @@ ${company.jurisdiction && (doc.documentType === 'sales_invoice' || doc.documentT
 
 /**
  * IRN band. Tally prints the IRP acknowledgement above the item grid on an
- * e-invoice, so a printed copy proves the invoice was reported.
+ * e-invoice, so a printed copy proves the invoice was reported: IRN, Ack No. and
+ * Ack Date, the signed QR beside them when the document carries it, and the
+ * e-way bill number / date / validity on the same band when one was generated.
  */
 function irnBandHtml(doc: VoucherDocument): string {
   const meta = (doc.tallyMeta || {}) as Record<string, any>;
   const irn = meta.irn || (doc.metadata as any)?.irn || '';
   if (!irn) return '';
-  const cell = (label: string, value: string) =>
-    value ? `<td style="border-top:1px solid #000;padding:3px 6px;font-size:9px">${esc(label)} : <b>${esc(value)}</b></td>` : '';
+  const pair = (label: string, value: string) => (value ? `${esc(label)} : <b>${esc(value)}</b>` : '');
+  const ackLine = [pair('Ack No.', meta.ackNo || ''), pair('Ack Date', meta.ackDate || '')].filter(Boolean).join(' &nbsp;&nbsp; ');
+  const ewbLine = meta.ewayBillNo
+    ? [pair('e-Way Bill No.', meta.ewayBillNo), pair('Date', meta.ewayBillDate || ''), pair('Valid upto', meta.ewayBillValidTill || '')].filter(Boolean).join(' &nbsp;&nbsp; ')
+    : '';
+  const qr = meta.irnQrImage
+    ? `<td style="width:78px;border-top:1px solid #000;padding:3px 6px;text-align:right;vertical-align:top">
+        <img src="${meta.irnQrImage}" style="width:66px;height:66px;object-fit:contain;display:block;margin-left:auto" alt="Signed QR" />
+      </td>`
+    : '';
   return `<table style="width:100%;border-collapse:collapse">
-    <tr><td colspan="2" style="border-top:1px solid #000;padding:3px 6px;font-size:9px">IRN : <b>${esc(irn)}</b></td></tr>
-    <tr>${cell('Ack No.', meta.ackNo || '')}${cell('Ack Date', meta.ackDate || '')}</tr>
+    <tr>
+      <td style="border-top:1px solid #000;padding:3px 6px;font-size:9px;vertical-align:top;word-break:break-all">
+        <div>IRN : <b>${esc(irn)}</b></div>
+        ${ackLine ? `<div style="margin-top:2px">${ackLine}</div>` : ''}
+        ${ewbLine ? `<div style="margin-top:2px">${ewbLine}</div>` : ''}
+      </td>
+      ${qr}
+    </tr>
   </table>`;
 }
 
