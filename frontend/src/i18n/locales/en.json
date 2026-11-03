@@ -4558,6 +4558,7 @@
       "fixTitle": "Fix {{number}}",
       "gapCompany": "Set the company address, state and pincode in Tally (Company → Alter); it reaches here with the next sync. Settings → Company shows what is synced.",
       "gapFutureDated": "The portal accepts a document only from its own date. This invoice is dated after today; it moves to Ready on that date.",
+      "gapLedgerHsn": "No stock items here, so each sales ledger line goes with the HSN/SAC of the ledger. Set HSN/SAC and GST rate in the GST details of {{ledgers}} in Tally, then sync.",
       "gapNoLines": "The voucher has no item lines; add them in Tally.",
       "gapNumbering": "The portal accepts up to 16 characters: letters, digits, / and -. Change the voucher numbering in Tally.",
       "gapPortal": "The portal rejected the last attempt. Fix the reason below and generate again.",

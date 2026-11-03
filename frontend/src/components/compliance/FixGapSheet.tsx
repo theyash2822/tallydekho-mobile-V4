@@ -75,6 +75,11 @@ export default function FixGapSheet({ visible, row, companyGuid, companyName, on
         return t('screens.reportsEinvoiceList.gapPortal', { defaultValue: 'The portal rejected the last attempt. Fix the reason below and generate again.' });
       case 'NO_LINES':
         return t('screens.reportsEinvoiceList.gapNoLines', { defaultValue: 'The voucher has no item lines; add them in Tally.' });
+      case 'LEDGER_HSN_MISSING':
+        return t('screens.reportsEinvoiceList.gapLedgerHsn', {
+          defaultValue: 'No stock items here, so each sales ledger line goes with the HSN/SAC of the ledger. Set HSN/SAC and GST rate in the GST details of {{ledgers}} in Tally, then sync.',
+          ledgers: (Array.isArray(g.fix?.ledgers) ? g.fix.ledgers : []).map((l: any) => l?.name).filter(Boolean).join(', '),
+        });
       case 'FUTURE_DATED':
         return t('screens.reportsEinvoiceList.gapFutureDated', { defaultValue: 'The portal accepts a document only from its own date. This invoice is dated after today; it moves to Ready on that date.' });
       default:

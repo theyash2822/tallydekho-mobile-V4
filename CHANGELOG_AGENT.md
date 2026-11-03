@@ -1,3 +1,7 @@
+## 2026-11-03 (14:15) — Fix sheet: LEDGER_HSN_MISSING explanation (branch `28-10-2026`)
+
+- `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapLedgerHsn`: accounting-mode invoice — set HSN/SAC and GST rate on the named sales ledgers in Tally, then sync.
+
 ## 2026-11-03 (13:20) — Fix sheet: FUTURE_DATED explanation (branch `28-10-2026`)
 
 - `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapFutureDated`: an invoice dated after today waits in Needs attention and moves to Ready on its date (backend gap `FUTURE_DATED`).
