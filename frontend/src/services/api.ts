@@ -828,11 +828,17 @@ export interface ReadinessRow {
   transporter_id?: string;
   error_message?: string;
   last_event_at?: string | number;
+  /** 'tally' when TallyPrime generated the document (shown here, managed in Tally); 'auditer' when we did. */
+  source?: 'tally' | 'auditer' | string;
+  /** TallyPrime mode: nothing to register here, the next sync brings the document. */
+  pending_in_tally?: boolean;
   [k: string]: any;
 }
 export interface ReadinessResponse {
   data: { ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] };
   counts?: Record<string, number>;
+  /** The company's generation settings: source 'tally' | 'auditer', mode NULL until chosen, active. */
+  integration?: { active?: boolean; mode?: string | null; source?: string; applicable?: string; auto_since?: string | null } | null;
 }
 /** GET /einvoice/readiness — Ready / Needs attention / Generated for the period (+ coverage counts). */
 export const fetchEinvoiceReadiness = (companyGuid: string, params?: Record<string, string | undefined>) =>

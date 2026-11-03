@@ -20,7 +20,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import {
   fetchEinvoiceReadiness, generateEinvoice, generateEinvoiceBulk, generateEwb, verifyEinvoice, refreshEinvoice, cancelEInvoice,
-  type ReadinessRow, type DispatchDetails,
+  type ReadinessRow, type ReadinessResponse, type DispatchDetails,
 } from '../../src/services/api';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
 import { shareEinvoicePdf, shareSignedJson } from '../../src/utils/complianceActions';
@@ -52,6 +52,9 @@ export default function EInvoiceListScreen() {
   const [tab, setTab] = useState<Tab>(initialTab === 'generated' || initialTab === 'attention' ? initialTab : 'ready');
   const [data, setData] = useState<{ ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] }>({ ready: [], attention: [], generated: [] });
   const [counts, setCounts] = useState<Record<string, number>>({});
+  // The company's generation settings: in TallyPrime mode nothing is registered here (Pending in Tally).
+  const [integration, setIntegration] = useState<ReadinessResponse['integration']>(null);
+  const tallyMode = integration?.source === 'tally';
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -102,6 +105,7 @@ export default function EInvoiceListScreen() {
         const d = res?.data || {};
         setData({ ready: d.ready || [], attention: d.attention || [], generated: d.generated || [] });
         setCounts(res?.counts || {});
+        setIntegration(res?.integration || null);
         setLoadError(null);
       })
       .catch((e: any) => { if (!cancelled) setLoadError(e?.message || t('screens.reportsEinvoiceList.loadFailed')); })
@@ -215,18 +219,18 @@ export default function EInvoiceListScreen() {
     }
   };
 
-  // ── ⋯ actions on generated rows ───────────────────────────────────────────
+  // ── ⋯ actions on generated rows (trimmed 03-11-2026: View · Acknowledgement · e-way bill · Refresh · Cancel · History) ──
+  // A document generated in TallyPrime is shown, not managed: View, Acknowledgement and History only.
   const actionsFor = (row: ReadinessRow): SheetAction[] => {
     const cancelled = String(row.status || '').toLowerCase() === 'cancelled';
     const hasEwb = !!rowEwbNo(row);
+    const managed = row.source !== 'tally';
     return [
       { key: 'view', label: t('common.view'), icon: 'document-text-outline' },
-      { key: 'share', label: t('pdf.sharePdf'), icon: 'share-outline' },
-      ...(canUpdate ? [{ key: 'json', label: t('screens.reportsEinvoiceList.downloadJson', { defaultValue: 'Download signed JSON' }), icon: 'code-download-outline' }] : []),
-      { key: 'verify', label: t('screens.reportsEinvoiceList.verify', { defaultValue: 'Verify signed data' }), icon: 'shield-checkmark-outline' },
-      { key: 'refresh', label: t('screens.reportsEinvoiceList.refreshStatus', { defaultValue: 'Refresh status' }), icon: 'refresh-outline' },
-      ...(!hasEwb && !cancelled && canEwb ? [{ key: 'ewb', label: t('screens.reportsEinvoiceList.generateEwb', { defaultValue: 'Generate e-way bill' }), icon: 'car-outline' }] : []),
-      ...(!cancelled && canUpdate ? [{ key: 'cancel', label: t('screens.reportsEinvoiceList.cancelRegistration', { defaultValue: 'Cancel registration' }), icon: 'close-circle-outline', destructive: true }] : []),
+      { key: 'share', label: t('screens.reportsEinvoiceList.acknowledgement', { defaultValue: 'Acknowledgement' }), icon: 'share-outline' },
+      ...(managed ? [{ key: 'refresh', label: t('screens.reportsEinvoiceList.refreshStatus', { defaultValue: 'Refresh status' }), icon: 'refresh-outline' }] : []),
+      ...(managed && !hasEwb && !cancelled && canEwb ? [{ key: 'ewb', label: t('screens.reportsEinvoiceList.generateEwb', { defaultValue: 'Generate e-way bill' }), icon: 'car-outline' }] : []),
+      ...(managed && !cancelled && canUpdate ? [{ key: 'cancel', label: t('screens.reportsEinvoiceList.cancelRegistration', { defaultValue: 'Cancel registration' }), icon: 'close-circle-outline', destructive: true }] : []),
       { key: 'history', label: t('screens.reportsEinvoiceList.viewHistory', { defaultValue: 'View history' }), icon: 'time-outline' },
     ];
   };
@@ -361,6 +365,11 @@ export default function EInvoiceListScreen() {
           <Text style={s.invoiceNo}>{rowNumber(row)}</Text>
           <Text style={s.dateTxt}>{rowDate(row) ? formatDate(rowDate(row)) : ''}</Text>
           <View style={{ flex: 1 }} />
+          {tab === 'generated' && row.source === 'tally' && (
+            <View style={[s.badge, { backgroundColor: COLORS.hoverBg, marginRight: 6 }]}>
+              <Text style={[s.badgeTxt, { color: COLORS.textSecondary }]}>{t('screens.reportsEinvoiceList.fromTally', { defaultValue: 'From Tally' })}</Text>
+            </View>
+          )}
           {tab === 'generated' && (
             <View style={[s.badge, { backgroundColor: status === 'cancelled' ? COLORS.hoverBg : COLORS.positiveBg }]}>
               <Text style={[s.badgeTxt, { color: status === 'cancelled' ? COLORS.textSecondary : COLORS.positive }]}>
@@ -402,7 +411,12 @@ export default function EInvoiceListScreen() {
             </View>
           )}
           <View style={{ flex: 1 }} />
-          {tab === 'ready' && canGenerate && (
+          {tab === 'ready' && (tallyMode || row.pending_in_tally) && (
+            <View style={[s.badge, { backgroundColor: COLORS.hoverBg }]}>
+              <Text style={[s.badgeTxt, { color: COLORS.textSecondary }]}>{t('screens.reportsEinvoiceList.pendingInTally', { defaultValue: 'Pending in Tally' })}</Text>
+            </View>
+          )}
+          {tab === 'ready' && canGenerate && !tallyMode && !row.pending_in_tally && (
             <TouchableOpacity style={s.primaryBtn} onPress={() => setGenRow(row)} activeOpacity={0.85}>
               <Ionicons name="document-attach-outline" size={14} color={COLORS.white} />
               <Text style={s.primaryBtnTxt}>{t('screens.reportsEinvoiceList.generate', { defaultValue: 'Generate' })}</Text>
@@ -420,7 +434,7 @@ export default function EInvoiceListScreen() {
   };
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'ready', label: t('screens.reportsEinvoiceList.tabReady', { defaultValue: 'Ready' }), count: data.ready.length },
+    { key: 'ready', label: tallyMode ? t('screens.reportsEinvoiceList.tabPendingInTally', { defaultValue: 'Pending in Tally' }) : t('screens.reportsEinvoiceList.tabReady', { defaultValue: 'Ready' }), count: data.ready.length },
     { key: 'attention', label: t('screens.reportsEinvoiceList.tabAttention', { defaultValue: 'Needs attention' }), count: data.attention.length },
     { key: 'generated', label: t('screens.reportsEinvoiceList.tabGenerated', { defaultValue: 'Generated' }), count: data.generated.length },
   ];

@@ -53,6 +53,8 @@ export default function EWBListScreen() {
   const [tab, setTab] = useState<Tab>(initialTab === 'generated' || initialTab === 'attention' || initialTab === 'incoming' ? initialTab : 'ready');
   const [data, setData] = useState<{ ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] }>({ ready: [], attention: [], generated: [] });
   const [counts, setCounts] = useState<Record<string, number>>({});
+  // TallyPrime mode: e-way bills are made in Tally; the Ready rows are "Pending in Tally".
+  const [tallyMode, setTallyMode] = useState(false);
   const [consolidated, setConsolidated] = useState<any[]>([]);
   const [loadedAt, setLoadedAt] = useState(0);
   const [incoming, setIncoming] = useState<any[]>([]);
@@ -121,6 +123,7 @@ export default function EWBListScreen() {
         const d = res?.data || {};
         setData({ ready: d.ready || [], attention: d.attention || [], generated: d.generated || [] });
         setCounts(res?.counts || {});
+        setTallyMode(res?.integration?.source === 'tally');
         setConsolidated(Array.isArray(cons?.data) ? cons.data : []);
         setLoadedAt(Date.now());
         setLoadError(null);
@@ -251,7 +254,8 @@ export default function EWBListScreen() {
   // ── ⋯ actions on generated rows ───────────────────────────────────────────
   const actionsFor = (row: ReadinessRow): SheetAction[] => {
     const status = String(row.status || '').toLowerCase();
-    const active = status !== 'cancelled' && status !== 'expired';
+    // A bill generated in TallyPrime is shown, not managed: Part B, extensions and cancellation happen in Tally.
+    const active = status !== 'cancelled' && status !== 'expired' && row.source !== 'tally';
     const partB = !row.vehicle_no;
     return [
       { key: 'view', label: t('common.view'), icon: 'document-text-outline' },
@@ -261,7 +265,7 @@ export default function EWBListScreen() {
         { key: 'transporter', label: t('screens.reportsEwbList.updateTransporter', { defaultValue: 'Update transporter' }), icon: 'people-outline' },
         { key: 'extend', label: t('screens.reportsEwbList.extendValidity', { defaultValue: 'Extend validity' }), icon: 'hourglass-outline' },
       ] : []),
-      { key: 'refresh', label: t('screens.reportsEinvoiceList.refreshStatus', { defaultValue: 'Refresh status' }), icon: 'refresh-outline' },
+      ...(row.source !== 'tally' ? [{ key: 'refresh', label: t('screens.reportsEinvoiceList.refreshStatus', { defaultValue: 'Refresh status' }), icon: 'refresh-outline' }] : []),
       ...(active && canUpdate ? [{ key: 'cancel', label: t('screens.reportsEwbList.cancelBill', { defaultValue: 'Cancel e-way bill' }), icon: 'close-circle-outline', destructive: true }] : []),
       { key: 'history', label: t('screens.reportsEinvoiceList.viewHistory', { defaultValue: 'View history' }), icon: 'time-outline' },
     ];
@@ -410,6 +414,11 @@ export default function EWBListScreen() {
           <Text style={s.invoiceNo}>{rowNumber(row)}</Text>
           <Text style={s.dateTxt}>{rowDate(row) ? formatDate(rowDate(row)) : ''}</Text>
           <View style={{ flex: 1 }} />
+          {tab === 'generated' && row.source === 'tally' && (
+            <View style={[s.badge, { backgroundColor: COLORS.hoverBg, marginRight: 6 }]}>
+              <Text style={[s.badgeTxt, { color: COLORS.textSecondary }]}>{t('screens.reportsEinvoiceList.fromTally', { defaultValue: 'From Tally' })}</Text>
+            </View>
+          )}
           {tab === 'generated' && (
             <View style={[s.badge, { backgroundColor: badge.bg }]}>
               <Text style={[s.badgeTxt, { color: badge.fg }]}>{badge.label}</Text>
@@ -447,7 +456,12 @@ export default function EWBListScreen() {
             </View>
           )}
           <View style={{ flex: 1 }} />
-          {tab === 'ready' && canGenerate && (
+          {tab === 'ready' && (tallyMode || row.pending_in_tally) && (
+            <View style={[s.badge, { backgroundColor: COLORS.hoverBg }]}>
+              <Text style={[s.badgeTxt, { color: COLORS.textSecondary }]}>{t('screens.reportsEinvoiceList.pendingInTally', { defaultValue: 'Pending in Tally' })}</Text>
+            </View>
+          )}
+          {tab === 'ready' && canGenerate && !tallyMode && !row.pending_in_tally && (
             <TouchableOpacity style={s.primaryBtn} onPress={() => setGenRow(row)} activeOpacity={0.85}>
               <Ionicons name="flash-outline" size={14} color={COLORS.white} />
               <Text style={s.primaryBtnTxt}>{t('screens.reportsEinvoiceList.generate', { defaultValue: 'Generate' })}</Text>
@@ -509,7 +523,7 @@ export default function EWBListScreen() {
   };
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'ready', label: t('screens.reportsEwbList.tabReady', { defaultValue: 'Ready' }), count: data.ready.length },
+    { key: 'ready', label: tallyMode ? t('screens.reportsEinvoiceList.tabPendingInTally', { defaultValue: 'Pending in Tally' }) : t('screens.reportsEwbList.tabReady', { defaultValue: 'Ready' }), count: data.ready.length },
     { key: 'attention', label: t('screens.reportsEwbList.tabAttention', { defaultValue: 'Attention' }), count: data.attention.length },
     { key: 'generated', label: t('screens.reportsEwbList.tabGenerated', { defaultValue: 'Generated' }), count: data.generated.length },
     { key: 'incoming', label: t('screens.reportsEwbList.tabIncoming', { defaultValue: 'Incoming' }) },
