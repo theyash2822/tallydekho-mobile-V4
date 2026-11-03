@@ -1,3 +1,7 @@
+## 2026-11-03 (13:20) — Fix sheet: FUTURE_DATED explanation (branch `28-10-2026`)
+
+- `src/components/compliance/FixGapSheet.tsx` + `en.json` `gapFutureDated`: an invoice dated after today waits in Needs attention and moves to Ready on its date (backend gap `FUTURE_DATED`).
+
 ## 2026-11-03 (09:00–09:20) — Settings integrations show only the header's company; no rates (branch `29-10-2026`)
 
 - `src/components/compliance/IntegrationSettingsScreen.tsx`: lists only the company chosen in the header (`useAuth().company`), rates line removed, Activate confirm without a number. `FixGapSheet.tsx`: `TOO_OLD` gap text (30-day window).
