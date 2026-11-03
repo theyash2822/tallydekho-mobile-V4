@@ -19,13 +19,13 @@ import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import {
-  fetchEinvoiceReadiness, generateEinvoice, generateEinvoiceBulk, generateEwb, verifyEinvoice, refreshEinvoice, cancelEInvoice,
+  fetchEinvoiceReadiness, generateEinvoice, generateEinvoiceBulk, generateEwb, refreshEinvoice, cancelEInvoice,
   type ReadinessRow, type ReadinessResponse, type DispatchDetails,
 } from '../../src/services/api';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
-import { shareEinvoicePdf, shareSignedJson } from '../../src/utils/complianceActions';
+import { shareEinvoicePdf } from '../../src/utils/complianceActions';
 import {
-  ActionSheet, CancelSheet, GenerateEwbSheet, GenerateIrnBulkSheet, GenerateIrnSheet, VerifyResultSheet, type SheetAction,
+  ActionSheet, CancelSheet, GenerateEwbSheet, GenerateIrnBulkSheet, GenerateIrnSheet, type SheetAction,
 } from '../../src/components/compliance/ComplianceSheets';
 import FixGapSheet from '../../src/components/compliance/FixGapSheet';
 import { complianceErrorText, firstGap, isNotConfiguredError, rowAmount, rowDate, rowEwbNo, rowIrn, rowNumber, rowParty } from '../../src/components/compliance/complianceShared';
@@ -72,8 +72,6 @@ export default function EInvoiceListScreen() {
   const [actionRow, setActionRow] = useState<ReadinessRow | null>(null);
   const [cancelRow, setCancelRow] = useState<ReadinessRow | null>(null);
   const [ewbRow, setEwbRow] = useState<ReadinessRow | null>(null);
-  const [verifyResult, setVerifyResult] = useState<any | null>(null);
-  const [verifyOpen, setVerifyOpen] = useState(false);
   const [sheetBusy, setSheetBusy] = useState(false);
 
   const [prevFy, setPrevFy] = useState<string>('');
@@ -249,23 +247,6 @@ export default function EInvoiceListScreen() {
         setBusyGuid(guid);
         await shareEinvoicePdf(companyGuid, row, company, () => setBusyGuid(null));
         setBusyGuid(null);
-        return;
-      case 'json':
-        setBusyGuid(guid);
-        try { await shareSignedJson(companyGuid, guid, rowIrn(row)); }
-        catch (e: any) { Alert.alert(t('common.error'), e?.message || t('screens.reportsEinvoiceList.unknownError')); }
-        finally { setBusyGuid(null); }
-        return;
-      case 'verify':
-        setVerifyResult(null);
-        setVerifyOpen(true);
-        try {
-          const res: any = await verifyEinvoice(companyGuid, guid);
-          setVerifyResult(res?.data ?? res ?? {});
-        } catch (e: any) {
-          setVerifyOpen(false);
-          Alert.alert(t('common.error'), e?.message || t('screens.reportsEinvoiceList.unknownError'));
-        }
         return;
       case 'refresh':
         setBusyGuid(guid);
@@ -551,7 +532,6 @@ export default function EInvoiceListScreen() {
         onClose={() => setCancelRow(null)}
         onConfirm={runCancel}
       />
-      <VerifyResultSheet visible={verifyOpen} result={verifyResult} onClose={() => setVerifyOpen(false)} />
     </SafeAreaView>
   );
 }
