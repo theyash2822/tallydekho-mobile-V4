@@ -292,7 +292,7 @@ function DepositsSheet({ visible, companyGuid, fyRange, onClose }: {
   const { t } = useTranslation();
   const { formatAmount, formatDate } = useSettings();
   const { hasCapability } = useWorkspace();
-  const [data, setData] = useState<{ mode: string; rows: GstDeposit[] } | null>(null);
+  const [data, setData] = useState<{ mode: string; rows: GstDeposit[]; postCredits: number | null } | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'not_configured' | 'error'>('idle');
   const [busyId, setBusyId] = useState<string | null>(null);
   const loadKey = visible && companyGuid ? `${companyGuid}|${fyRange.from || ''}|${fyRange.to || ''}` : '';
@@ -309,7 +309,8 @@ function DepositsSheet({ visible, companyGuid, fyRange, onClose }: {
       .then((res: any) => {
         if (cancelled) return;
         const d = res?.data ?? {};
-        setData({ mode: String(d.mode || 'show'), rows: Array.isArray(d.rows) ? d.rows : [] });
+        const credits = Number(d.post_credits);
+        setData({ mode: String(d.mode || 'show'), rows: Array.isArray(d.rows) ? d.rows : [], postCredits: Number.isFinite(credits) && credits > 0 ? credits : null });
         setState('ready');
       })
       .catch((e) => { if (!cancelled) setState(isGstNotConfigured(e) ? 'not_configured' : 'error'); });
@@ -339,7 +340,9 @@ function DepositsSheet({ visible, companyGuid, fyRange, onClose }: {
   const confirmPost = (row: GstDeposit, again: boolean) => {
     Alert.alert(
       t('screens.reportsGst.postConfirmTitle'),
-      t('screens.reportsGst.postConfirmMsg', { amount: formatAmount(Number(row.amount) || 0), date: formatDate(String(row.date || '')) }),
+      // Charged like any entry posted to Tally; the server sends the rate with the list.
+      t('screens.reportsGst.postConfirmMsg', { amount: formatAmount(Number(row.amount) || 0), date: formatDate(String(row.date || '')) })
+        + (data?.postCredits != null ? `\n${data.postCredits} ${t('screens.settingsLicense.credits')}` : ''),
       [{ text: t('common.cancel'), style: 'cancel' }, { text: t(again ? 'screens.reportsGst.postAgain' : 'screens.reportsGst.postToTally'), onPress: () => post(row) }],
     );
   };
