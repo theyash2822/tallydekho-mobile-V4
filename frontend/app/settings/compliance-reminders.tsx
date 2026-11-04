@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -9,7 +9,8 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { updateAlertSettings } from '../../src/services/api';
+import { getAlertSettings, updateAlertSettings } from '../../src/services/api';
+import ComplianceAlertsCard from '../../src/components/compliance/ComplianceAlertsCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. CustomCheckbox
@@ -192,42 +193,51 @@ export default function ComplianceRemindersScreen() {
     gstr1Days: 3, gstr3bDays: 3, autoPause: true,
     channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
   });
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
-
-  // ── E-Invoice ────────────────────────────────────────────────────────────
-  const [einv, setEinv] = useState({
-    irnDays: 3,
-    channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
-  });
-
-  // ── E-Way Bill ───────────────────────────────────────────────────────────
-  const [ewb, setEwb] = useState({
-    expiryHours: 4,
-    channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
-  });
-
   // ── Other Taxes ──────────────────────────────────────────────────────────
   const [other, setOther] = useState({
     tdsDays: 3, vatDays: 3,
     channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
   });
 
+  // The saved rules, so a save never drops what this screen does not show (the server replaces the whole object).
+  // E-invoice and e-way bill alerts moved to the Compliance alerts card above.
+  const stored = useRef<Record<string, any>>({});
+  // Save stays off until the saved rules are here: saving the defaults shown after a failed load would overwrite them.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getAlertSettings()
+      .then((res: any) => {
+        if (!alive) return;
+        const rules = (res?.data ?? res ?? {}).compliance_reminders;
+        if (rules && typeof rules === 'object') {
+          stored.current = rules;
+          if (rules.gst) setGst(p => ({ ...p, ...rules.gst, channels: { ...p.channels, ...(rules.gst.channels || {}) } }));
+          if (rules.other_taxes) setOther(p => ({ ...p, ...rules.other_taxes, channels: { ...p.channels, ...(rules.other_taxes.channels || {}) } }));
+        }
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (alive) Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsComplianceReminders.couldNotLoad') });
+      });
+    return () => { alive = false; };
+  }, [t]);
+
   const save = async () => {
     if (!isOwnerOrAdmin) {
       Toast.show({ type: 'info', text1: t('common.permissionNeeded', { defaultValue: 'This needs a permission your role does not have.' }) });
       return;
     }
+    if (!loaded) return;
     try {
       await updateAlertSettings({
         compliance_reminders: {
-          einvoice: einv,
-          ewb,
+          ...stored.current,
+          gst,
           other_taxes: other,
         },
       });
       Toast.show({ type: 'success', text1: t('common.saved'), text2: t('screens.settingsComplianceReminders.updated') });
-      setIsDirty(false);
     } catch {
       Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsComplianceReminders.couldNotSave') });
     }
@@ -245,6 +255,9 @@ export default function ComplianceRemindersScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+
+        {/* Compliance alerts (spec 2026-11-04 §1.4): saved as they change, kind by kind */}
+        <ComplianceAlertsCard canManage={isOwnerOrAdmin} />
 
         {/* ════════════════════════════════════════════════════
             GST CARD
@@ -291,52 +304,6 @@ export default function ComplianceRemindersScreen() {
         </View>
 
         {/* ════════════════════════════════════════════════════
-            E-INVOICE CARD
-        ════════════════════════════════════════════════════ */}
-        <View style={s.card}>
-          <View style={s.cardHdr}>
-            <Ionicons name="barcode-outline" size={18} color={COLORS.info} />
-            <Text style={s.cardTitle}>{t('screens.settingsComplianceReminders.eInvoice')}</Text>
-          </View>
-
-          {/* Full-width single stepper */}
-          <StepperBox
-            label={t('screens.settingsComplianceReminders.irnErrorDigest')}
-            value={einv.irnDays}
-            sublabel={t('screens.settingsComplianceReminders.daysBeforeDue')}
-            onChange={v => setEinv(p => ({ ...p, irnDays: v }))}
-          />
-
-          <ChannelChips
-            value={einv.channels}
-            onChange={v => setEinv(p => ({ ...p, channels: v }))}
-          />
-        </View>
-
-        {/* ════════════════════════════════════════════════════
-            E-WAY BILL CARD
-        ════════════════════════════════════════════════════ */}
-        <View style={s.card}>
-          <View style={s.cardHdr}>
-            <Ionicons name="document-outline" size={18} color={COLORS.warning} />
-            <Text style={s.cardTitle}>{t('screens.settingsComplianceReminders.eWayBill')}</Text>
-          </View>
-
-          <StepperBox
-            label={t('screens.settingsComplianceReminders.expiryReminder')}
-            value={ewb.expiryHours}
-            sublabel={t('screens.settingsComplianceReminders.hBeforeValidityEnd')}
-            onChange={v => setEwb(p => ({ ...p, expiryHours: v }))}
-            max={72}
-          />
-
-          <ChannelChips
-            value={ewb.channels}
-            onChange={v => setEwb(p => ({ ...p, channels: v }))}
-          />
-        </View>
-
-        {/* ════════════════════════════════════════════════════
             OTHER TAXES CARD
         ════════════════════════════════════════════════════ */}
         <View style={s.card}>
@@ -369,7 +336,7 @@ export default function ComplianceRemindersScreen() {
         </View>
 
         {/* Save */}
-        <TouchableOpacity style={[s.saveBtn, !isOwnerOrAdmin && { opacity: 0.5 }]} onPress={save} activeOpacity={0.8}>
+        <TouchableOpacity style={[s.saveBtn, (!isOwnerOrAdmin || !loaded) && { opacity: 0.5 }]} onPress={save} disabled={!loaded} activeOpacity={0.8}>
           <Text style={s.saveTxt}>{t('screens.settingsComplianceReminders.saveSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>

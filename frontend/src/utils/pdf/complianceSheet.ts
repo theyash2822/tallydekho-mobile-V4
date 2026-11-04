@@ -8,6 +8,7 @@
  * replicate. These follow the same monochrome ruled sheet style as the master
  * summary, with the field order the portals use on their own printouts.
  */
+import { sanitizeImageSrc } from '../sanitizeImageSrc';
 
 const esc = (v: any): string => String(v ?? '')
   .replace(/&/g, '&amp;')
@@ -111,7 +112,8 @@ export function renderEInvoiceSheetHTML(v: ComplianceVoucher, company: Complianc
     { label: 'Buyer GSTIN/UIN', value: v.partyGstin },
     { label: 'Invoice Value', value: v.amount != null ? money(v.amount) : '' },
   ], {
-    qrImage: v.qrImage,
+    // Only an image: the signed QR's JWT text is drawn into one by the PDF builders (utils/irnQr.ts).
+    qrImage: sanitizeImageSrc(v.qrImage),
     note: 'Reported to the Invoice Registration Portal. The signed QR code above is the IRP acknowledgement.',
   });
 }

@@ -119,7 +119,7 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 | File | Screen |
 |------|--------|
 | financial.tsx | P&L + Balance Sheet |
-| gst.tsx | GST report |
+| gst.tsx | GST report (Overview, IMS and deposits sheets on top; `?tab=ims|deposits`) |
 | compliance.tsx | Compliance overview |
 | audit-trail.tsx | Audit trail |
 | ai-insights.tsx | AI Insights |
@@ -163,6 +163,7 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 | voucher-config.tsx | Voucher config |
 | einvoice.tsx | E-Invoice settings |
 | ewb.tsx | E-Way Bill settings |
+| gst.tsx | GST settings (portal connection, returns / IMS / deposits choices) |
 | barcodes.tsx | Barcode settings |
 | license.tsx | License info |
 | about.tsx | About screen |

@@ -30,6 +30,7 @@ import {
   thermalPageSize,
 } from './pdf/thermalShared';
 import { sanitizeImageSrc } from './sanitizeImageSrc';
+import { irnQrDataUrl, withIrnQrImage } from './irnQr';
 import {
   normalizeThermalWidth,
   writeLocalVoucherConfig,
@@ -178,7 +179,7 @@ export async function buildVoucherPdf(
   const safeLogo = await toSafePdfImageSrc(options.logoUri ?? null);
   const safeQr = sanitizeImageSrc(options.qrImage ?? null);
   const html = generateDocumentHTML(
-    doc,
+    await withIrnQrImage(doc),
     safeLogo,
     options.format ?? 'tally',
     options.terms ?? [],
@@ -352,7 +353,7 @@ export async function buildCompliancePdfFile(
   company: ComplianceCompany = {},
 ): Promise<{ uri: string; name: string }> {
   const html = kind === 'einvoice'
-    ? renderEInvoiceSheetHTML(voucher, company)
+    ? renderEInvoiceSheetHTML({ ...voucher, qrImage: await irnQrDataUrl(voucher.qrImage) }, company)
     : renderEWayBillSheetHTML(voucher, company);
   const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
   const label = kind === 'einvoice' ? 'e-Invoice' : 'e-Way Bill';

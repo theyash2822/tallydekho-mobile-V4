@@ -12,6 +12,7 @@ import FormField from '../forms/FormField';
 import FormDropdown from '../forms/FormDropdown';
 import { SheetFooter, SectionTitle } from './ComplianceSheets';
 import { CONSIGNMENT_STATUS, EXTEND_REASONS, TRANSPORT_MODES, VEHICLE_REASONS } from './complianceShared';
+import VehicleCheck from './VehicleCheck';
 
 type Common = { visible: boolean; busy?: boolean; onClose: () => void };
 
@@ -58,6 +59,7 @@ export function EwbVehicleSheet({ visible, busy, onClose, onSubmit, record }: Co
     >
       <FormDropdown label={t('screens.reportsEwbList.mode', { defaultValue: 'Mode' })} value={transMode} options={TRANSPORT_MODES(t)} onSelect={(o) => setTransMode(o.value)} />
       <FormField label={t('screens.reportsEwbList.vehicleNumber', { defaultValue: 'Vehicle number' })} required={road} value={vehicleNo} onChangeText={setVehicleNo} autoCapitalize="characters" placeholder="KA01AB1234" />
+      {road && !!vehicleNo.trim() && <VehicleCheck vehicleNo={vehicleNo} />}
       <FormField label={t('screens.reportsEwbList.fromPlace', { defaultValue: 'From place' })} required value={fromPlace} onChangeText={setFromPlace} />
       <FormField label={t('screens.reportsEwbList.fromState', { defaultValue: 'From state' })} required value={fromState} onChangeText={setFromState} />
       <FormDropdown label={t('screens.reportsEinvoiceList.reason', { defaultValue: 'Reason' })} required value={reasonCode} options={VEHICLE_REASONS(t)} onSelect={(o) => setReasonCode(o.value)} placeholder={t('common.select')} />
@@ -119,6 +121,7 @@ export function EwbExtendSheet({ visible, busy, onClose, onSubmit, record }: Com
       <Text style={s.note}>{t('screens.reportsEwbList.extendWindow', { defaultValue: 'The portal allows an extension only within 8 hours before or after expiry.' })}</Text>
       <FormDropdown label={t('screens.reportsEwbList.consignmentStatus', { defaultValue: 'Consignment' })} value={consignmentStatus} options={CONSIGNMENT_STATUS(t)} onSelect={(o) => setConsignmentStatus(o.value as 'M' | 'T')} />
       <FormField label={t('screens.reportsEwbList.vehicleNumber', { defaultValue: 'Vehicle number' })} required={consignmentStatus === 'M'} value={vehicleNo} onChangeText={setVehicleNo} autoCapitalize="characters" />
+      {consignmentStatus === 'M' && !!vehicleNo.trim() && <VehicleCheck vehicleNo={vehicleNo} />}
       <FormField label={t('screens.reportsEwbList.fromPlace', { defaultValue: 'From place' })} required value={fromPlace} onChangeText={setFromPlace} />
       <FormField label={t('screens.reportsEwbList.fromState', { defaultValue: 'From state' })} required value={fromState} onChangeText={setFromState} />
       <FormField label={t('screens.reportsEwbList.fromPincode', { defaultValue: 'From pincode' })} required value={fromPincode} onChangeText={setFromPincode} keyboardType="numeric" maxLength={6} />
@@ -161,6 +164,7 @@ export function ConsolidateSheet({ visible, busy, onClose, onSubmit, ewbNos }: C
     >
       <Text style={s.note}>{ewbNos.join(' · ')}</Text>
       <FormField label={t('screens.reportsEwbList.vehicleNumber', { defaultValue: 'Vehicle number' })} required value={vehicleNo} onChangeText={setVehicleNo} autoCapitalize="characters" />
+      {!!vehicleNo.trim() && <VehicleCheck vehicleNo={vehicleNo} />}
       <FormField label={t('screens.reportsEwbList.fromPlace', { defaultValue: 'From place' })} required value={fromPlace} onChangeText={setFromPlace} />
       <FormField label={t('screens.reportsEwbList.fromState', { defaultValue: 'From state' })} required value={fromState} onChangeText={setFromState} />
       <FormDropdown label={t('screens.reportsEwbList.mode', { defaultValue: 'Mode' })} value={transMode} options={TRANSPORT_MODES(t)} onSelect={(o) => setTransMode(o.value)} />

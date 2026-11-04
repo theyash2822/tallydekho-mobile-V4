@@ -1,7 +1,10 @@
 /**
  * E-Invoice list — Ready / Needs attention / Generated from GET /einvoice/readiness
  * (spec 2026-11-03 §4). Coverage numbers live in the header KPIs; the old
- * coverage screen redirects here.
+ * coverage screen redirects here. Spec 2026-11-04 §4.3: days-left chip, notices
+ * for a Tally that stopped syncing and the unanswered ₹10 Cr question, Share
+ * report (CSV), Correct invoice from the Fix sheet for a today-dated invoice, and
+ * how many sales to unregistered buyers need no e-invoice.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,11 +26,13 @@ import {
   type ReadinessRow, type ReadinessResponse, type DispatchDetails,
 } from '../../src/services/api';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
-import { shareEinvoicePdf } from '../../src/utils/complianceActions';
+import { shareComplianceReport, shareEinvoicePdf } from '../../src/utils/complianceActions';
 import {
   ActionSheet, CancelSheet, GenerateEwbSheet, GenerateIrnBulkSheet, GenerateIrnSheet, type SheetAction,
 } from '../../src/components/compliance/ComplianceSheets';
 import FixGapSheet from '../../src/components/compliance/FixGapSheet';
+import { DaysLeftChip } from '../../src/components/compliance/ComplianceChips';
+import { Rule30Callout, StaleDesktopBanner } from '../../src/components/compliance/ComplianceCallouts';
 import { complianceErrorText, firstGap, isNotConfiguredError, rowAmount, rowDate, rowEwbNo, rowIrn, rowNumber, rowParty } from '../../src/components/compliance/complianceShared';
 
 type Tab = 'ready' | 'attention' | 'generated';
@@ -38,8 +43,10 @@ export default function EInvoiceListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
-  const { hasCapability } = useWorkspace();
+  const { hasCapability, isOwnerOrAdmin } = useWorkspace();
   const canGenerate = hasCapability('einvoice.generate');
+  const canCorrect = hasCapability('sales_invoice.create');
+  const canConfigure = isOwnerOrAdmin || hasCapability('integrations.configure');
   const canUpdate = hasCapability('einvoice.update');
   const canEwb = hasCapability('eway.generate');
   const companyGuid = company?.guid || '';
@@ -64,6 +71,7 @@ export default function EInvoiceListScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [busyGuid, setBusyGuid] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [sharingReport, setSharingReport] = useState(false);
 
   // Sheets
   const [genRow, setGenRow] = useState<ReadinessRow | null>(null);
@@ -318,6 +326,27 @@ export default function EInvoiceListScreen() {
     }
   };
 
+  // ── Share report (CSV of the open tab and period) ─────────────────────────
+  const handleShareReport = async () => {
+    if (!companyGuid || sharingReport) return;
+    setSharingReport(true);
+    try {
+      await shareComplianceReport('einvoice', companyGuid, company?.name, { tab, ...(fromDate && toDate ? { from: fromDate, to: toDate } : {}) });
+    } catch (err: any) {
+      Alert.alert(t('screens.reportsEinvoiceList.reportFailed'), err?.message || t('screens.reportsEinvoiceList.unknownError'));
+    } finally {
+      setSharingReport(false);
+    }
+  };
+
+  // ── Correct invoice: the create form, prefilled from the voucher, alters the same Tally voucher ──
+  const openCorrection = (row: ReadinessRow, reason?: string) => {
+    setFixRow(null);
+    const q = [`correct=${encodeURIComponent(row.guid)}`, `correctNo=${encodeURIComponent(rowNumber(row))}`, reason ? `reason=${encodeURIComponent(reason.slice(0, 300))}` : '']
+      .filter(Boolean).join('&');
+    safePush(router, `/sales/create-invoice?${q}` as any);
+  };
+
   // ── Rows ──────────────────────────────────────────────────────────────────
   const renderRow = (row: ReadinessRow) => {
     const guid = row.guid;
@@ -346,6 +375,7 @@ export default function EInvoiceListScreen() {
           <Text style={s.invoiceNo}>{rowNumber(row)}</Text>
           <Text style={s.dateTxt}>{rowDate(row) ? formatDate(rowDate(row)) : ''}</Text>
           <View style={{ flex: 1 }} />
+          {tab !== 'generated' && <DaysLeftChip row={row} />}
           {tab === 'generated' && row.source === 'tally' && (
             <View style={[s.badge, { backgroundColor: COLORS.hoverBg, marginRight: 6 }]}>
               <Text style={[s.badgeTxt, { color: COLORS.textSecondary }]}>{t('screens.reportsEinvoiceList.fromTally', { defaultValue: 'From Tally' })}</Text>
@@ -427,6 +457,9 @@ export default function EInvoiceListScreen() {
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('reports.einvoices')}</Text>
+        <TouchableOpacity style={s.backBtn} onPress={handleShareReport} disabled={sharingReport} activeOpacity={0.7} accessibilityLabel={t('screens.reportsEinvoiceList.shareReport')} testID="einvoice-share-report">
+          {sharingReport ? <ActivityIndicator size="small" color={COLORS.textSecondary} /> : <Ionicons name="download-outline" size={20} color={COLORS.textSecondary} />}
+        </TouchableOpacity>
         <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20} color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary} />
         </TouchableOpacity>
@@ -438,6 +471,8 @@ export default function EInvoiceListScreen() {
         refreshControl={<RefreshControl refreshing={loading && rows.length > 0} onRefresh={refetch} />}
       >
         {loadError && <ErrorBanner message={loadError} onRetry={refetch} />}
+        <StaleDesktopBanner desktop={integration?.desktop} />
+        <Rule30Callout rule30Days={integration?.applicable === 'not_applicable' ? undefined : integration?.rule_30_days} canConfigure={canConfigure} />
         {statusOnly ? (
           <View style={{ paddingTop: SPACING.sm }}>
             <StatusOnlyChip status={statusOnly} onClear={() => { setStatusOnly(null); switchTab('ready'); }} />
@@ -461,6 +496,9 @@ export default function EInvoiceListScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        {tab !== 'generated' && Number(counts.b2c_excluded) > 0 && (
+          <Text style={s.b2cNote} testID="einvoice-b2c-excluded">{t('screens.reportsEinvoiceList.b2cExcluded', { count: Number(counts.b2c_excluded) })}</Text>
+        )}
 
         {loading && rows.length === 0 && <ActivityIndicator color={COLORS.brandPrimary} style={{ marginTop: 32 }} />}
         {!loading && rows.length === 0 && !loadError && (
@@ -516,7 +554,7 @@ export default function EInvoiceListScreen() {
       <GenerateIrnSheet visible={!!genRow} row={genRow} busy={sheetBusy} onClose={() => setGenRow(null)} onConfirm={(o) => genRow && runGenerate(genRow, o)} />
       <GenerateIrnBulkSheet visible={bulkOpen} rows={data.ready.filter((r) => selected.includes(r.guid))} busy={sheetBusy} onClose={() => setBulkOpen(false)} onConfirm={runBulk} />
       <GenerateEwbSheet visible={!!ewbRow} row={ewbRow} busy={sheetBusy} onClose={() => setEwbRow(null)} onConfirm={(d) => ewbRow && runGenerateEwb(ewbRow, d)} />
-      <FixGapSheet visible={!!fixRow} row={fixRow} companyGuid={companyGuid} companyName={company?.name} onClose={() => setFixRow(null)} onSaved={refetch} />
+      <FixGapSheet visible={!!fixRow} row={fixRow} companyGuid={companyGuid} companyName={company?.name} onClose={() => setFixRow(null)} onSaved={refetch} onCorrectInvoice={canCorrect ? openCorrection : undefined} />
       <ActionSheet
         visible={!!actionRow}
         title={actionRow ? `${rowNumber(actionRow)} · ${rowParty(actionRow)}` : ''}
@@ -558,6 +596,7 @@ const s = StyleSheet.create({
   tabActive: { backgroundColor: COLORS.cardBg, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
   tabTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
   tabActiveTxt: { color: COLORS.textPrimary },
+  b2cNote: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: 4, marginBottom: SPACING.sm },
 
   empty: { alignItems: 'center', padding: 48, gap: 12 },
   emptyTitle: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },

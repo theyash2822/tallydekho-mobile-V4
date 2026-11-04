@@ -14,7 +14,9 @@ import FormDropdown from '../forms/FormDropdown';
 import BrandSwitch from '../forms/BrandSwitch';
 import { useSettings } from '../../context/SettingsContext';
 import type { DispatchDetails } from '../../services/api';
+import { DELIVERY_NOTE_REASONS, SUB_SUPPLY_DESC_MAX } from '../../utils/complianceRules';
 import { CANCEL_REASONS, GENERATE_CREDITS, TRANSPORT_MODES, dispatchFromPreview, type Option } from './complianceShared';
+import VehicleCheck from './VehicleCheck';
 
 // ── Footer buttons ────────────────────────────────────────────────────────────
 export function SheetFooter({
@@ -112,16 +114,18 @@ export function toDispatchDetails(d: DispatchForm): DispatchDetails {
   };
 }
 
-export function DispatchFields({ value, onChange }: { value: DispatchForm; onChange: (v: DispatchForm) => void }) {
+export function DispatchFields({ value, onChange, hideShipTo }: { value: DispatchForm; onChange: (v: DispatchForm) => void; hideShipTo?: boolean }) {
   const { t } = useTranslation();
   const set = (k: keyof DispatchForm) => (v: string) => onChange({ ...value, [k]: v });
   return (
     <View>
       <FormField label={t('screens.reportsEwbList.dispatchFrom', { defaultValue: 'Dispatch from' })} value={value.dispatchFrom} onChangeText={set('dispatchFrom')} placeholder={t('screens.reportsEwbList.dispatchFromPh', { defaultValue: 'Place or pincode' })} />
-      <FormField label={t('screens.reportsEwbList.shipTo', { defaultValue: 'Ship to' })} value={value.shipTo} onChangeText={set('shipTo')} placeholder={t('screens.reportsEwbList.shipToPh', { defaultValue: 'Place or pincode' })} />
+      {!hideShipTo && <FormField label={t('screens.reportsEwbList.shipTo', { defaultValue: 'Ship to' })} value={value.shipTo} onChangeText={set('shipTo')} placeholder={t('screens.reportsEwbList.shipToPh', { defaultValue: 'Place or pincode' })} />}
       <FormDropdown label={t('screens.reportsEwbList.mode', { defaultValue: 'Mode' })} value={value.transportMode} options={TRANSPORT_MODES(t)} onSelect={(o) => onChange({ ...value, transportMode: o.value })} />
-      <FormField label={t('screens.reportsEwbList.distanceKm', { defaultValue: 'Distance (km)' })} value={value.distance} onChangeText={set('distance')} keyboardType="numeric" placeholder="0" />
+      {/* Blank or 0: the e-way bill system works the distance out from the PIN codes. */}
+      <FormField label={t('screens.reportsEwbList.distanceOptional')} value={value.distance} onChangeText={(v) => set('distance')(v.replace(/[^\d]/g, ''))} keyboardType="numeric" hint={t('screens.reportsEwbList.distanceHint')} />
       <FormField label={t('screens.reportsEwbList.vehicleNumber', { defaultValue: 'Vehicle number' })} value={value.vehicleNumber} onChangeText={set('vehicleNumber')} autoCapitalize="characters" placeholder="KA01AB1234" />
+      {!!value.vehicleNumber.trim() && <VehicleCheck vehicleNo={value.vehicleNumber} />}
       <FormField label={t('screens.reportsEwbList.transporterId', { defaultValue: 'Transporter ID' })} value={value.transporterId} onChangeText={set('transporterId')} autoCapitalize="characters" placeholder={t('screens.reportsEwbList.transporterIdPh', { defaultValue: 'When no vehicle is known' })} hint={t('screens.reportsEwbList.vehicleOrTransporter', { defaultValue: 'Vehicle number or transporter ID is required.' })} />
     </View>
   );
@@ -251,22 +255,53 @@ export function GenerateIrnSheet({ visible, row, busy, onClose, onConfirm }: {
 }
 
 // ── Generate EWB confirmation ─────────────────────────────────────────────────
+/** What the generate call adds for the document kind: why a delivery note's goods move, the godown a transfer leaves. */
+export type EwbGenerateExtra = { docKind?: string; subSupplyType?: string; subSupplyDesc?: string; fromGodown?: string };
+type GodownForm = { address: string; pincode: string; state: string; fromGodown: string };
+const emptyGodown = (): GodownForm => ({ address: '', pincode: '', state: '', fromGodown: '' });
+
 export function GenerateEwbSheet({ visible, row, busy, onClose, onConfirm, bulkCount }: {
   visible: boolean; row: any | null; busy?: boolean; onClose: () => void;
-  onConfirm: (dispatchDetails: DispatchDetails) => void;
+  onConfirm: (dispatchDetails: DispatchDetails, extra: EwbGenerateExtra) => void;
   /** When set, the sheet is the shared form for a bulk run and shows no preview. */
   bulkCount?: number;
 }) {
   const { t } = useTranslation();
   const preview = row?.preview;
+  const docKind: string = bulkCount ? '' : String(row?.doc_kind || '');
+  const deliveryNote = docKind === 'delivery_note';
+  const stockTransfer = docKind === 'stock_transfer';
   const [dispatch, setDispatch] = useState<DispatchForm>(emptyDispatch());
+  const [reason, setReason] = useState('');
+  const [reasonDesc, setReasonDesc] = useState('');
+  const [godown, setGodown] = useState<GodownForm>(emptyGodown());
   const [seededFor, setSeededFor] = useState<string | null>(null);
   const rowKey = row ? String(row.guid || row.voucher_number) : (bulkCount != null ? `bulk-${bulkCount}` : null);
   if (visible && rowKey && seededFor !== rowKey) {
     setSeededFor(rowKey);
     setDispatch({ ...emptyDispatch(), ...dispatchFromPreview(preview, row?.dispatch) });
+    setReason('');
+    setReasonDesc('');
+    setGodown(emptyGodown());
   }
   const credits = GENERATE_CREDITS * (bulkCount || 1);
+  const ready = (!deliveryNote || (!!reason && (reason !== '8' || !!reasonDesc.trim())))
+    && (!stockTransfer || (!!dispatch.shipTo.trim() && /^\d{6}$/.test(godown.pincode)));
+  const confirm = () => {
+    const details = toDispatchDetails(dispatch);
+    const extra: EwbGenerateExtra = docKind ? { docKind } : {};
+    if (deliveryNote) {
+      extra.subSupplyType = reason;
+      if (reason === '8') extra.subSupplyDesc = reasonDesc.trim().slice(0, SUB_SUPPLY_DESC_MAX);
+    }
+    if (stockTransfer) {
+      details.ship_to_address1 = godown.address.trim() || undefined;
+      details.ship_to_pincode = godown.pincode;
+      details.ship_to_state = godown.state.trim() || undefined;
+      if (godown.fromGodown.trim()) extra.fromGodown = godown.fromGodown.trim();
+    }
+    onConfirm(details, extra);
+  };
   return (
     <BottomModalShell
       visible={visible}
@@ -278,15 +313,41 @@ export function GenerateEwbSheet({ visible, row, busy, onClose, onConfirm, bulkC
         <SheetFooter
           onCancel={onClose}
           busy={busy}
-          onConfirm={() => onConfirm(toDispatchDetails(dispatch))}
+          disabled={!ready}
+          onConfirm={confirm}
           confirmLabel={t('screens.reportsEinvoiceList.generate', { defaultValue: 'Generate' })}
         />
       )}
     >
       {!bulkCount && <PreviewCard preview={preview} docNo={row?.voucher_number} docDate={row?.date} docType={row?.voucher_type} />}
       <CreditsLine credits={credits} />
+      {deliveryNote && (
+        <>
+          <FormDropdown
+            label={t('screens.reportsEwbList.reasonTitle')}
+            required
+            value={reason}
+            options={DELIVERY_NOTE_REASONS.map((code) => ({ value: code, label: t(`screens.reportsEwbList.reason_${code}`) }))}
+            onSelect={(o) => setReason(o.value)}
+            placeholder={t('common.select')}
+          />
+          {reason === '8' && (
+            <FormField label={t('screens.reportsEwbList.reasonDesc')} required value={reasonDesc} onChangeText={setReasonDesc} maxLength={SUB_SUPPLY_DESC_MAX} />
+          )}
+        </>
+      )}
+      {stockTransfer && (
+        <>
+          <FormField label={t('screens.reportsEwbList.fromGodown')} value={godown.fromGodown} onChangeText={(v) => setGodown((g) => ({ ...g, fromGodown: v }))} />
+          <SectionTitle>{t('screens.reportsEwbList.receivingGodown')}</SectionTitle>
+          <FormField label={t('screens.reportsEwbList.receivingGodownName')} required value={dispatch.shipTo} onChangeText={(v) => setDispatch((d) => ({ ...d, shipTo: v }))} />
+          <FormField label={t('screens.reportsEwbList.godownAddress')} value={godown.address} onChangeText={(v) => setGodown((g) => ({ ...g, address: v }))} />
+          <FormField label={t('screens.reportsEinvoiceList.pincode', { defaultValue: 'Pincode' })} required value={godown.pincode} onChangeText={(v) => setGodown((g) => ({ ...g, pincode: v.replace(/\D/g, '').slice(0, 6) }))} keyboardType="numeric" maxLength={6} />
+          <FormField label={t('screens.reportsEinvoiceList.state', { defaultValue: 'State' })} value={godown.state} onChangeText={(v) => setGodown((g) => ({ ...g, state: v }))} />
+        </>
+      )}
       <SectionTitle>{t('screens.reportsEwbList.dispatchDetails', { defaultValue: 'Dispatch details' })}</SectionTitle>
-      <DispatchFields value={dispatch} onChange={setDispatch} />
+      <DispatchFields value={dispatch} onChange={setDispatch} hideShipTo={stockTransfer} />
     </BottomModalShell>
   );
 }

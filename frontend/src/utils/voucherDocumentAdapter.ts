@@ -769,6 +769,7 @@ export function fromTallyVoucher(
     irn: v.irn || undefined,
     ackNo: data.e_invoice?.ack_no || undefined,
     ackDate: data.e_invoice?.ack_date || undefined,
+    irnSignedQr: v.irn ? (data.e_invoice?.qr_code || undefined) : undefined,
     ewayBillNo: v.ewb_number || data.e_way_bill?.ewb_no || undefined,
     ewayBillDate: data.e_way_bill?.ewb_date || undefined,
     ewayBillValidTill: data.e_way_bill?.valid_till || undefined,

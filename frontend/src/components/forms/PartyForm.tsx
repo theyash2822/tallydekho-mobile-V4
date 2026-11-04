@@ -8,6 +8,8 @@
  * Country / division pickers load Tally-exact spellings from /api/geo/*.
  * Division field label follows country (State / Emirate / Province / Division).
  * GST Details only for India — fades away for other countries.
+ * With `verifyCompanyGuid`, "Verify" beside the GSTIN asks GET /api/gst/gstin-check for the legal name,
+ * status and registration type (fills an empty state, warns when cancelled; hidden when the check is not available).
  */
 
 import React, {
@@ -16,16 +18,20 @@ import React, {
 } from 'react';
 import {
   View, Text, TextInput, TextInputProps,
-  StyleSheet, Platform,
+  StyleSheet, Platform, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BrandSwitch from './BrandSwitch';
 import FormDropdown from './FormDropdown';
 import { stateFromGstin } from '../../constants/indianStates';
 import { DEFAULT_COUNTRY } from '../../constants/countries';
-import { getGeoCountries, getGeoStates } from '../../services/api';
+import { getGeoCountries, getGeoStates, checkGstin, isGstNotConfigured, type GstinCheck } from '../../services/api';
+
+/** Once the server says the GSTIN check is not available, Verify stays hidden for the session. */
+let gstinCheckUnavailable = false;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface PartyFormData {
@@ -105,7 +111,9 @@ const VAT_DEALER_TYPES = [
 const PartyForm = forwardRef<PartyFormRef, {
   InputComponent?: ElementType<TextInputProps>;
   initialData?: Partial<PartyFormData>;
-}>(function PartyForm({ InputComponent = TextInput, initialData }, ref) {
+  /** Shows "Verify" beside the GSTIN (checked against the GST portal for this company). */
+  verifyCompanyGuid?: string;
+}>(function PartyForm({ InputComponent = TextInput, initialData, verifyCompanyGuid }, ref) {
   const { t } = useTranslation();
 
   const d = { ...defaultPartyFormData, ...initialData };
@@ -144,8 +152,42 @@ const PartyForm = forwardRef<PartyFormRef, {
   const [divisionLabel, setDivisionLabel] = useState('State');
   const [stateOptions, setStateOptions] = useState<{ label: string; value: string }[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [verify, setVerify] = useState<{ gstin: string; data?: GstinCheck; error?: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyHidden, setVerifyHidden] = useState(gstinCheckUnavailable);
 
   const isIndia = country.trim().toLowerCase() === 'india';
+
+  const verifyGstin = async () => {
+    if (!verifyCompanyGuid || gstin.length !== 15) return;
+    setVerifying(true);
+    try {
+      const res: any = await checkGstin(verifyCompanyGuid, gstin);
+      const data: GstinCheck = res?.data ?? res ?? {};
+      if (data.available === false) {
+        gstinCheckUnavailable = true;
+        setVerifyHidden(true);
+        Toast.show({ type: 'info', text1: t('screens.componentsFormsPartyForm.verifyUnavailable') });
+        return;
+      }
+      setVerify({ gstin, data });
+      // Fill the state when it is still empty, in the spelling the state list uses.
+      const match = data.state ? stateOptions.find((o) => o.value.toLowerCase() === String(data.state).toLowerCase()) : null;
+      if (!state && match) setState(match.value);
+    } catch (e: any) {
+      if (isGstNotConfigured(e)) {
+        gstinCheckUnavailable = true;
+        setVerifyHidden(true);
+        Toast.show({ type: 'info', text1: t('screens.componentsFormsPartyForm.verifyUnavailable') });
+      } else {
+        setVerify({ gstin, error: e?.message || t('screens.componentsFormsPartyForm.verifyFailed') });
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+  const verified = verify && verify.gstin === gstin ? verify : null;
+  const cancelledGstin = !!verified?.data && /cancel/i.test(String(verified.data.status || ''));
 
   useEffect(() => {
     getGeoCountries()
@@ -326,11 +368,56 @@ const PartyForm = forwardRef<PartyFormRef, {
                 placeholder={t('screens.componentsFormsPartyForm.selectGstType')}
               />
 
-              {showGstinField && (
+              {showGstinField && verifyCompanyGuid && !verifyHidden ? (
+                <>
+                  <Text style={f.label}>{t('screens.componentsFormsPartyForm.gstin')}</Text>
+                  <View style={f.gstinRow}>
+                    <View style={{ flex: 1 }}>
+                      <IC
+                        placeholderTextColor={COLORS.textTertiary}
+                        style={[f.input, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+                        placeholder="24ABCDE1234F1Z5"
+                        value={gstin}
+                        onChangeText={(v: string) => setGstin(v.toUpperCase())}
+                        autoCapitalize="characters"
+                        maxLength={15}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[f.verifyBtn, gstin.length !== 15 && { opacity: 0.5 }]}
+                      onPress={verifyGstin}
+                      disabled={verifying || gstin.length !== 15}
+                      activeOpacity={0.7}
+                      testID="party-gstin-verify"
+                    >
+                      {verifying ? <ActivityIndicator size="small" color={COLORS.info} /> : <Text style={f.verifyTxt}>{t('screens.componentsFormsPartyForm.verify')}</Text>}
+                    </TouchableOpacity>
+                  </View>
+                  {verified?.data?.found === false && <Text style={[f.verifyWarn, { marginTop: 6 }]}>{t('screens.componentsFormsPartyForm.gstinNotFound')}</Text>}
+                  {!!verified?.data && verified.data.found !== false && (
+                    <View style={[f.verifyBox, cancelledGstin && { backgroundColor: COLORS.negativeBg }]} testID="party-gstin-result">
+                      <View style={f.verifyHead}>
+                        <Text style={f.verifyName} numberOfLines={2}>{verified.data.legal_name || verified.data.trade_name || verified.gstin}</Text>
+                        {!!verified.data.status && (
+                          <View style={[f.statusPill, { backgroundColor: cancelledGstin ? COLORS.negative : COLORS.positiveBg }]}>
+                            <Text style={[f.statusTxt, { color: cancelledGstin ? COLORS.white : COLORS.positive }]}>{verified.data.status}</Text>
+                          </View>
+                        )}
+                      </View>
+                      {!!verified.data.trade_name && verified.data.trade_name !== verified.data.legal_name && <Text style={f.verifyMeta}>{verified.data.trade_name}</Text>}
+                      {!!(verified.data.registration_type || verified.data.state) && (
+                        <Text style={f.verifyMeta}>{[verified.data.registration_type, verified.data.state].filter(Boolean).join(' · ')}</Text>
+                      )}
+                      {cancelledGstin && <Text style={f.verifyWarn}>{t('screens.componentsFormsPartyForm.gstinCancelled')}</Text>}
+                    </View>
+                  )}
+                  {!!verified?.error && <Text style={[f.verifyMeta, { color: COLORS.negative, marginTop: 6 }]}>{verified.error}</Text>}
+                </>
+              ) : showGstinField ? (
                 <PartyInput IC={IC} label={t('screens.componentsFormsPartyForm.gstin')} placeholder="24ABCDE1234F1Z5"
                   value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
                   autoCapitalize="characters" maxLength={15} />
-              )}
+              ) : null}
 
               <View style={f.divider} />
               <View style={f.toggleRow}>
@@ -456,4 +543,14 @@ const f = StyleSheet.create({
     color: COLORS.textTertiary,
     lineHeight: 18,
   },
+  gstinRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  verifyBtn: { paddingHorizontal: 14, paddingVertical: 13, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.info, minWidth: 72, alignItems: 'center' },
+  verifyTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.info },
+  verifyBox: { marginTop: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: 10, gap: 3 },
+  verifyHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  verifyName: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  verifyMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 17 },
+  verifyWarn: { fontSize: TYPOGRAPHY.xs, color: COLORS.negative, fontWeight: '600', lineHeight: 17, marginTop: 2 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.full },
+  statusTxt: { fontSize: 10, fontWeight: '700' },
 });

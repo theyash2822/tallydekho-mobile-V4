@@ -625,7 +625,7 @@ export default function CreateLedgerScreen() {
           {isParty && (
             <>
               <View style={s.divider} />
-              <PartyForm ref={formRef} />
+              <PartyForm ref={formRef} verifyCompanyGuid={company?.guid || undefined} />
             </>
           )}
         </ScrollView>

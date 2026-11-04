@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { safePush } from '../../src/utils/safeNavigation';
 import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
@@ -19,6 +19,8 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { GstOverviewSection } from '../../src/components/compliance/GstPanels';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = [
@@ -105,6 +107,9 @@ export default function GSTScreen() {
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
+  const { hasCapability } = useWorkspace();
+  // GST on PeriOne (spec 2026-11-04 §4.3): Overview on top; ?tab=ims|deposits (alerts) opens that sheet.
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo = selectedFY?.endDate ?? '';
@@ -430,6 +435,10 @@ export default function GSTScreen() {
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
         {(detailError || summaryError) && (
           <ErrorBanner message={(detailError || summaryError) as string} onRetry={() => setReloadKey(k => k + 1)} />
+        )}
+
+        {!!companyGuid && hasCapability('gst.view') && (
+          <GstOverviewSection companyGuid={companyGuid} initialSheet={typeof tabParam === 'string' ? tabParam : undefined} fyRange={{ from: fyFrom || undefined, to: fyTo || undefined }} />
         )}
 
         {/* ── Summary Card ─────────────────────────────────────────────── */}

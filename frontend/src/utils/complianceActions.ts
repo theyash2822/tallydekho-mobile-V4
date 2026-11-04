@@ -1,7 +1,7 @@
 /**
  * Device-side compliance actions shared by the lists, the record screen and
- * the sales screens: share PDFs (existing sheets), share the signed JSON as a
- * file, and record the share / download events on the server.
+ * the sales screens: share PDFs (existing sheets), share the signed JSON and the
+ * list report (CSV) as files, and record the share / download events on the server.
  */
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -9,9 +9,13 @@ import { Alert } from 'react-native';
 import i18n from '../i18n';
 import {
   getEinvoiceSignedJson,
+  getComplianceReportCsv,
   recordComplianceEvent,
+  type ComplianceDomain,
+  type ComplianceReportTab,
 } from '../services/api';
 import { shareCompliancePdfSafely } from './voucherPdf';
+import { complianceReportFileName } from './complianceRules';
 import { rowAmount, rowDate, rowEwbNo, rowIrn, rowNumber, rowParty, rowType } from '../components/compliance/complianceShared';
 
 export type ComplianceCompanyInfo = { name?: string; address?: string; gstin?: string } | null | undefined;
@@ -80,6 +84,29 @@ export async function shareSignedJson(companyGuid: string, voucherGuid: string, 
     return false;
   }
   await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: `IRN-${safe}.json`, UTI: 'public.json' });
+  return true;
+}
+
+/**
+ * GET /einvoice/report · /ewaybills/report → the list as `<file>.csv` in the cache → the share sheet
+ * (Excel, WhatsApp, mail). The server's text starts with a byte-order mark so Excel reads ₹ and names right.
+ */
+export async function shareComplianceReport(
+  domain: ComplianceDomain,
+  companyGuid: string,
+  companyName: string | undefined,
+  params: { tab: ComplianceReportTab; from?: string; to?: string },
+): Promise<boolean> {
+  const text = await getComplianceReportCsv(domain, companyGuid, params);
+  const name = complianceReportFileName(domain, companyName, params.tab);
+  const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+  const path = `${dir}${name}`;
+  await FileSystem.writeAsStringAsync(path, typeof text === 'string' ? text : String(text ?? ''), { encoding: FileSystem.EncodingType.UTF8 });
+  if (!(await Sharing.isAvailableAsync())) {
+    Alert.alert(i18n.t('screens.reportsEinvoiceList.sharingUnavailable', { defaultValue: 'Sharing is not available on this device' }), path);
+    return false;
+  }
+  await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: name, UTI: 'public.comma-separated-values-text' });
   return true;
 }
 

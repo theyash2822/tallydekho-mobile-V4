@@ -329,6 +329,9 @@ async function request<T>(
     if (!res.ok) {
       const { message, code } = extractErrorMeta(data);
       const kind = kindFromStatus(res.status, code);
+      // A 503 naming a feature the server has switched off (GST_NOT_CONFIGURED) came from a server that is up.
+      const featureOff = res.status === 503 && !!code && /_NOT_CONFIGURED$/.test(code);
+      if (featureOff) markServerReachable(true);
       // A refusal of the member's access reads "Not in your access" everywhere, so screens lock instead of erroring.
       const accessRefused = res.status === 403 && !!code && ACCESS_CODES.has(code);
       const err = new ApiError(
@@ -351,7 +354,7 @@ async function request<T>(
       } else if (res.status === 403 || res.status === 402 || res.status === 409) {
         // Background reads outside the member's access stay quiet; the screen shows the lock.
         if (!(method === 'GET' && code && ACCESS_CODES.has(code))) toastRbasError(err);
-      } else if (res.status >= 500) {
+      } else if (res.status >= 500 && !featureOff) {
         reportError(err, { method, endpoint: endpoint.split('?')[0], status: res.status, code });
       }
       throw err;
@@ -806,6 +809,10 @@ export interface DispatchDetails {
   transporter_name?: string;
   transport_doc_no?: string;
   transport_doc_date?: string;
+  /** Stock transfer: the receiving godown's address (`ship_to` carries its name). */
+  ship_to_address1?: string;
+  ship_to_pincode?: string;
+  ship_to_state?: string;
 }
 export interface ReadinessGap { code: string; message: string; fix?: any }
 export interface ReadinessRow {
@@ -832,13 +839,31 @@ export interface ReadinessRow {
   source?: 'tally' | 'auditer' | string;
   /** TallyPrime mode: nothing to register here, the next sync brings the document. */
   pending_in_tally?: boolean;
+  /** E-invoice: last day the IRP accepts it (yyyy-mm-dd), days until then (<0 = closed) and how urgent that is. */
+  deadline?: string;
+  days_left?: number;
+  urgency?: 'ok' | 'soon' | 'urgent' | 'expired';
+  /** E-way bill: which document this is (sales, delivery_note, job_work, purchase_return, inward_unregistered, stock_transfer). */
+  doc_kind?: string;
+  supply_type?: 'O' | 'I';
+  distance_km?: number | null;
+  /** Created in Auditer (app voucher). */
+  from_app?: boolean;
   [k: string]: any;
 }
 export interface ReadinessResponse {
   data: { ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] };
   counts?: Record<string, number>;
   /** The company's generation settings: source 'tally' | 'auditer', mode NULL until chosen, active. */
-  integration?: { active?: boolean; mode?: string | null; source?: string; applicable?: string; auto_since?: string | null } | null;
+  integration?: {
+    active?: boolean; mode?: string | null; source?: string; applicable?: string; auto_since?: string | null;
+    /** E-invoice: the 30-day limit applies (true), does not (false), or the ₹10 Cr question is unanswered (null). */
+    rule_30_days?: boolean | null;
+    app_invoices?: string; app_invoices_choice?: string | null;
+    /** Last successful Tally sync; `stale` after 24 hours. */
+    desktop?: { last_sync_at?: number | null; hours?: number | null; stale?: boolean } | null;
+    [k: string]: any;
+  } | null;
 }
 /** GET /einvoice/readiness — Ready / Needs attention / Generated for the period (+ coverage counts). */
 export const fetchEinvoiceReadiness = (companyGuid: string, params?: Record<string, string | undefined>) =>
@@ -860,8 +885,11 @@ export const refreshEinvoice = (companyGuid: string, voucherGuid: string) =>
   post<any>(`/einvoice/${encodeURIComponent(voucherGuid)}/refresh`, { companyGuid });
 export const fetchEwbReadiness = (companyGuid: string, params?: Record<string, string | undefined>) =>
   get<ReadinessResponse>(withCompany('/ewaybills/readiness', companyGuid, params));
-export const generateEwb = (payload: { companyGuid: string; voucherGuid: string; dispatchDetails?: DispatchDetails }) =>
-  post<any>('/ewaybills/generate', payload);
+/** POST /ewaybills/generate — `subSupplyType` / `subSupplyDesc` say why a delivery note's goods move; `fromGodown` for a stock transfer. */
+export const generateEwb = (payload: {
+  companyGuid: string; voucherGuid: string; dispatchDetails?: DispatchDetails;
+  subSupplyType?: string; subSupplyDesc?: string; fromGodown?: string; docKind?: string;
+}) => post<any>('/ewaybills/generate', payload);
 export const generateEwbBulk = (payload: { companyGuid: string; voucherGuids: string[]; dispatchDetails?: DispatchDetails }) =>
   post<any>('/ewaybills/generate-bulk', payload);
 export const getEwbRecord = (companyGuid: string, voucherGuid: string) =>
@@ -901,9 +929,151 @@ export const getComplianceHistory = (companyGuid: string, voucherGuid: string) =
 /** POST /tally/master/party-alter — GSTIN / pincode / state written back to the Tally ledger. */
 export const alterParty = (payload: { companyGuid: string; ledgerGuid?: string; ledgerName?: string; gstin?: string; pincode?: string; state?: string; address?: string }) =>
   tallyPost<any>('/master/party-alter', payload);
+/** POST /tally/voucher/sales-correct — alters the same Tally voucher (dated today, no live IRN) with the corrected lines. */
+export const correctSalesInvoice = (payload: any) => tallyPost<any>('/voucher/sales-correct', payload, 'sales');
+
+// ── Compliance v2 (spec 2026-11-04 §3.1, §5A) ──
+export interface ComplianceConfig {
+  e_invoice_applicable?: string;
+  e_invoice_mode?: string | null;
+  e_invoice_source?: string;
+  e_way_bill_applicable?: string;
+  e_way_bill_source?: string;
+  /** "Has turnover crossed ₹5 Cr in any year since 2017-18?" */
+  e_invoice_turnover?: 'above_5cr' | 'below_5cr' | null;
+  /** "Was it ₹10 Cr or more?" — the 30-day limit. */
+  e_invoice_aato_10cr?: boolean | null;
+  e_invoice_app_invoices?: string | null;
+  e_invoice_app_invoices_effective?: 'auto' | 'follow_mode' | 'auditer' | 'tally';
+  e_invoice_rule_30_days?: boolean;
+  /** "Does this business move goods worth ₹50,000 or more?" */
+  e_way_bill_moves_goods?: boolean | null;
+  e_way_bill_intra_limit?: number | null;
+  e_way_bill_intra_limit_effective?: number;
+  e_way_bill_doc_kinds?: string[] | null;
+  e_way_bill_doc_kinds_effective?: string[];
+  e_way_bill_state_rule?: { state_code?: string; state?: string | null; intra?: number; inter?: number; notified_only?: boolean; note?: string | null; checked_on?: string } | null;
+  [k: string]: any;
+}
+export interface TurnoverYear { fy: string; fy_start?: number; turnover: number; complete: boolean; until?: string }
+export interface ComplianceTurnover {
+  pan?: string | null;
+  pan_source?: 'profile' | 'gstin' | null;
+  companies?: { guid: string; name: string; gstin?: string | null }[];
+  years?: TurnoverYear[];
+  crossed_5cr_in?: string | null;
+  crossed_10cr_in?: string | null;
+  advice?: { code: string; message: string | null; effective_from?: string | null; fy?: string | null } | null;
+}
+/** GET /compliance/turnover — turnover per FY across the PAN's companies (an estimate from the books) and the advice. */
+export const getComplianceTurnover = (companyGuid: string) =>
+  get<any>(withCompany('/compliance/turnover', companyGuid));
+export type ComplianceReportTab = 'attention' | 'ready' | 'generated' | 'failed' | 'all';
+/** GET /einvoice/report · /ewaybills/report — the list as CSV text (UTF-8 BOM first). */
+export const getComplianceReportCsv = (domain: ComplianceDomain, companyGuid: string, params: { tab: ComplianceReportTab; from?: string; to?: string; fy?: string }) =>
+  request<string>('GET', withCompany(domain === 'einvoice' ? '/einvoice/report' : '/ewaybills/report', companyGuid, params), undefined, true, 'api', true, 'text');
+export interface VehicleCheckResult {
+  available: boolean; found?: boolean; vehicle_no?: string; owner_name_masked?: string; vehicle_class?: string; maker_model?: string;
+  registered_at?: string; fitness_upto?: string; insurance_upto?: string; puc_upto?: string; status_note?: string;
+}
+/** POST /ewaybills/vehicle-check — the vehicle as Vahan knows it; `{ available: false }` when Vahan is not set up. */
+export const checkEwbVehicle = (companyGuid: string, vehicleNo: string) =>
+  post<any>('/ewaybills/vehicle-check', { companyGuid, vehicleNo });
+export interface StoredIncomingEwb {
+  ewb_no: string; ewb_date?: string; from_gstin?: string; from_name?: string; doc_no?: string; doc_date?: string;
+  value?: number | null; valid_till?: string; status?: string; decision?: string | null; decided_at?: number | null;
+  /** Epoch seconds: generation + 72 h, the last moment the portal takes a rejection (also on the by-date rows). */
+  reject_by?: number | null;
+}
+/** GET /ewaybills/incoming/stored — e-way bills raised on this company, as fetched twice a day. */
+export const listStoredIncomingEwbs = (companyGuid: string, days = 3) =>
+  get<any>(withCompany('/ewaybills/incoming/stored', companyGuid, { days: String(days) }));
 
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));
 export const getGSTSummary       = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-summary', companyGuid, params));
+
+// ── GST returns on PeriOne (spec 2026-11-04 §3.2) — /api/gst/*, 503 GST_NOT_CONFIGURED until the server has credentials ──
+export interface GstConnection { status: 'not_connected' | 'connected' | 'expired' | string; connected_at?: number | string | null; expires_at?: number | string | null }
+export interface GstConfig {
+  returns_mode: 'prepare' | 'draft' | 'file';
+  ims_mode: 'decide' | 'view';
+  deposit_posting: 'show' | 'button' | 'auto';
+  deposit_debit_ledger: string | null;
+  deposit_bank_ledger: string | null;
+  filing_frequency: 'monthly' | 'quarterly' | null;
+  filing_frequency_effective?: string | null;
+  username?: string | null;
+  gstin?: string | null;
+  configured_on_server?: boolean;
+  connection?: GstConnection | null;
+}
+export interface GstCalendarRow {
+  form: string; period: string; period_label?: string; due_date: string;
+  status: 'filed' | 'due' | 'overdue' | 'upcoming' | string; filed_on?: string | null; arn?: string | null; days_left?: number | null;
+  /** false when the portal's filing status could not be read: "due" / "overdue" is then only a guess. */
+  status_known?: boolean;
+}
+export interface GstScore { score: number | null; parts?: { key: string; label: string; value: number | null; weight: number; note?: string | null }[] }
+export interface GstOverview {
+  configured_on_server?: boolean; connection?: GstConnection | null; calendar?: GstCalendarRow[]; score?: GstScore | null; cash_balance?: any; last_deposit?: any;
+}
+export interface GstImsRow {
+  id: string; section?: string; supplier_gstin?: string; supplier_name?: string; doc_type?: string; doc_no?: string; doc_date?: string;
+  taxable?: number; tax?: number; action?: 'accepted' | 'rejected' | 'pending' | 'none' | string; in_books?: boolean; voucher_guid?: string | null;
+}
+export interface GstImsSection { key: string; label: string; count: number }
+export interface GstImsResponse {
+  mode: 'decide' | 'view' | string;
+  /** The section asked for; null when the answer holds every section. */
+  section?: string | null;
+  sections?: GstImsSection[];
+  period?: string | null;
+  rows: GstImsRow[];
+}
+export type GstImsAction = 'accepted' | 'rejected' | 'pending';
+/** 'unknown': Tally did not confirm the voucher, so it may be there already — it cannot be posted again from here. */
+export type GstDepositPostStatus = 'not_posted' | 'queued' | 'posted' | 'failed' | 'unknown';
+export interface GstDeposit {
+  id: string; date: string; reference?: string; description?: string; amount: number;
+  igst?: number; cgst?: number; sgst?: number; cess?: number; posted?: boolean; voucher_number?: string | null;
+  post_status?: GstDepositPostStatus | null;
+  /** Why the last posting failed (Tally's or the queue's own words). */
+  post_error?: string | null;
+  /** True when Post to Tally (or Post again after a failure) is allowed for this deposit. */
+  can_post?: boolean;
+}
+/** POST /gst/deposits/:id/post — 'success': Tally took it · 'queued': the desktop posts it when online · 'unconfirmed': Tally did not answer. */
+export interface GstDepositPostResult { queued: boolean; tdk_ref?: string | null; status: 'success' | 'queued' | 'unconfirmed' | string }
+export interface GstinCheck {
+  /** `found: false` — the GSTIN is not registered (or not found where it was looked up). */
+  available: boolean; found?: boolean; source?: string; gstin?: string; legal_name?: string; trade_name?: string; status?: string; registration_type?: string;
+  state?: string; state_code?: string; address?: string; registered_on?: string; cancelled_on?: string | null;
+}
+export const getGstConfig = (companyGuid: string) => get<any>(withCompany('/gst/config', companyGuid));
+export const saveGstConfig = (companyGuid: string, patch: Partial<GstConfig>) => post<any>('/gst/config', { companyGuid, ...patch });
+export const requestGstConnectOtp = (companyGuid: string, username: string) => post<any>('/gst/connect/otp', { companyGuid, username });
+export const verifyGstConnectOtp = (companyGuid: string, otp: string, keepAliveDays: number, username?: string) =>
+  post<any>('/gst/connect/verify', { companyGuid, otp, keepAliveDays, username });
+export const disconnectGst = (companyGuid: string) => post<any>('/gst/disconnect', { companyGuid });
+export const getGstOverview = (companyGuid: string, fy?: string) => get<any>(withCompany('/gst/overview', companyGuid, { fy }));
+/**
+ * GET /gst/ims?period=MMYYYY — supplier invoices in the Invoice Management System, matched to the books.
+ * Without `section`: every section in one list (each row says its section) and `sections` with the count of each.
+ */
+export const getGstIms = (companyGuid: string, period: string, section?: string) =>
+  get<{ success: boolean; data: GstImsResponse }>(withCompany('/gst/ims', companyGuid, { period, section }));
+export const saveGstImsActions = (companyGuid: string, period: string, items: { id: string; action: GstImsAction }[]) =>
+  post<any>('/gst/ims/action', { companyGuid, period, items });
+export const getGstDeposits = (companyGuid: string, params: { from?: string; to?: string } = {}) => get<any>(withCompany('/gst/deposits', companyGuid, params));
+/** Queues a Payment voucher in Tally for the deposit; after a failed posting it posts the deposit again. */
+export const postGstDeposit = (companyGuid: string, id: string) =>
+  post<{ success: boolean; data: GstDepositPostResult }>(`/gst/deposits/${encodeURIComponent(id)}/post`, { companyGuid });
+export const checkGstin = (companyGuid: string, gstin: string) => get<any>(withCompany('/gst/gstin-check', companyGuid, { gstin }));
+/** The server's "GST filing is not set up on the server yet" answer (503 GST_NOT_CONFIGURED). */
+export const isGstNotConfigured = (err: unknown): boolean => {
+  const code = (err as any)?.code;
+  return code === 'GST_NOT_CONFIGURED' || (err instanceof ApiError && err.status === 503 && !code);
+};
 
 // ══════════════════════════════════════════════════════════════
 // KPI DETAIL VIEWS

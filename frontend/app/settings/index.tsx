@@ -77,6 +77,7 @@ const SECTIONS: Section[] = [
       { id: 'bank', label: 'Bank Feeds', icon: 'wallet-outline', route: '/settings/bank-feeds' },
       { id: 'ewaybill', label: 'E-Way Bill Integration', icon: 'document-outline', route: '/settings/ewb' },
       { id: 'einvoice', label: 'E-Invoice (IRN)', icon: 'receipt-outline', route: '/settings/einvoice' },
+      { id: 'gst', label: 'GST Returns', icon: 'document-text-outline', route: '/settings/gst' },
     ],
   },
   {
@@ -110,6 +111,7 @@ const SUBITEM_KEY: Record<string, string> = {
   bank:         'settings.bankFeeds',
   ewaybill:     'settings.ewayBill',
   einvoice:     'settings.eInvoice',
+  gst:          'settings.gst',
   about:        'settings.about',
   guide:        'settings.appGuide',
   security:     'settings.security',
@@ -348,7 +350,7 @@ export default function SettingsScreen() {
                   <View style={styles.subItems}>
                     {section.subItems
                       .filter((sub) => {
-                        if ((sub.id === 'ewaybill' || sub.id === 'einvoice') && !(isOwnerOrAdmin || hasCapability('integrations.configure'))) return false;
+                        if ((sub.id === 'ewaybill' || sub.id === 'einvoice' || sub.id === 'gst') && !(isOwnerOrAdmin || hasCapability('integrations.configure'))) return false;
                         if (sub.id === 'approvals' && !(isOwnerOrAdmin || hasCapability('tally.restore_replace'))) return false;
                         return true;
                       })

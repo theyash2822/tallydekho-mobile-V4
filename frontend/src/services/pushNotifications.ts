@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { getActiveWorkspaceId, registerPushToken } from './api';
 import { safePush } from '../utils/safeNavigation';
-import { notificationRoute } from '../utils/notificationLinks';
+import { complianceLinkRoute, isComplianceAlert, notificationRoute } from '../utils/notificationLinks';
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
@@ -125,7 +125,10 @@ export function setupNotificationHandlers(router: any) {
     const active = getActiveWorkspaceId();
     if (eventWs && active && String(eventWs) !== String(active)) return;
 
-    const linked = notificationRoute({ target: data.target, route: data.route });
+    // Compliance alerts name the web page they are about (`data.link`); open the matching app screen.
+    const linked = isComplianceAlert(data)
+      ? (complianceLinkRoute(data.link) || '/reports/compliance')
+      : notificationRoute({ target: data.target, route: data.route });
     if (linked) {
       safePush(router, linked);
       return;

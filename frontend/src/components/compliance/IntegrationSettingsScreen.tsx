@@ -1,10 +1,12 @@
 /**
- * Settings → E-invoice / E-way bill for the company chosen in the header (spec 2026-11-03 §2.1, §4;
- * settings move 03-11-2026):
- *   Generated in: TallyPrime (Auditer shows what Tally generated after sync; no credentials, nothing to pay)
- *              or Auditer (PeriOne with the company's portal API user: Configure / Test / Activate / Remove).
- *   After activation the Owner/Admin picks Manual or Auto (generation stays Manual until chosen) and can
- *   opt the company out ("Not applicable"). Rates are not shown here (Owner decision 2026-11-03).
+ * Settings → E-invoice / E-way bill for the company chosen in the header (spec 2026-11-04 §1, §4.3):
+ *   First the question that decides whether the rule applies at all — e-invoice: has turnover crossed ₹5 Cr
+ *   (and ₹10 Cr, the 30-day limit), with the estimate from the books; e-way bill: does the business move goods
+ *   worth ₹50,000 or more. "No" leaves a short Not applicable state and nothing else.
+ *   Otherwise: Generated in TallyPrime | Auditer (PeriOne with the company's portal API user: Configure / Test /
+ *   Activate / Remove), Manual or Auto once active, then — e-invoice: what happens to invoices created in Auditer;
+ *   e-way bill: the documents Auditer tracks and the limit inside the company's state.
+ *   Every change is one partial save of the compliance config. Rates are not shown here (Owner decision 2026-11-03).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking, ActivityIndicator, RefreshControl } from 'react-native';
@@ -16,17 +18,21 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import {
   getWorkspaceIntegration, saveWorkspaceIntegration, activateWorkspaceIntegration, testWorkspaceIntegration, removeWorkspaceIntegration,
-  saveComplianceConfig, ApiError, type IntegrationCompanyRow, type WorkspaceIntegrationResponse,
+  saveComplianceConfig, getComplianceConfig, getComplianceTurnover, ApiError,
+  type IntegrationCompanyRow, type WorkspaceIntegrationResponse, type ComplianceConfig, type ComplianceTurnover,
 } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import { toastRbasError } from '../../utils/rbasErrors';
+import { EWB_EXTRA_KINDS, recentTurnoverYears, withDocKind, type EwbExtraKind } from '../../utils/complianceRules';
 import { LoadingState, ErrorState } from '../ApiStateViews';
 import { BottomModalShell } from '../forms/BottomModalShell';
 import FormField from '../forms/FormField';
 import BrandSwitch from '../forms/BrandSwitch';
 import { SheetFooter } from './ComplianceSheets';
 import { StatusChip } from './ComplianceChips';
+import { OptionRow, YesNo } from './SettingsOptions';
 
 type Props = {
   /** Server domain key: 'einvoice' | 'eway'. */
@@ -50,7 +56,6 @@ const GEN = {
       manual: 'Invoices wait in Reports → E-Invoice → Ready until someone taps Register.',
       auto: 'Every new sales invoice is registered on sync, from today on. 2 credits each, refunded when the portal refuses; failures go to Needs attention.',
     } as Record<string, string>,
-    optOutHelp: 'For a company below the ₹5 Cr e-invoicing threshold, for example one that only needs e-way bills. Blocks IRN generation and lifts the "IRN first" rule for its e-way bills.',
     tallyHelp: 'You generate IRNs in TallyPrime. After each sync Auditer shows them under Reports → E-Invoice → Generated, with the acknowledgement and the signed QR; nothing is registered or charged from here.',
     auditerHelp: 'Through PeriOne with this company\u2019s portal API user: save the credentials, activate once, then choose Manual or Auto.',
   },
@@ -64,38 +69,51 @@ const GEN = {
       auto: 'Generated on sync when the invoice carries dispatch, ship-to and vehicle or transporter details, from today on. 2 credits each, refunded when the portal refuses.',
       ask_after_irn: 'Right after an IRN is registered you are asked whether to generate the e-way bill now.',
     } as Record<string, string>,
-    optOutHelp: 'For a company that never moves goods, for example a services company. Blocks e-way bill generation.',
     tallyHelp: 'You generate e-way bills in TallyPrime. After each sync Auditer shows them under Reports → E-Way Bill → Generated; Part B, extensions and cancellations are done in Tally.',
     auditerHelp: 'Through PeriOne with this company\u2019s portal API user: save the credentials, activate once, then choose Manual or Auto.',
   },
 } as const;
 
+/** Invoices created in Auditer: the two choices of each source (spec §1.1, §2.3). */
+const APP_INVOICE_CHOICES = { auditer: ['auto', 'follow_mode'], tally: ['auditer', 'tally'] } as const;
+
 export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl, portalLabel, howTo }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
+  const { formatAmount, formatAmountCompact } = useSettings();
   const { workspaceId, isOwnerOrAdmin: ownerOrAdmin, hasCapability } = useWorkspace();
   const { company: selectedCompany } = useAuth();
   const canConfigure = ownerOrAdmin || hasCapability('integrations.configure');
   const [data, setData] = useState<WorkspaceIntegrationResponse | null>(null);
+  const [cfg, setCfg] = useState<ComplianceConfig | null>(null);
+  const [turnover, setTurnover] = useState<ComplianceTurnover | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [reloadKey, setReloadKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [configRow, setConfigRow] = useState<IntegrationCompanyRow | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [limitDraft, setLimitDraft] = useState<string | null>(null);
+  const companyGuid = selectedCompany?.guid || '';
 
   const load = useCallback(() => {
     if (!workspaceId) return () => {};
     let cancelled = false;
-    getWorkspaceIntegration(workspaceId, domain)
-      .then((res: any) => {
+    Promise.all([
+      getWorkspaceIntegration(workspaceId, domain),
+      companyGuid ? getComplianceConfig(companyGuid).catch(() => null) : Promise.resolve(null),
+      companyGuid && domain === 'einvoice' ? getComplianceTurnover(companyGuid).catch(() => null) : Promise.resolve(null),
+    ])
+      .then(([res, cfgRes, turnoverRes]: any[]) => {
         if (cancelled) return;
         const d: WorkspaceIntegrationResponse = res?.data ?? res ?? {};
         setData(d);
+        setCfg(cfgRes?.data ?? null);
+        setTurnover(turnoverRes?.data ?? null);
         setLoadState('ready');
       })
       .catch(() => { if (!cancelled) setLoadState('error'); });
     return () => { cancelled = true; };
-  }, [workspaceId, domain]);
+  }, [workspaceId, domain, companyGuid]);
   useEffect(() => load(), [load, reloadKey]);
   const refetch = () => setReloadKey((k) => k + 1);
 
@@ -103,27 +121,35 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
   const sandbox = gateway?.env === 'sandbox';
   const allCompanies: IntegrationCompanyRow[] = Array.isArray(data?.companies) ? data!.companies! : [];
   // Only the company chosen in the header: settings, activation and credentials are per company.
-  const companies = allCompanies.filter((c) => !!selectedCompany?.guid && c.company_guid === selectedCompany.guid);
+  const companies = allCompanies.filter((c) => !!companyGuid && c.company_guid === companyGuid);
 
   const idOf = (c: IntegrationCompanyRow) => String(c.company_id);
   // The server computes status from the stored credentials (complianceCredentials.integrationStatus); `secretsSet`
   // is a per-key map, so its presence alone says nothing. Same rule as the web portal.
   const hasCreds = (c: IntegrationCompanyRow) => !!(c.useSandboxLogin || c.config_json?.useSandboxLogin) || String(c.status || 'NOT_CONFIGURED').toUpperCase() !== 'NOT_CONFIGURED';
 
-  // Source / mode / opt-out: one key at a time (partial save on the compliance config), then reload.
   const gen = GEN[domain];
   const genOf = (c: IntegrationCompanyRow) => ({
     source: c.compliance?.source === 'tally' ? 'tally' : 'auditer',
     mode: c.compliance?.mode || null,
-    optedOut: c.compliance?.applicable === 'not_applicable',
     autoSince: c.compliance?.auto_since || null,
   });
-  const saveSetting = async (c: IntegrationCompanyRow, patch: Record<string, string | null>, okText?: string) => {
+  /** The answer that decides whether the rule applies: 'yes', 'no' or unanswered (null). */
+  const answer: 'yes' | 'no' | null = domain === 'einvoice'
+    ? (cfg?.e_invoice_turnover === 'above_5cr' ? 'yes' : cfg?.e_invoice_turnover === 'below_5cr' ? 'no' : null)
+    : (cfg?.e_way_bill_moves_goods === true ? 'yes' : cfg?.e_way_bill_moves_goods === false ? 'no' : null);
+  // Unanswered keeps an earlier "Not applicable" (the switch the question replaced).
+  const notApplicable = (c?: IntegrationCompanyRow) => answer === 'no'
+    || (answer === null && (cfg?.[`${gen.prefix}_applicable`] ?? c?.compliance?.applicable) === 'not_applicable');
+
+  // One key (or answer) at a time: partial save on the compliance config, then reload.
+  const saveSetting = async (c: IntegrationCompanyRow, patch: Record<string, unknown>, okText?: string) => {
     if (!c.company_guid) return;
     setBusyId(idOf(c));
     try {
-      await saveComplianceConfig(c.company_guid, patch);
-      if (okText) Toast.show({ type: 'success', text1: t('common.saved'), text2: okText });
+      const res: any = await saveComplianceConfig(c.company_guid, patch);
+      if (res?.data) setCfg(res.data);
+      Toast.show({ type: 'success', text1: t('common.saved'), text2: okText });
       refetch();
     } catch (e) {
       toastRbasError(e) || Alert.alert(t('common.error'), (e as any)?.message || t(`${ns}.settingNotSaved`, { defaultValue: 'Could not save this setting.' }));
@@ -141,11 +167,9 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
     if (mode === genOf(c).mode) return;
     saveSetting(c, { [`${gen.prefix}_mode`]: mode }, `${t(`${ns}.modeTitle`, { defaultValue: gen.modeTitle })}: ${t(`${ns}.mode_${mode}`, { defaultValue: gen.modes.find((m) => m.key === mode)?.label || mode })}`);
   };
-  const setOptOut = (c: IntegrationCompanyRow, on: boolean) => {
-    const value = on ? 'not_applicable' : (c.activated_at ? 'applicable_configured' : 'applicable_not_configured');
-    saveSetting(c, { [`${gen.prefix}_applicable`]: value }, on
-      ? t(`${ns}.optedOut`, { defaultValue: 'Marked Not applicable for this company.' })
-      : t(`${ns}.optedIn`, { defaultValue: 'Applies to this company again.' }));
+  const saveLimit = (c: IntegrationCompanyRow, value: number | null) => {
+    setLimitDraft(null);
+    saveSetting(c, { e_way_bill_intra_limit: value });
   };
 
   const activate = (c: IntegrationCompanyRow) => {
@@ -250,6 +274,163 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
     return <StatusChip label={t(`${ns}.statusNotConfigured`, { defaultValue: 'Not configured' })} tone="none" />;
   };
 
+  // ── The question that decides whether the rule applies ──────────────────────
+  const questionCard = (c: IntegrationCompanyRow, busy: boolean) => {
+    if (domain === 'eway') {
+      return (
+        <View style={s.card}>
+          <Text style={s.blockTitle}>{t('screens.settingsEwb.movesGoodsQ')}</Text>
+          <Text style={s.note}>{t('screens.settingsEwb.movesGoodsHelp')}</Text>
+          <YesNo value={cfg?.e_way_bill_moves_goods ?? null} disabled={busy} onChange={(v) => saveSetting(c, { e_way_bill_moves_goods: v })} testID="ewb-moves-goods" />
+          {answer === null && <Text style={s.hint}>{t('screens.settingsEinvoice.answerHint')}</Text>}
+        </View>
+      );
+    }
+    const years = recentTurnoverYears(turnover?.years);
+    const advice = turnover?.advice && turnover.advice.code !== 'NONE' ? turnover.advice.message : null;
+    return (
+      <View style={s.card}>
+        <Text style={s.blockTitle}>{t('screens.settingsEinvoice.requiredTitle')}</Text>
+        <Text style={s.question}>{t('screens.settingsEinvoice.turnoverQ')}</Text>
+        <YesNo
+          value={cfg?.e_invoice_turnover === 'above_5cr' ? true : cfg?.e_invoice_turnover === 'below_5cr' ? false : null}
+          disabled={busy}
+          onChange={(v) => saveSetting(c, { e_invoice_turnover: v ? 'above_5cr' : 'below_5cr' })}
+          testID="einv-turnover"
+        />
+        {answer === 'yes' && (
+          <>
+            <Text style={s.question}>{t('screens.settingsEinvoice.aatoQ')}</Text>
+            <YesNo value={cfg?.e_invoice_aato_10cr ?? null} disabled={busy} onChange={(v) => saveSetting(c, { e_invoice_aato_10cr: v })} testID="einv-aato" />
+            <Text style={s.note}>{t('screens.settingsEinvoice.aatoHelp')}</Text>
+          </>
+        )}
+        {answer === null && <Text style={s.hint}>{t('screens.settingsEinvoice.answerHint')}</Text>}
+        {years.length > 0 && (
+          <View style={s.estimate} testID="einv-turnover-estimate">
+            <Text style={s.estimateTitle}>{t('screens.settingsEinvoice.fromBooks')}</Text>
+            {years.map((y) => (
+              <View key={y.fy} style={s.estimateRow}>
+                <Text style={s.estimateLabel}>{y.complete ? t('screens.settingsEinvoice.fyLabel', { fy: y.fy }) : t('screens.settingsEinvoice.fySoFar', { fy: y.fy })}</Text>
+                <Text style={s.estimateValue}>{formatAmountCompact(Number(y.turnover) || 0)}</Text>
+              </View>
+            ))}
+            {!!turnover?.pan && <Text style={s.estimateNote}>{t('screens.settingsEinvoice.panNote', { pan: turnover.pan })}</Text>}
+          </View>
+        )}
+        {!!advice && (
+          <View style={[s.warnBox, { marginTop: SPACING.sm }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={COLORS.warning} />
+            <Text style={s.warnTxt}>{advice}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const notApplicableCard = (
+    <View style={s.card} testID="not-applicable-state">
+      <View style={s.cardHdr}>
+        <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.positive} />
+        <Text style={s.cardTitle}>{t('screens.settingsEinvoice.notApplicableTitle')}</Text>
+      </View>
+      <Text style={[s.note, { marginBottom: 0 }]}>{t(domain === 'einvoice' ? 'screens.settingsEinvoice.notApplicableBody' : 'screens.settingsEwb.notApplicableBody')}</Text>
+    </View>
+  );
+
+  // ── E-invoice: invoices created in Auditer ──────────────────────────────────
+  const appInvoicesCard = (c: IntegrationCompanyRow, busy: boolean) => {
+    const source = genOf(c).source as 'tally' | 'auditer';
+    const current = cfg?.e_invoice_app_invoices_effective || (source === 'tally' ? 'tally' : 'follow_mode');
+    return (
+      <View style={s.card}>
+        <Text style={s.blockTitle}>{t('screens.settingsEinvoice.appInvTitle')}</Text>
+        <Text style={s.note}>{t('screens.settingsEinvoice.appInvSub')}</Text>
+        {APP_INVOICE_CHOICES[source].map((key) => (
+          <OptionRow
+            key={key}
+            selected={current === key}
+            disabled={busy}
+            title={t(`screens.settingsEinvoice.appInv_${key}`)}
+            help={t(`screens.settingsEinvoice.appInv_${key}Help`)}
+            onPress={() => saveSetting(c, { e_invoice_app_invoices: key })}
+            testID={`app-invoices-${key}`}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  // ── E-way bill: documents tracked and the limit inside the state ────────────
+  const docKindsCard = (c: IntegrationCompanyRow, busy: boolean) => {
+    const kinds = cfg?.e_way_bill_doc_kinds_effective || [];
+    return (
+      <View style={s.card}>
+        <Text style={s.blockTitle}>{t('screens.settingsEwb.docsTitle')}</Text>
+        <Text style={s.note}>{t('screens.settingsEwb.docsHelp')}</Text>
+        {EWB_EXTRA_KINDS.map((kind: EwbExtraKind) => (
+          <View key={kind} style={s.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.switchLabel}>{t(`screens.reportsEwbList.kind_${kind}`)}</Text>
+              {kind === 'stock_transfer' && <Text style={[s.note, { marginBottom: 0 }]}>{t('screens.settingsEwb.docsStockNote')}</Text>}
+            </View>
+            <BrandSwitch value={kinds.includes(kind)} disabled={busy} onValueChange={(on: boolean) => saveSetting(c, { e_way_bill_doc_kinds: withDocKind(kinds, kind, on) })} />
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const limitCard = (c: IntegrationCompanyRow, busy: boolean) => {
+    const rule = cfg?.e_way_bill_state_rule || null;
+    const own = cfg?.e_way_bill_intra_limit != null;
+    const effective = Number(cfg?.e_way_bill_intra_limit_effective ?? rule?.intra ?? 50000);
+    const draftValid = limitDraft != null && /^\d+$/.test(limitDraft.trim());
+    return (
+      <View style={s.card}>
+        <Text style={s.blockTitle}>{t('screens.settingsEwb.limitTitle', { state: rule?.state || t('screens.settingsEwb.limitStateFallback') })}</Text>
+        <View style={s.limitRow}>
+          <Text style={s.limitValue}>{formatAmount(effective)}</Text>
+          <StatusChip label={own ? t('screens.settingsEwb.limitOwn') : t('screens.settingsEwb.limitDefault')} tone={own ? 'info' : 'muted'} />
+        </View>
+        {!!rule?.note && <Text style={s.note}>{rule.note}</Text>}
+        <Text style={s.note}>{t('screens.settingsEwb.limitAcross', { amount: formatAmount(Number(rule?.inter ?? 50000)) })}</Text>
+        {limitDraft == null ? (
+          <View style={s.btnRow}>
+            <TouchableOpacity style={s.outBtn} onPress={() => setLimitDraft(own ? String(cfg?.e_way_bill_intra_limit ?? '') : '')} disabled={busy} activeOpacity={0.7} testID="ewb-limit-change">
+              <Text style={s.outTxt}>{t('screens.settingsEwb.limitChange')}</Text>
+            </TouchableOpacity>
+            {own && (
+              <TouchableOpacity style={s.outBtn} onPress={() => saveLimit(c, null)} disabled={busy} activeOpacity={0.7} testID="ewb-limit-reset">
+                <Text style={s.outTxt}>{t('screens.settingsEwb.limitUseDefault')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <>
+            <FormField
+              label={t('screens.settingsEwb.limitAmount')}
+              value={limitDraft}
+              onChangeText={(v) => setLimitDraft(v.replace(/\D/g, '').slice(0, 8))}
+              keyboardType="numeric"
+              placeholder={String(rule?.intra ?? 50000)}
+            />
+            <View style={s.btnRow}>
+              <TouchableOpacity style={s.outBtn} onPress={() => setLimitDraft(null)} activeOpacity={0.7}>
+                <Text style={s.outTxt}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.primaryBtn, !draftValid && { opacity: 0.5 }]} onPress={() => draftValid && saveLimit(c, Number(limitDraft))} disabled={busy || !draftValid} activeOpacity={0.8} testID="ewb-limit-save">
+                <Text style={s.primaryTxt}>{t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+    );
+  };
+
+  const anyNotApplicable = companies.some((c) => notApplicable(c));
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {header}
@@ -263,7 +444,7 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} />}>
-          {gateway && (
+          {gateway && !anyNotApplicable && (
             <View style={s.card}>
               <View style={s.cardHdr}>
                 <Ionicons name="server-outline" size={18} color={COLORS.info} />
@@ -296,96 +477,96 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
             const ms = (sec: number | string | null | undefined) => (sec ? Number(sec) * (Number(sec) < 1e12 ? 1000 : 1) : NaN);
             return (
               <View key={id}>
-                <View style={s.card}>
-                  <View style={s.rowHead}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.coName}>{c.name}</Text>
-                      <Text style={s.note}>{[g.source === 'auditer' ? (c.config_json?.gstin || c.gstin) : c.gstin, g.source === 'auditer' && c.activated_at ? `${t(`${ns}.activatedOn`, { defaultValue: 'Activated' })} ${new Date(ms(c.activated_at)).toLocaleDateString()}` : ''].filter(Boolean).join(' · ') || ' '}</Text>
-                    </View>
-                    {g.source === 'auditer' ? statusChip(c) : <StatusChip label={t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })} tone="none" />}
-                  </View>
-
-                  {/* Generated in: TallyPrime | Auditer */}
-                  <Text style={s.fieldLabel}>{t(`${ns}.generatedIn`, { defaultValue: 'Generated in' })}</Text>
-                  <View style={s.chips}>
-                    {([['tally', t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })], ['auditer', t(`${ns}.sourceAuditer`, { defaultValue: 'Auditer' })]] as const).map(([key, label]) => (
-                      <TouchableOpacity key={key} style={[s.chip, g.source === key && s.chipActive]} onPress={() => setSource(c, key)} disabled={busy} activeOpacity={0.7}>
-                        <Text style={[s.chipTxt, g.source === key && s.chipTxtActive]}>{label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <Text style={s.note}>{t(`${ns}.${g.source === 'tally' ? 'tallyHelp' : 'auditerHelp'}`, { defaultValue: g.source === 'tally' ? gen.tallyHelp : gen.auditerHelp })}</Text>
-
-                  {g.source === 'auditer' && (
-                    <>
-                      {!!tr && <Text style={[s.note, { color: tr.ok ? COLORS.positive : COLORS.negative }]}>{tr.text}</Text>}
-                      <View style={s.btnRow}>
-                        <TouchableOpacity style={s.outBtn} onPress={() => setConfigRow(c)} disabled={busy} activeOpacity={0.7}>
-                          <Text style={s.outTxt}>{t(`${ns}.configure`, { defaultValue: 'Configure' })}</Text>
-                        </TouchableOpacity>
-                        {creds && (
-                          <TouchableOpacity style={s.outBtn} onPress={() => testLogin(c)} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
-                            {busy ? <ActivityIndicator size="small" color={COLORS.info} /> : <Text style={s.outTxt}>{t(`${ns}.testLoginBtn`, { defaultValue: 'Test login' })}</Text>}
-                          </TouchableOpacity>
-                        )}
-                        {st !== 'ACTIVE' && !c.activated_at && creds && (
-                          <TouchableOpacity style={s.primaryBtn} onPress={() => activate(c)} disabled={busy} activeOpacity={0.8}>
-                            <Text style={s.primaryTxt}>{t(`${ns}.activate`)}</Text>
-                          </TouchableOpacity>
-                        )}
-                        {creds && (
-                          <TouchableOpacity style={s.iconBtn} onPress={() => remove(c)} disabled={busy} activeOpacity={0.7} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                            <Ionicons name="trash-outline" size={18} color={COLORS.negative} />
-                          </TouchableOpacity>
-                        )}
+                {questionCard(c, busy)}
+                {notApplicable(c) ? notApplicableCard : (
+                  <>
+                    <View style={s.card}>
+                      <View style={s.rowHead}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.coName}>{c.name}</Text>
+                          <Text style={s.note}>{[g.source === 'auditer' ? (c.config_json?.gstin || c.gstin) : c.gstin, g.source === 'auditer' && c.activated_at ? `${t(`${ns}.activatedOn`, { defaultValue: 'Activated' })} ${new Date(ms(c.activated_at)).toLocaleDateString()}` : ''].filter(Boolean).join(' · ') || ' '}</Text>
+                        </View>
+                        {g.source === 'auditer' ? statusChip(c) : <StatusChip label={t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })} tone="none" />}
                       </View>
-                    </>
-                  )}
-                </View>
 
-                {/* Manual / Auto — only once the company is active here and has not opted out. */}
-                {g.source === 'auditer' && active && !g.optedOut && (
-                  <View style={s.card}>
-                    <Text style={s.fieldLabel}>{t(`${ns}.modeTitle`, { defaultValue: gen.modeTitle })}</Text>
-                    <View style={s.chips}>
-                      {gen.modes.map((m) => (
-                        <TouchableOpacity key={m.key} style={[s.chip, g.mode === m.key && s.chipActive]} onPress={() => setMode(c, m.key)} disabled={busy} activeOpacity={0.7}>
-                          <Text style={[s.chipTxt, g.mode === m.key && s.chipTxtActive]}>{t(`${ns}.mode_${m.key}`, { defaultValue: m.label })}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {/* Generated in: TallyPrime | Auditer */}
+                      <Text style={s.fieldLabel}>{t(`${ns}.generatedIn`, { defaultValue: 'Generated in' })}</Text>
+                      <View style={s.chips}>
+                        {([['tally', t(`${ns}.sourceTally`, { defaultValue: 'TallyPrime' })], ['auditer', t(`${ns}.sourceAuditer`, { defaultValue: 'Auditer' })]] as const).map(([key, label]) => (
+                          <TouchableOpacity key={key} style={[s.chip, g.source === key && s.chipActive]} onPress={() => setSource(c, key)} disabled={busy} activeOpacity={0.7}>
+                            <Text style={[s.chipTxt, g.source === key && s.chipTxtActive]}>{label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Text style={s.note}>{t(`${ns}.${g.source === 'tally' ? 'tallyHelp' : 'auditerHelp'}`, { defaultValue: g.source === 'tally' ? gen.tallyHelp : gen.auditerHelp })}</Text>
+
+                      {g.source === 'auditer' && (
+                        <>
+                          {!!tr && <Text style={[s.note, { color: tr.ok ? COLORS.positive : COLORS.negative }]}>{tr.text}</Text>}
+                          <View style={s.btnRow}>
+                            <TouchableOpacity style={s.outBtn} onPress={() => setConfigRow(c)} disabled={busy} activeOpacity={0.7}>
+                              <Text style={s.outTxt}>{t(`${ns}.configure`, { defaultValue: 'Configure' })}</Text>
+                            </TouchableOpacity>
+                            {creds && (
+                              <TouchableOpacity style={s.outBtn} onPress={() => testLogin(c)} disabled={busy || !gateway?.configured} activeOpacity={0.7}>
+                                {busy ? <ActivityIndicator size="small" color={COLORS.info} /> : <Text style={s.outTxt}>{t(`${ns}.testLoginBtn`, { defaultValue: 'Test login' })}</Text>}
+                              </TouchableOpacity>
+                            )}
+                            {st !== 'ACTIVE' && !c.activated_at && creds && (
+                              <TouchableOpacity style={s.primaryBtn} onPress={() => activate(c)} disabled={busy} activeOpacity={0.8}>
+                                <Text style={s.primaryTxt}>{t(`${ns}.activate`)}</Text>
+                              </TouchableOpacity>
+                            )}
+                            {creds && (
+                              <TouchableOpacity style={s.iconBtn} onPress={() => remove(c)} disabled={busy} activeOpacity={0.7} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                                <Ionicons name="trash-outline" size={18} color={COLORS.negative} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </>
+                      )}
                     </View>
-                    {g.mode ? (
-                      <Text style={s.note}>
-                        {t(`${ns}.modeHelp_${g.mode}`, { defaultValue: gen.modeHelp[g.mode] || '' })}
-                        {g.mode === 'auto' && g.autoSince ? ` ${t(`${ns}.autoSince`, { defaultValue: 'Auto since' })} ${g.autoSince}.` : ''}
-                      </Text>
-                    ) : (
-                      <View style={s.warnBox}>
-                        <Ionicons name="alert-circle-outline" size={16} color={COLORS.warning} />
-                        <Text style={s.warnTxt}>{t(`${ns}.chooseMode`, { doc: gen.doc, defaultValue: 'Choose how the {{doc}} is generated. Until you pick, nothing is generated on its own: invoices wait in Ready for a tap.' })}</Text>
+
+                    {/* Manual / Auto — only once the company is active here. */}
+                    {g.source === 'auditer' && active && (
+                      <View style={s.card}>
+                        <Text style={s.fieldLabel}>{t(`${ns}.modeTitle`, { defaultValue: gen.modeTitle })}</Text>
+                        <View style={s.chips}>
+                          {gen.modes.map((m) => (
+                            <TouchableOpacity key={m.key} style={[s.chip, g.mode === m.key && s.chipActive]} onPress={() => setMode(c, m.key)} disabled={busy} activeOpacity={0.7}>
+                              <Text style={[s.chipTxt, g.mode === m.key && s.chipTxtActive]}>{t(`${ns}.mode_${m.key}`, { defaultValue: m.label })}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        {g.mode ? (
+                          <Text style={s.note}>
+                            {t(`${ns}.modeHelp_${g.mode}`, { defaultValue: gen.modeHelp[g.mode] || '' })}
+                            {g.mode === 'auto' && g.autoSince ? ` ${t(`${ns}.autoSince`, { defaultValue: 'Auto since' })} ${g.autoSince}.` : ''}
+                          </Text>
+                        ) : (
+                          <View style={s.warnBox}>
+                            <Ionicons name="alert-circle-outline" size={16} color={COLORS.warning} />
+                            <Text style={s.warnTxt}>{t(`${ns}.chooseMode`, { doc: gen.doc, defaultValue: 'Choose how the {{doc}} is generated. Until you pick, nothing is generated on its own: invoices wait in Ready for a tap.' })}</Text>
+                          </View>
+                        )}
                       </View>
                     )}
-                  </View>
-                )}
 
-                {/* Opt-out */}
-                <View style={s.card}>
-                  <View style={s.switchRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.switchLabel}>{t(`${ns}.notApplicable`, { defaultValue: 'Not applicable' })}</Text>
-                      <Text style={s.note}>{t(`${ns}.optOutHelp`, { defaultValue: gen.optOutHelp })}</Text>
-                    </View>
-                    <BrandSwitch value={g.optedOut} onValueChange={(v: boolean) => setOptOut(c, v)} disabled={busy} />
-                  </View>
-                </View>
+                    {domain === 'einvoice' && appInvoicesCard(c, busy)}
+                    {domain === 'eway' && docKindsCard(c, busy)}
+                    {domain === 'eway' && limitCard(c, busy)}
+                  </>
+                )}
               </View>
             );
           })}
 
-          <TouchableOpacity style={s.portalBtn} onPress={() => Linking.openURL(portalUrl)} activeOpacity={0.7}>
-            <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={s.portalTxt}>{portalLabel}</Text>
-          </TouchableOpacity>
+          {!anyNotApplicable && (
+            <TouchableOpacity style={s.portalBtn} onPress={() => Linking.openURL(portalUrl)} activeOpacity={0.7}>
+              <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={s.portalTxt}>{portalLabel}</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
 
@@ -466,7 +647,10 @@ const s = StyleSheet.create({
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  blockTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 6 },
+  question: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, marginTop: 6, marginBottom: 8, lineHeight: 20 },
   note: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.sm, lineHeight: 20 },
+  hint: { fontSize: TYPOGRAPHY.xs, color: COLORS.warning, fontWeight: '600', marginBottom: 4 },
   rowHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   coName: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
   btnRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
@@ -487,4 +671,12 @@ const s = StyleSheet.create({
   chipTxtActive: { color: COLORS.white },
   warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.warningBg, borderRadius: RADIUS.md, padding: 10 },
   warnTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, lineHeight: 20 },
+  estimate: { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: 10, marginTop: SPACING.sm, gap: 4 },
+  estimateTitle: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  estimateRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  estimateLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  estimateValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  estimateNote: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 16, marginTop: 2 },
+  limitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  limitValue: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
 });

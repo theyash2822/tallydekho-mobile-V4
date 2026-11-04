@@ -119,6 +119,24 @@ getFinancialReport, getPLBS, getGSTReport, getGSTSummary, getGSTDetail,
 getEWayBills, getEWBStatus, getEInvoiceStatus, getOtherTaxes,
 getAuditTrail, getDaybook, getExpenses, getSyncHistory
 
+## Compliance v2 (spec 2026-11-04)
+getComplianceConfig / saveComplianceConfig — GET/POST /api/company/:guid/compliance-config (partial: e_invoice_turnover, e_invoice_aato_10cr, e_invoice_app_invoices, e_way_bill_moves_goods, e_way_bill_doc_kinds, e_way_bill_intra_limit)
+getComplianceTurnover(companyGuid) — GET /api/compliance/turnover (estimate per FY + advice)
+getComplianceReportCsv(domain, companyGuid, { tab, from, to }) — GET /api/einvoice/report · /api/ewaybills/report (CSV text, shared as a file)
+checkEwbVehicle(companyGuid, vehicleNo) — POST /api/ewaybills/vehicle-check (`{ available: false }` hides Check vehicle)
+listStoredIncomingEwbs(companyGuid, days) — GET /api/ewaybills/incoming/stored
+generateEwb — POST /api/ewaybills/generate now also sends subSupplyType / subSupplyDesc (delivery notes), fromGodown + dispatchDetails.ship_to_* (stock transfers), docKind
+correctSalesInvoice(payload) — POST /tally/voucher/sales-correct (payload + voucherGuid, isOptional false, date = today IST)
+getAlertSettings / updateAlertSettings — compliance_alerts (PATCH merges kind by kind), whatsapp_compliance_ready
+
+## GST (spec 2026-11-04 §3.2, /api/gst/*; 503 GST_NOT_CONFIGURED → isGstNotConfigured)
+getGstConfig / saveGstConfig — GET/POST /api/gst/config
+requestGstConnectOtp / verifyGstConnectOtp / disconnectGst — POST /api/gst/connect/otp · /connect/verify · /disconnect
+getGstOverview — GET /api/gst/overview
+getGstIms / saveGstImsActions — GET /api/gst/ims?period=MMYYYY · POST /api/gst/ims/action (accepted | rejected | pending)
+getGstDeposits / postGstDeposit — GET /api/gst/deposits?from&to · POST /api/gst/deposits/:id/post
+checkGstin — GET /api/gst/gstin-check?gstin (party create Verify)
+
 ## AI Insights
 getAIInsights, getAIInsightsHistory — GET /api/ai/insights + ?companyGuid&fy
 

@@ -1,10 +1,12 @@
 /**
  * "Needs attention" → Fix sheet (spec §2.6). HSN gaps write each item with
  * POST /tally/master/stock-item-alter, party gaps write POST /tally/master/party-alter;
- * company / numbering / portal gaps only explain where to change things.
+ * company / numbering / portal gaps only explain where to change things. An invoice dated
+ * today whose gap is the invoice's own (totals, lines, dispatch, portal refusal) can be
+ * corrected here: Correct invoice opens the create form on the same Tally voucher (spec 2026-11-04 §4.3).
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
@@ -14,6 +16,7 @@ import FormField from '../forms/FormField';
 import { alterParty, alterStockItem } from '../../services/api';
 import type { ReadinessGap, ReadinessRow } from '../../services/api';
 import { SheetFooter } from './ComplianceSheets';
+import { correctableRow, correctionReason, isInvoiceGap } from '../../utils/complianceRules';
 
 type Props = {
   visible: boolean;
@@ -25,6 +28,8 @@ type Props = {
   onSaved: () => void;
   /** `IRN_REQUIRED` gap on the EWB list → open the IRN confirmation for this row. */
   onRegisterEinvoiceFirst?: (row: ReadinessRow) => void;
+  /** E-invoice list: open the correction form for a today-dated invoice (reason = what the portal said). */
+  onCorrectInvoice?: (row: ReadinessRow, reason?: string) => void;
 };
 
 function gapKind(g: ReadinessGap): 'hsn' | 'party' | 'dispatch' | 'einvoice_first' | 'info' {
@@ -36,7 +41,7 @@ function gapKind(g: ReadinessGap): 'hsn' | 'party' | 'dispatch' | 'einvoice_firs
   return 'info';
 }
 
-export default function FixGapSheet({ visible, row, companyGuid, companyName, onClose, onSaved, onRegisterEinvoiceFirst }: Props) {
+export default function FixGapSheet({ visible, row, companyGuid, companyName, onClose, onSaved, onRegisterEinvoiceFirst, onCorrectInvoice }: Props) {
   const { t } = useTranslation();
   const gaps: ReadinessGap[] = Array.isArray(row?.gaps) ? row!.gaps! : [];
   const [hsn, setHsn] = useState<Record<string, string>>({});
@@ -131,6 +136,8 @@ export default function FixGapSheet({ visible, row, companyGuid, companyName, on
   };
 
   const einvoiceFirst = gaps.find((g) => gapKind(g) === 'einvoice_first');
+  // The first gap the correction screen can put right carries the Correct invoice button.
+  const correctGapIdx = onCorrectInvoice && row && correctableRow(row) ? gaps.findIndex(isInvoiceGap) : -1;
 
   return (
     <BottomModalShell
@@ -177,6 +184,15 @@ export default function FixGapSheet({ visible, row, companyGuid, companyName, on
             {(kind === 'info' || kind === 'dispatch' || kind === 'einvoice_first') && !!explain(g) && (
               <Text style={s.explain}>{explain(g)}</Text>
             )}
+            {idx === correctGapIdx && row && onCorrectInvoice && (
+              <View style={s.correct}>
+                <Text style={s.correctTxt}>{t('screens.reportsEinvoiceList.correctHere')}</Text>
+                <TouchableOpacity style={s.correctBtn} onPress={() => onCorrectInvoice(row, correctionReason(gaps))} activeOpacity={0.85} testID="gap-correct-invoice">
+                  <Ionicons name="create-outline" size={14} color={COLORS.white} />
+                  <Text style={s.correctBtnTxt}>{t('screens.reportsEinvoiceList.correctInvoice')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         );
       })}
@@ -190,4 +206,8 @@ const s = StyleSheet.create({
   gapHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
   gapMsg: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, lineHeight: 20 },
   explain: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20, backgroundColor: COLORS.pageBg, padding: SPACING.sm, borderRadius: RADIUS.md },
+  correct: { marginTop: SPACING.sm, gap: 8 },
+  correctTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, lineHeight: 20 },
+  correctBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 9, paddingHorizontal: 14 },
+  correctBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
 });

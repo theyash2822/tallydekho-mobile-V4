@@ -27,6 +27,7 @@ import {
   renderEWayBillSheetHTML,
 } from './pdf/complianceSheet';
 import { assertCanSharePdf } from './rbasGate';
+import { irnQrDataUrl, withIrnQrImage } from './irnQr';
 import { TX_TO_DOC_TYPE } from './documentHelpers';
 import {
   thermalPageSize,
@@ -275,10 +276,10 @@ export async function buildVoucherHtmlByRef(
       TX_TO_DOC_TYPE[raw.voucher_type || raw.type || ''] ||
       undefined;
 
-    const doc: VoucherDocument = toVoucherDocument(
+    const doc: VoucherDocument = await withIrnQrImage(toVoucherDocument(
       raw,
       typeHint ? { documentType: typeHint } : {}
-    );
+    ));
     const options = await resolvePdfOptions(doc, companyGuid);
     return generateDocumentHTML(
       doc,
@@ -431,7 +432,7 @@ export async function shareCompliancePdfsAsMultiPage(
     try {
       const html =
         kind === 'einvoice'
-          ? renderEInvoiceSheetHTML(vouchers[i], companyNorm)
+          ? renderEInvoiceSheetHTML({ ...vouchers[i], qrImage: await irnQrDataUrl(vouchers[i].qrImage) }, companyNorm)
           : renderEWayBillSheetHTML(vouchers[i], companyNorm);
       htmlDocs.push(html);
     } catch {

@@ -19,8 +19,9 @@ import {
   getParties, createSalesInvoice, createProformaInvoice, convertProformaInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
-  invoiceSharePdf, getCompanyProfile,
+  invoiceSharePdf, getCompanyProfile, getVoucherById, correctSalesInvoice,
 } from '../../src/services/api';
+import { correctionPrefillFromVoucher, einvoiceRegistersAppInvoices, isB2cBuyer, todayIst } from '../../src/utils/complianceRules';
 import {
   proformaPrefillStorageKey,
   legacyProformaPrefillKey,
@@ -787,6 +788,12 @@ export default function CreateSalesInvoiceScreen() {
   const companyGuid = company?.guid;
   const pathname = usePathname();
   const isProforma = (pathname || '').includes('create-proforma');
+  // Correction (spec 2026-11-04 §4.3): a today-dated invoice the portal refused, opened from the e-invoice Fix sheet.
+  // The same Tally voucher is altered (POST /tally/voucher/sales-correct), dated today.
+  const correctionParams = useLocalSearchParams<{ correct?: string; correctNo?: string; reason?: string }>();
+  const correctGuid = !isProforma && typeof correctionParams?.correct === 'string' ? correctionParams.correct : '';
+  const correctReason = typeof correctionParams?.reason === 'string' ? correctionParams.reason : '';
+  const [correctionNo, setCorrectionNo] = useState(typeof correctionParams?.correctNo === 'string' ? correctionParams.correctNo : '');
   const { assertCanCreate } = useRbasCreate(isProforma ? undefined : 'sales-invoice');
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const draftKey = () => currentTenantKey(company?.guid, draftFeature(isProforma ? 'proforma' : 'invoice'));
@@ -831,6 +838,7 @@ export default function CreateSalesInvoiceScreen() {
   const [ewbRequired, setEwbRequired] = useState(false);
   const [ewbApplicable, setEwbApplicable] = useState(false);
   const [eInvoiceApplicable, setEInvoiceApplicable] = useState(false);
+  const [complianceCfg, setComplianceCfg] = useState<Record<string, any> | null>(null);
 
   const addCustomerRef = useRef<AddCustomerDrawerMethods>(null);
   const [payTerms, setPayTerms] = useState('due_on_receipt');
@@ -1023,6 +1031,7 @@ export default function CreateSalesInvoiceScreen() {
     if (!company?.guid) return;
     getComplianceConfig(company.guid).then((res: any) => {
       const cfg = res?.data || res;
+      setComplianceCfg(cfg || null);
       if (cfg?.e_way_bill_applicable === 'applicable_configured') {
         setShowDispatch(true);
         setEwbRequired(true);
@@ -1086,7 +1095,7 @@ export default function CreateSalesInvoiceScreen() {
 
   // ── Draft: check for saved draft on mount ────────────────────────────────
   useEffect(() => {
-    if (!company?.guid) return;
+    if (!company?.guid || correctGuid) return;
     const key = draftKey();
     const convertKey = proformaPrefillStorageKey(company.guid);
     dropLegacyKeys([legacyDraftKey(), legacyProformaPrefillKey(company.guid)]);
@@ -1112,7 +1121,7 @@ export default function CreateSalesInvoiceScreen() {
   //    draft-restore-on-mount logic above so a genuine unsaved invoice draft still
   //    surfaces its own Resume banner independently of this conversion flow.
   useEffect(() => {
-    if (!company?.guid) return;
+    if (!company?.guid || correctGuid) return;
     const key = currentTenantKey(company.guid, prefillFeature('tdso'));
     dropLegacyKeys([`tdso_to_invoice_prefill_${company.guid}`]);
     AsyncStorage.getItem(key).then(raw => {
@@ -1146,7 +1155,7 @@ export default function CreateSalesInvoiceScreen() {
   // ── Proforma → Invoice prefill: Convert opens this screen. Submit Alters the
   //    same Tally voucher (ISOPTIONAL=No) — it does not create a second invoice.
   useEffect(() => {
-    if (!company?.guid || isProforma) return;
+    if (!company?.guid || isProforma || correctGuid) return;
     const key = proformaPrefillStorageKey(company.guid);
     AsyncStorage.getItem(key).then(raw => {
       if (!raw) return;
@@ -1176,9 +1185,70 @@ export default function CreateSalesInvoiceScreen() {
     }).catch(() => {});
   }, [company?.guid, isProforma]);
 
+  // ── Correction: the form filled from the synced voucher; regular entry, dated today ──
+  useEffect(() => {
+    if (!company?.guid || !correctGuid) return;
+    let cancelled = false;
+    getVoucherById(company.guid, correctGuid).then((res: any) => {
+      if (cancelled) return;
+      const p = correctionPrefillFromVoucher(res?.data || res);
+      if (!p) throw new Error(t('screens.salesCreateInvoice.correctNotFound'));
+      setEntryType('regular');
+      setDate(todayStr());
+      if (p.voucherNumber) setCorrectionNo(p.voucherNumber);
+      if (p.party) setParty(p.party);
+      if (p.ledger) setLedger(p.ledger);
+      setRefNo(p.refNo);
+      setNarration(p.narration);
+      if (p.lines.length) {
+        setItems(p.lines.map((l, i) => ({
+          ...newItem(l.warehouse),
+          id: `${Date.now()}-${i}`,
+          product: l.product, qty: l.qty, unit: l.unit || 'pcs', rate: l.rate, hsn: l.hsn,
+          discountType: '%' as const, discount: l.discount,
+          taxEntries: l.taxes.map((tx, j) => ({ id: `${Date.now()}-${i}-${j}`, ledgerName: tx.ledgerName, taxRate: tx.taxRate, taxAmount: '' })),
+        })));
+      }
+      const d = p.dispatch;
+      if (d) {
+        setShowDispatch(true);
+        if (INDIAN_STATES.includes(d.dispatchFromState)) {
+          setDispatchFromState(d.dispatchFromState);
+          if (getCitiesForState(d.dispatchFromState).includes(d.dispatchFrom)) setDispatchFrom(d.dispatchFrom);
+        }
+        if (INDIAN_STATES.includes(d.shipToState)) {
+          setShipToState(d.shipToState);
+          if (getCitiesForState(d.shipToState).includes(d.shipTo)) setShipTo(d.shipTo);
+        }
+        setDispatchFromAddress1(d.dispatchFromAddress1); setDispatchFromAddress2(d.dispatchFromAddress2); setDispatchFromPincode(d.dispatchFromPincode);
+        setShipToAddress1(d.shipToAddress1); setShipToAddress2(d.shipToAddress2); setShipToPincode(d.shipToPincode);
+        if (d.transportMode) setTransportMode(d.transportMode);
+        setTransporterName(d.transporterName); setTransporterId(d.transporterId); setVehicleNumber(d.vehicleNumber);
+        if (d.vehicleType) setVehicleType(d.vehicleType);
+        setTransportDocNo(d.transportDocNo); setTransportDocDate(d.transportDocDate);
+      }
+    }).catch((err: any) => {
+      if (!cancelled) Toast.show({ type: 'error', text1: t('screens.salesCreateInvoice.correctLoadFailed'), text2: err?.message || '' });
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.guid, correctGuid]);
+
+  // A prefilled party carries its GSTIN once the party list is in (the picker sets it on a tap).
+  const [correctionPartyKey, setCorrectionPartyKey] = useState('');
+  const partyKey = correctGuid ? `${party}|${parties.length}` : '';
+  if (partyKey !== correctionPartyKey) {
+    setCorrectionPartyKey(partyKey);
+    const match = correctGuid && party && !partyGstin ? parties.find(x => x.value === party) : null;
+    if (match?.data) {
+      setPartyGstin(match.data.gstin || '');
+      setPartyGstRegType(match.data.gst_registration_type || '');
+    }
+  }
+
   // ── Draft: auto-save on any significant field change (debounced 800ms) ───
   useEffect(() => {
-    if (!company?.guid) return;
+    if (!company?.guid || correctGuid) return;
     // Guard: only save if the form has meaningful data — prevents overwriting a real
     // draft with an empty form on mount (which would break the Resume banner flow)
     const hasMeaningfulData = !!party || items.some(i => i.product);
@@ -1450,7 +1520,7 @@ export default function CreateSalesInvoiceScreen() {
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     // Converting a proforma is a regular entry under its own permission; a proforma is always optional.
-    if (!assertCanCreate(convertProformaTdkRef ? 'sales_proforma.convert_to_regular' : 'sales_invoice.create', isProforma ? 'optional' : entryType)) return;
+    if (!assertCanCreate(convertProformaTdkRef ? 'sales_proforma.convert_to_regular' : 'sales_invoice.create', isProforma ? 'optional' : (correctGuid ? 'regular' : entryType))) return;
     // Dismiss any open keyboard before validation / submit — prevents the keyboard from
     // hovering over the success modal when user submits with a text field still focused.
     Keyboard.dismiss();
@@ -1474,11 +1544,11 @@ export default function CreateSalesInvoiceScreen() {
         return;
       }
     }
-    if (!isProforma && collectPayNow && !payNowLedger) {
+    if (!isProforma && !correctGuid && collectPayNow && !payNowLedger) {
       Toast.show({ type: 'error', text1: t('screens.salesCreateInvoice.errPayLedger'), text2: t('screens.salesCreateInvoice.errPayLedgerMsg') });
       return;
     }
-    if (!isProforma && collectPayNow && payNowLedger) {
+    if (!isProforma && !correctGuid && collectPayNow && payNowLedger) {
       const pAmt = parseFloat(payNowAmount) || 0;
       if (pAmt <= 0) {
         Toast.show({ type: 'error', text1: t('screens.salesCreateInvoice.errPayAmount'), text2: t('screens.salesCreateInvoice.errPayAmountMsg') });
@@ -1557,7 +1627,7 @@ export default function CreateSalesInvoiceScreen() {
             });
         }),
         logistics: allLogistics,
-        collect_payment: !isProforma && collectPayNow && payNowLedger ? {
+        collect_payment: !isProforma && !correctGuid && collectPayNow && payNowLedger ? {
           mode: payNowMode, ledgerName: payNowLedger,
           amount: parseFloat(payNowAmount) || 0, reference: payNowRef || undefined,
         } : undefined,
@@ -1577,7 +1647,15 @@ export default function CreateSalesInvoiceScreen() {
         } : undefined,
       };
 
-      const result: any = convertProformaTdkRef
+      const result: any = correctGuid
+        ? await correctSalesInvoice({
+            ...payload,
+            voucherGuid: correctGuid,
+            isOptional: false,
+            original_entry_type: 'regular',
+            date: todayIst(),
+          })
+        : convertProformaTdkRef
         ? await convertProformaInvoice({
             ...payload,
             tdkRef: convertProformaTdkRef,
@@ -1595,7 +1673,7 @@ export default function CreateSalesInvoiceScreen() {
       const isQueued = result?.queued === true;
       const invoiceUuid = result?.invoiceUuid || result?.data?.invoiceUuid || undefined;
       const respNumberingPolicy = result?.numberingPolicy || numberingPolicy;
-      const invoiceNumber = result?.invoiceNumber || result?.data?.invoiceNumber || undefined;
+      const invoiceNumber = result?.invoiceNumber || result?.data?.invoiceNumber || (correctGuid ? result?.voucherNumber || correctionNo : undefined) || undefined;
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
       clearDraftOnSubmit();
@@ -1613,7 +1691,7 @@ export default function CreateSalesInvoiceScreen() {
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
     dispatchFromState, shipToState,
-    numberingPolicy, againstOrderNo, isProforma, convertProformaTdkRef, t,
+    numberingPolicy, againstOrderNo, isProforma, convertProformaTdkRef, correctGuid, correctionNo, t,
   ]);
 
   const handleConvertProformaFromSuccess = useCallback(async () => {
@@ -1657,17 +1735,28 @@ export default function CreateSalesInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>{isProforma ? t('sales.createProforma') : t('sales.createInvoice')}</Text>
+          <Text style={s.headerTitle}>{isProforma ? t('sales.createProforma') : correctGuid ? t('screens.salesCreateInvoice.correctTitle') : t('sales.createInvoice')}</Text>
           <Text style={s.headerSub}>
             {isProforma
               ? t('screens.salesCreateInvoice.alwaysOptional')
-              : (convertProformaTdkRef
+              : correctGuid
+                ? correctionNo
+                : (convertProformaTdkRef
                 ? (convertTallyVoucherNo || t('screens.salesCreateInvoice.fromProforma'))
                 : (invoiceNo || 'INV-Auto'))}
           </Text>
         </View>
-        {!isProforma && !convertProformaTdkRef && <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />}
+        {!isProforma && !convertProformaTdkRef && !correctGuid && <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />}
       </View>
+      {!!correctGuid && (
+        <View style={s.correctionBanner} testID="correction-banner">
+          <Ionicons name="create-outline" size={15} color={COLORS.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.correctionTxt}>{t('screens.salesCreateInvoice.correctBanner', { number: correctionNo || t('screens.salesCreateInvoice.thisInvoice') })}</Text>
+            {!!correctReason && <Text style={s.correctionReason}>{t('screens.salesCreateInvoice.portalSaid', { reason: correctReason })}</Text>}
+          </View>
+        </View>
+      )}
 
       <StepIndicator step={step} />
 
@@ -1702,7 +1791,7 @@ export default function CreateSalesInvoiceScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>{t('voucher.date')} <Text style={s.star}>*</Text></Text>
-                    {entryType === 'regular' && !isProforma ? (
+                    {(entryType === 'regular' || correctGuid) && !isProforma ? (
                       <View style={[s.autoBox, { opacity: 0.55 }]}>
                         <Text style={s.autoTxt}>{date}</Text>
                         <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -1857,8 +1946,8 @@ export default function CreateSalesInvoiceScreen() {
           {/* ═══════════ STEP 3 ═══════════ */}
           {step === 3 && (
             <>
-              {/* 1. Collect Payment Now — not on Proforma (not a tax invoice yet) */}
-              {!isProforma && (
+              {/* 1. Collect Payment Now — not on Proforma (not a tax invoice yet) nor on a correction */}
+              {!isProforma && !correctGuid && (
               <View style={s.card}>
                 <TouchableOpacity style={s.payNowToggleRow} onPress={() => setCollectPayNow(v => !v)} activeOpacity={0.8}>
                   <View style={s.payNowLeft}>
@@ -2219,6 +2308,12 @@ export default function CreateSalesInvoiceScreen() {
                   <Text style={s.grandLabel}>{t('pdf.grandTotal')}</Text>
                   <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
+                {!isProforma && !correctGuid && entryType === 'regular' && einvoiceRegistersAppInvoices(complianceCfg) && !isB2cBuyer(partyGstin, partyGstRegType) && (
+                  <View style={s.einvNote} testID="einvoice-auto-note">
+                    <Ionicons name="flash-outline" size={14} color={COLORS.info} />
+                    <Text style={s.einvNoteTxt}>{t('screens.salesCreateInvoice.einvoiceAutoNote')}</Text>
+                  </View>
+                )}
               </View>
 
               {/* 5. Notes & Terms */}
@@ -2293,7 +2388,7 @@ export default function CreateSalesInvoiceScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
                   {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                  <Text style={s.submitTxt}>{submitting ? t('voucher.submitting') : t('screens.salesCreateInvoice.submitInvoice')}</Text>
+                  <Text style={s.submitTxt}>{submitting ? t('voucher.submitting') : correctGuid ? t('screens.salesCreateInvoice.correctInvoice') : t('screens.salesCreateInvoice.submitInvoice')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -2356,11 +2451,11 @@ export default function CreateSalesInvoiceScreen() {
                 color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult?.isQueued ? t('screens.salesCreateInvoice.savedPending') : (isProforma ? t('screens.salesCreateInvoice.proformaSubmitted') : (convertProformaTdkRef ? t('screens.salesCreateInvoice.convertedTitle') : t('screens.salesCreateInvoice.invoiceSubmitted')))}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? t('screens.salesCreateInvoice.savedPending') : (isProforma ? t('screens.salesCreateInvoice.proformaSubmitted') : correctGuid ? t('screens.salesCreateInvoice.correctedTitle') : (convertProformaTdkRef ? t('screens.salesCreateInvoice.convertedTitle') : t('screens.salesCreateInvoice.invoiceSubmitted')))}</Text>
             <Text style={ss.sub}>
               {submitResult?.isQueued
                 ? t('screens.salesCreateInvoice.queuedSub')
-                : (isProforma ? t('screens.salesCreateInvoice.proformaSub') : (convertProformaTdkRef ? t('screens.salesCreateInvoice.convertedSub') : t('screens.salesCreateInvoice.invoiceSub')))}
+                : (isProforma ? t('screens.salesCreateInvoice.proformaSub') : correctGuid ? t('screens.salesCreateInvoice.correctedSub') : (convertProformaTdkRef ? t('screens.salesCreateInvoice.convertedSub') : t('screens.salesCreateInvoice.invoiceSub')))}
             </Text>
             {/* TallyDekho Series: show invoice number immediately */}
             {!!submitResult?.invoiceNumber && (
@@ -2376,7 +2471,8 @@ export default function CreateSalesInvoiceScreen() {
               </View>
             )}
 
-            {/* Preview — opens instantly with provisional/final data */}
+            {/* Preview — opens instantly with provisional/final data (a correction has no TDK reference) */}
+            {!correctGuid && (
             <TouchableOpacity
               style={ss.previewBtn}
               activeOpacity={0.85}
@@ -2390,9 +2486,10 @@ export default function CreateSalesInvoiceScreen() {
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
               <Text style={ss.previewBtnTxt}>{t('screens.salesCreateInvoice.preview')}</Text>
             </TouchableOpacity>
+            )}
 
             {/* Share PDF — waits up to 10s for Tally number (TALLY_PRIME_SERIES) */}
-            {canSharePdf ? (
+            {canSharePdf && !correctGuid ? (
             <TouchableOpacity
               style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
               activeOpacity={0.85}
@@ -2471,6 +2568,11 @@ const s = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   headerSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
+  correctionBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.warningBg, paddingHorizontal: SPACING.md, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  correctionTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, lineHeight: 17 },
+  correctionReason: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 17, marginTop: 3 },
+  einvNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md, padding: 10 },
+  einvNoteTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, lineHeight: 17 },
   scroll: { padding: SPACING.md, paddingBottom: 8 },
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },

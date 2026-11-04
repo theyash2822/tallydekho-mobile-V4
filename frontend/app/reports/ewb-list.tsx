@@ -3,6 +3,9 @@
  * GET /ewaybills/readiness and /ewaybills/incoming (spec 2026-11-03 §4).
  * Generated tab: ⋯ actions (Part B, transporter, extend, refresh, cancel…),
  * multi-select → Consolidate, and the list of consolidated bills.
+ * Spec 2026-11-04 §4.3: document kind tag, notice when Tally stopped syncing, Share report
+ * (CSV), generate extras (delivery-note reason, receiving godown, distance worked out from
+ * the PIN codes, Check vehicle) and Incoming from the stored list with "Reject by".
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, RefreshControl } from 'react-native';
@@ -22,12 +25,15 @@ import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import {
   fetchEwbReadiness, generateEwb, generateEwbBulk, generateEinvoice, cancelEWayBill, updateEwbVehicle, updateEwbTransporter, extendEwb, refreshEwb,
-  createConsolidatedEwb, listConsolidatedEwbs, listIncomingEwbs, acceptIncomingEwb, rejectIncomingEwb,
-  type ReadinessRow, type DispatchDetails,
+  createConsolidatedEwb, listConsolidatedEwbs, listIncomingEwbs, listStoredIncomingEwbs, acceptIncomingEwb, rejectIncomingEwb,
+  type ReadinessRow, type ReadinessResponse, type DispatchDetails, type StoredIncomingEwb,
 } from '../../src/services/api';
 import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
-import { shareEwbPdf, dmyToDdMmYyyy } from '../../src/utils/complianceActions';
-import { ActionSheet, CancelSheet, GenerateEwbSheet, GenerateIrnSheet, type SheetAction } from '../../src/components/compliance/ComplianceSheets';
+import { shareComplianceReport, shareEwbPdf, dmyToDdMmYyyy } from '../../src/utils/complianceActions';
+import { canRejectIncoming, formatDayTime, formatWhen, rejectDeadline } from '../../src/utils/complianceRules';
+import { ActionSheet, CancelSheet, GenerateEwbSheet, GenerateIrnSheet, type EwbGenerateExtra, type SheetAction } from '../../src/components/compliance/ComplianceSheets';
+import { DocKindTag } from '../../src/components/compliance/ComplianceChips';
+import { StaleDesktopBanner } from '../../src/components/compliance/ComplianceCallouts';
 import { ConsolidateSheet, EwbExtendSheet, EwbTransporterSheet, EwbVehicleSheet } from '../../src/components/compliance/EwbForms';
 import FixGapSheet from '../../src/components/compliance/FixGapSheet';
 import { EWB_CANCEL_REASONS, complianceErrorText, firstGap, isNotConfiguredError, rowAmount, rowDate, rowEwbNo, rowNumber, rowParty } from '../../src/components/compliance/complianceShared';
@@ -54,10 +60,16 @@ export default function EWBListScreen() {
   const [data, setData] = useState<{ ready: ReadinessRow[]; attention: ReadinessRow[]; generated: ReadinessRow[] }>({ ready: [], attention: [], generated: [] });
   const [counts, setCounts] = useState<Record<string, number>>({});
   // TallyPrime mode: e-way bills are made in Tally; the Ready rows are "Pending in Tally".
-  const [tallyMode, setTallyMode] = useState(false);
+  const [integration, setIntegration] = useState<ReadinessResponse['integration']>(null);
+  const tallyMode = integration?.source === 'tally';
   const [consolidated, setConsolidated] = useState<any[]>([]);
   const [loadedAt, setLoadedAt] = useState(0);
   const [incoming, setIncoming] = useState<any[]>([]);
+  // Incoming reads the bills fetched twice a day (last 3 days); picking a date asks the portal for that day.
+  const [incomingMode, setIncomingMode] = useState<'stored' | 'date'>('stored');
+  const [stored, setStored] = useState<{ lastCheckedAt: number | null; rows: StoredIncomingEwb[] }>({ lastCheckedAt: null, rows: [] });
+  // When the incoming list arrived: the reject deadlines on screen are measured against it (and again on the tap).
+  const [incomingAt, setIncomingAt] = useState(0);
   const [incomingDate, setIncomingDate] = useState(formatDMY(new Date()));
   const [incomingLoading, setIncomingLoading] = useState(false);
   const [incomingError, setIncomingError] = useState<string | null>(null);
@@ -71,6 +83,7 @@ export default function EWBListScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [busyGuid, setBusyGuid] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [sharingReport, setSharingReport] = useState(false);
   const [sheetBusy, setSheetBusy] = useState(false);
 
   // Sheets
@@ -102,7 +115,7 @@ export default function EWBListScreen() {
     setPrevLoadKey(loadKey);
     if (companyGuid) setLoading(true);
   }
-  const incomingKey = tab === 'incoming' && companyGuid ? `${companyGuid}|${incomingDate}|${reloadKey}` : '';
+  const incomingKey = tab === 'incoming' && companyGuid ? `${companyGuid}|${incomingMode}|${incomingDate}|${reloadKey}` : '';
   const [prevIncomingKey, setPrevIncomingKey] = useState<string>('');
   if (prevIncomingKey !== incomingKey) {
     setPrevIncomingKey(incomingKey);
@@ -123,7 +136,7 @@ export default function EWBListScreen() {
         const d = res?.data || {};
         setData({ ready: d.ready || [], attention: d.attention || [], generated: d.generated || [] });
         setCounts(res?.counts || {});
-        setTallyMode(res?.integration?.source === 'tally');
+        setIntegration(res?.integration || null);
         setConsolidated(Array.isArray(cons?.data) ? cons.data : []);
         setLoadedAt(Date.now());
         setLoadError(null);
@@ -136,20 +149,26 @@ export default function EWBListScreen() {
   useEffect(() => load(), [load, reloadKey]);
   const refetch = () => setReloadKey((k) => k + 1);
 
-  // Incoming (bills others generated on this GSTIN) — fetched per date, never stored.
+  // Incoming (bills others generated on this GSTIN): the stored list by default, or the portal for one date.
   useEffect(() => {
     if (tab !== 'incoming' || !companyGuid) return;
     let cancelled = false;
-    listIncomingEwbs(companyGuid, dmyToDdMmYyyy(incomingDate))
-      .then((res: any) => {
+    const request = incomingMode === 'stored'
+      ? listStoredIncomingEwbs(companyGuid).then((res: any) => {
         if (cancelled) return;
-        setIncoming(Array.isArray(res?.data) ? res.data : []);
-        setIncomingError(null);
+        const d = res?.data || {};
+        setStored({ lastCheckedAt: d.last_checked_at ?? null, rows: Array.isArray(d.rows) ? d.rows : [] });
       })
+      : listIncomingEwbs(companyGuid, dmyToDdMmYyyy(incomingDate)).then((res: any) => {
+        if (!cancelled) setIncoming(Array.isArray(res?.data) ? res.data : []);
+      });
+    request
+      .then(() => { if (!cancelled) { setIncomingError(null); setIncomingAt(Date.now()); } })
       .catch((e: any) => { if (!cancelled) setIncomingError(e?.message || t('screens.reportsEwbList.loadFailed')); })
       .finally(() => { if (!cancelled) setIncomingLoading(false); });
     return () => { cancelled = true; };
-  }, [tab, companyGuid, incomingDate, reloadKey, t]);
+  }, [tab, companyGuid, incomingMode, incomingDate, reloadKey, t]);
+  const incomingRows: any[] = incomingMode === 'stored' ? stored.rows : incoming;
 
   const rows = tab === 'incoming' ? [] : data[tab];
   const selectMode = selected.length > 0;
@@ -191,17 +210,22 @@ export default function EWBListScreen() {
     Alert.alert(title, complianceErrorText(err, t));
   };
 
-  const runGenerate = async (row: ReadinessRow, dispatchDetails: DispatchDetails) => {
+  const runGenerate = async (row: ReadinessRow, dispatchDetails: DispatchDetails, extra: EwbGenerateExtra = {}) => {
     if (!companyGuid) return;
     setSheetBusy(true);
     try {
-      const res: any = await generateEwb({ companyGuid, voucherGuid: row.guid, dispatchDetails });
+      const res: any = await generateEwb({ companyGuid, voucherGuid: row.guid, dispatchDetails, ...extra });
       if (res?.success === false) throw new Error(res?.error?.message || t('screens.reportsEwbList.unknownError', { defaultValue: 'Unknown error' }));
       setGenRow(null);
       const d = res?.data ?? {};
+      const km = d.distance_km != null && d.distance_km !== '' ? Number(d.distance_km) : null;
       Alert.alert(
         t('screens.reportsEwbList.generated', { defaultValue: 'E-way bill generated' }),
-        [d.ewbNo ? `EWB ${d.ewbNo}` : '', d.validUpto || d.ewbValidUpto ? `${t('screens.reportsEwbList.validTill', { defaultValue: 'Valid till' })} ${d.validUpto || d.ewbValidUpto}` : ''].filter(Boolean).join('\n') || undefined,
+        [
+          d.ewbNo ? `EWB ${d.ewbNo}` : '',
+          d.validUpto || d.ewbValidUpto ? `${t('screens.reportsEwbList.validTill', { defaultValue: 'Valid till' })} ${d.validUpto || d.ewbValidUpto}` : '',
+          km != null && Number.isFinite(km) ? t(dispatchDetails.distance ? 'screens.reportsEwbList.distanceResult' : 'screens.reportsEwbList.distanceWorkedOut', { km }) : '',
+        ].filter(Boolean).join('\n') || undefined,
       );
       refetch();
     } catch (err: any) {
@@ -360,13 +384,15 @@ export default function EWBListScreen() {
     );
 
   // ── Incoming accept / reject ──────────────────────────────────────────────
-  const decideIncoming = (ewbNo: string, decision: 'accept' | 'reject') => {
+  const decideIncoming = (ewbNo: string, decision: 'accept' | 'reject', rejectBy?: number | null) => {
     const go = async () => {
       setBusyGuid(ewbNo);
       try {
         if (decision === 'accept') await acceptIncomingEwb(companyGuid, ewbNo);
         else await rejectIncomingEwb(companyGuid, ewbNo);
-        setIncoming((prev) => prev.map((b) => (String(b.ewbNo || b.ewb_no) === ewbNo ? { ...b, decision: decision === 'accept' ? 'accepted' : 'rejected' } : b)));
+        const mark = (b: any) => (String(b.ewbNo || b.ewb_no) === ewbNo ? { ...b, decision: decision === 'accept' ? 'accepted' : 'rejected' } : b);
+        setIncoming((prev) => prev.map(mark));
+        setStored((prev) => ({ ...prev, rows: prev.rows.map(mark) }));
       } catch (e: any) {
         Alert.alert(t('common.error'), complianceErrorText(e, t));
       } finally {
@@ -374,12 +400,30 @@ export default function EWBListScreen() {
       }
     };
     if (decision === 'reject') {
+      if (!canRejectIncoming(rejectBy)) {
+        Alert.alert(t('screens.reportsEwbList.rejectClosed'));
+        refetch();
+        return;
+      }
       Alert.alert(
         t('screens.reportsEwbList.rejectTitle', { defaultValue: 'Reject this e-way bill?' }),
         t('screens.reportsEwbList.rejectMsg', { defaultValue: 'The rejection is sent to the portal and cannot be undone.' }),
         [{ text: t('common.cancel'), style: 'cancel' }, { text: t('screens.reportsEwbList.reject', { defaultValue: 'Reject' }), style: 'destructive', onPress: go }],
       );
     } else go();
+  };
+
+  // ── Share report (CSV of the open tab and period) ─────────────────────────
+  const handleShareReport = async () => {
+    if (!companyGuid || sharingReport || tab === 'incoming') return;
+    setSharingReport(true);
+    try {
+      await shareComplianceReport('ewaybill', companyGuid, company?.name, { tab, ...(fromDate && toDate ? { from: fromDate, to: toDate } : {}) });
+    } catch (err: any) {
+      Alert.alert(t('screens.reportsEinvoiceList.reportFailed'), err?.message || t('screens.reportsEwbList.unknownError', { defaultValue: 'Unknown error' }));
+    } finally {
+      setSharingReport(false);
+    }
   };
 
   // ── Rows ──────────────────────────────────────────────────────────────────
@@ -449,6 +493,7 @@ export default function EWBListScreen() {
           <Text style={s.amount}>{formatAmount(rowAmount(row))}</Text>
         </View>
         <View style={s.cardFoot}>
+          <DocKindTag kind={row.doc_kind} />
           {tab === 'ready' && !!transportLabel && (
             <View style={s.transportChip}>
               <Ionicons name="car-outline" size={12} color={COLORS.textSecondary} />
@@ -482,6 +527,9 @@ export default function EWBListScreen() {
     const ewbNo = String(b.ewbNo || b.ewb_no || '');
     const decision = String(b.decision || '').toLowerCase();
     const busy = busyGuid === ewbNo;
+    // Stored and by-date rows carry reject_by: the portal takes a rejection until 72 hours after generation.
+    const rejectBy = !decision ? rejectDeadline(b.reject_by) : null;
+    const rejectClosed = !!rejectBy && !canRejectIncoming(b.reject_by, incomingAt);
     return (
       <View key={ewbNo || String(idx)} style={s.card}>
         <View style={s.cardTop}>
@@ -500,17 +548,24 @@ export default function EWBListScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.party} numberOfLines={1}>{String(b.fromTrdName || b.from_name || b.userGstin || b.fromGstin || '')}</Text>
             <Text style={s.meta}>{[b.fromGstin || b.from_gstin, b.docNo || b.doc_no, b.vehicleNo || b.vehicle_no].filter(Boolean).join(' · ')}</Text>
+            {!!rejectBy && (
+              <Text style={[s.meta, { color: rejectClosed ? COLORS.textTertiary : COLORS.warning, fontWeight: '600' }]}>
+                {rejectClosed ? t('screens.reportsEwbList.rejectClosed') : t('screens.reportsEwbList.rejectBy', { when: formatDayTime(rejectBy) })}
+              </Text>
+            )}
           </View>
-          <Text style={s.amount}>{formatAmount(Number(b.totInvValue || b.totalInvoiceValue || b.amount || 0))}</Text>
+          <Text style={s.amount}>{formatAmount(Number(b.totInvValue || b.totalInvoiceValue || b.amount || b.value || 0))}</Text>
         </View>
         {!decision && (
           <View style={s.cardFoot}>
             <View style={{ flex: 1 }} />
             {busy ? <ActivityIndicator size="small" color={COLORS.brandPrimary} /> : (
               <>
-                <TouchableOpacity style={s.outlineBtn} onPress={() => decideIncoming(ewbNo, 'reject')} activeOpacity={0.85}>
-                  <Text style={[s.outlineBtnTxt, { color: COLORS.negative }]}>{t('screens.reportsEwbList.reject', { defaultValue: 'Reject' })}</Text>
-                </TouchableOpacity>
+                {!rejectClosed && (
+                  <TouchableOpacity style={s.outlineBtn} onPress={() => decideIncoming(ewbNo, 'reject', b.reject_by)} activeOpacity={0.85}>
+                    <Text style={[s.outlineBtnTxt, { color: COLORS.negative }]}>{t('screens.reportsEwbList.reject', { defaultValue: 'Reject' })}</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={s.primaryBtn} onPress={() => decideIncoming(ewbNo, 'accept')} activeOpacity={0.85}>
                   <Text style={s.primaryBtnTxt}>{t('screens.reportsEwbList.accept', { defaultValue: 'Accept' })}</Text>
                 </TouchableOpacity>
@@ -538,6 +593,11 @@ export default function EWBListScreen() {
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('reports.ewayBills')}</Text>
+        {tab !== 'incoming' && (
+          <TouchableOpacity style={s.backBtn} onPress={handleShareReport} disabled={sharingReport} activeOpacity={0.7} accessibilityLabel={t('screens.reportsEinvoiceList.shareReport')} testID="ewb-share-report">
+            {sharingReport ? <ActivityIndicator size="small" color={COLORS.textSecondary} /> : <Ionicons name="download-outline" size={20} color={COLORS.textSecondary} />}
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20} color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary} />
         </TouchableOpacity>
@@ -549,6 +609,7 @@ export default function EWBListScreen() {
         refreshControl={<RefreshControl refreshing={loading && rows.length > 0} onRefresh={refetch} />}
       >
         {loadError && <ErrorBanner message={loadError} onRetry={refetch} />}
+        <StaleDesktopBanner desktop={integration?.desktop} />
         {statusOnly ? (
           <View style={{ paddingTop: SPACING.sm }}>
             <StatusOnlyChip status={statusOnly} onClear={() => { setStatusOnly(null); switchTab('ready'); }} />
@@ -586,24 +647,37 @@ export default function EWBListScreen() {
         )}
 
         {tab === 'incoming' && (
-          <TouchableOpacity style={s.datePill} onPress={() => setShowIncomingDate(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={s.datePill} onPress={() => setShowIncomingDate(true)} activeOpacity={0.7} testID="incoming-date-pill">
             <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={s.dateTxtPill}>{incomingDate}</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
+            <Text style={s.dateTxtPill}>{incomingMode === 'stored' ? t('screens.reportsEwbList.last3Days') : incomingDate}</Text>
+            {incomingMode === 'date' ? (
+              <TouchableOpacity onPress={() => setIncomingMode('stored')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
+              </TouchableOpacity>
+            ) : <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />}
           </TouchableOpacity>
+        )}
+        {tab === 'incoming' && incomingMode === 'stored' && !!stored.lastCheckedAt && (
+          <Text style={[s.toolbarHint, { marginBottom: SPACING.sm }]}>
+            {t('screens.reportsEwbList.lastChecked', { when: formatWhen(new Date(Number(stored.lastCheckedAt) * (Number(stored.lastCheckedAt) < 1e12 ? 1000 : 1)), incomingAt) })}
+          </Text>
         )}
 
         {tab === 'incoming' ? (
           <>
             {incomingError && <ErrorBanner message={incomingError} onRetry={refetch} />}
             {incomingLoading && <ActivityIndicator color={COLORS.brandPrimary} style={{ marginTop: 32 }} />}
-            {!incomingLoading && incoming.length === 0 && !incomingError && (
+            {!incomingLoading && incomingRows.length === 0 && !incomingError && (
               <View style={s.empty}>
                 <Ionicons name="download-outline" size={40} color={COLORS.textTertiary} />
-                <Text style={s.emptyTitle}>{t('screens.reportsEwbList.emptyIncoming', { defaultValue: 'No e-way bills were generated on your GSTIN that day' })}</Text>
+                <Text style={s.emptyTitle}>
+                  {incomingMode === 'stored'
+                    ? t('screens.reportsEwbList.emptyIncomingStored')
+                    : t('screens.reportsEwbList.emptyIncoming', { defaultValue: 'No e-way bills were generated on your GSTIN that day' })}
+                </Text>
               </View>
             )}
-            {incoming.map(renderIncoming)}
+            {!incomingLoading && incomingRows.map(renderIncoming)}
           </>
         ) : (
           <>
@@ -678,11 +752,11 @@ export default function EWBListScreen() {
         value={incomingDate}
         title={t('screens.reportsEwbList.incomingDate', { defaultValue: 'Bills generated on' })}
         maxDate={new Date().toISOString().slice(0, 10)}
-        onSelect={(d) => { setIncomingDate(d); setShowIncomingDate(false); }}
+        onSelect={(d) => { setIncomingDate(d); setIncomingMode('date'); setShowIncomingDate(false); }}
         onClose={() => setShowIncomingDate(false)}
       />
 
-      <GenerateEwbSheet visible={!!genRow} row={genRow} busy={sheetBusy} onClose={() => setGenRow(null)} onConfirm={(d) => genRow && runGenerate(genRow, d)} />
+      <GenerateEwbSheet visible={!!genRow} row={genRow} busy={sheetBusy} onClose={() => setGenRow(null)} onConfirm={(d, extra) => genRow && runGenerate(genRow, d, extra)} />
       <GenerateEwbSheet visible={bulkOpen} row={null} bulkCount={selected.length} busy={sheetBusy} onClose={() => setBulkOpen(false)} onConfirm={runBulk} />
       <GenerateIrnSheet visible={!!irnRow} row={irnRow} busy={sheetBusy} onClose={() => setIrnRow(null)} onConfirm={(o) => irnRow && runGenerateIrn(irnRow, o)} />
       <FixGapSheet visible={!!fixRow} row={fixRow} companyGuid={companyGuid} companyName={company?.name} onClose={() => setFixRow(null)} onSaved={refetch} onRegisterEinvoiceFirst={(r) => setIrnRow(r)} />
