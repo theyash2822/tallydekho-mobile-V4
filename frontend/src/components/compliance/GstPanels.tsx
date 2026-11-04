@@ -96,6 +96,7 @@ export function GstOverviewSection({ companyGuid, initialSheet, fyRange }: {
         )}
       </View>
       {overview?.configured_on_server === false && <Text style={st.meta}>{t('screens.reportsGst.notConfigured')}</Text>}
+      {overview?.read_only === true && overview?.configured_on_server !== false && <Text style={st.meta} testID="gst-read-only">{t('screens.settingsGst.readOnly')}</Text>}
       {connected && !!until && <Text style={st.meta}>{t('screens.settingsGst.connectedUntil', { date: formatDate(localIsoDay(until)) })}</Text>}
       {state === 'ready' && !connected && canConfigure && overview?.configured_on_server !== false && (
         <TouchableOpacity onPress={() => safePush(router, '/settings/gst' as any)} activeOpacity={0.7} testID="gst-connect-link">

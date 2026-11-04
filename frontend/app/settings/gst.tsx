@@ -197,6 +197,11 @@ export default function GstSettingsScreen() {
               <ComplianceCallout testID="gst-not-configured" icon="information-circle-outline" tone="info" text={t('screens.settingsGst.notConfigured')} />
             </View>
           )}
+          {!notConfigured && cfg.read_only === true && (
+            <View style={{ marginBottom: SPACING.md, marginTop: -SPACING.sm }}>
+              <ComplianceCallout testID="gst-read-only" icon="eye-outline" tone="info" text={t('screens.settingsGst.readOnly')} />
+            </View>
+          )}
 
           {/* Connection to the GST portal */}
           <View style={s.card}>

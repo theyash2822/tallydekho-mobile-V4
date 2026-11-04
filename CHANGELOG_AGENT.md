@@ -1,3 +1,8 @@
+## 2026-11-04 (23:40) — GST read-only notice (branch `28-10-2026`, local, not pushed)
+
+- `read_only` on `GstConfig` / `GstOverview`; Settings → GST Returns shows a read-only callout and the GST overview card one line while the server only reads from the portal (backend `GST_READ_ONLY`). IMS / deposits already follow the server's `view` / `show`. Username + OTP connect screen unchanged (Settings → GST Returns).
+- `screens.settingsGst.readOnly` in 11 languages. tsc 0; `verify:compliance-v2` passes.
+
 ## 2026-11-04 (21:30) — Compliance v2 QA fixes (mobile) and full translation parity (branch `28-10-2026`, local, not pushed)
 
 QA plan `audits/compliance_v2/QA_2026-11-04.md`; the app reads the backend shapes of contracts C1–C11.

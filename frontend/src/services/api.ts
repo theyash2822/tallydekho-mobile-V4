@@ -1005,6 +1005,8 @@ export interface GstConfig {
   username?: string | null;
   gstin?: string | null;
   configured_on_server?: boolean;
+  /** GST_READ_ONLY on the server: Auditer only reads from the GST portal. */
+  read_only?: boolean;
   connection?: GstConnection | null;
 }
 export interface GstCalendarRow {
@@ -1015,7 +1017,7 @@ export interface GstCalendarRow {
 }
 export interface GstScore { score: number | null; parts?: { key: string; label: string; value: number | null; weight: number; note?: string | null }[] }
 export interface GstOverview {
-  configured_on_server?: boolean; connection?: GstConnection | null; calendar?: GstCalendarRow[]; score?: GstScore | null; cash_balance?: any; last_deposit?: any;
+  configured_on_server?: boolean; read_only?: boolean; connection?: GstConnection | null; calendar?: GstCalendarRow[]; score?: GstScore | null; cash_balance?: any; last_deposit?: any;
 }
 export interface GstImsRow {
   id: string; section?: string; supplier_gstin?: string; supplier_name?: string; doc_type?: string; doc_no?: string; doc_date?: string;

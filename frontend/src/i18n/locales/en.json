@@ -5324,7 +5324,8 @@
       "freqMonthly": "Monthly",
       "freqQuarterly": "Quarterly",
       "portalSays": "The portal says: {{frequency}}.",
-      "fileOnWeb": "GSTR-1 and GSTR-3B are filed on the web portal."
+      "fileOnWeb": "GSTR-1 and GSTR-3B are filed on the web portal.",
+      "readOnly": "Read-only mode: Auditer only reads from the GST portal here. Nothing is saved, filed, posted to Tally or sent to suppliers."
     }
   }
 }
