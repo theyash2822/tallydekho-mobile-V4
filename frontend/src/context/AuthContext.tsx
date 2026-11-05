@@ -25,6 +25,7 @@ import { getLastPushToken } from '../services/pushNotifications';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
+import { DEMO_MODE } from '../demo/config';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -118,7 +119,8 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
+  // The website demo shows a connected office PC from the first frame; the recorded status confirms it on the first poll.
+  const [isDesktopOnline, setIsDesktopOnlineState] = useState(DEMO_MODE);
   const [lastSyncAt, setLastSyncAt] = useState(0);
   const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);

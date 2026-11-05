@@ -1,3 +1,12 @@
+## 2026-11-05 (17:00) — Website demo mode (branch `cursor` = `28-10-2026` + this, local, not pushed)
+
+For the live app inside the phone on auditer.com (Yash 15:37: browse the app, creating disabled).
+
+- `src/demo/` (new): `EXPO_PUBLIC_DEMO_MODE=1` (web only) loads the recorded sample data (`EXPO_PUBLIC_DEMO_DATA_URL`, default `/demo/data.json`) before the app renders, seeds the signed-in storage keys, answers every backend GET from it (path + stable query; date ranges ignored; closest recorded parameters otherwise; empty list when nothing was recorded) and refuses every write with "Not available in the demo".
+- `app/_layout.tsx` waits for the demo data; `(tabs)/_layout.tsx` "+" shows the demo notice; `socketService.connect` does nothing in the demo; `AuthContext` starts the desktop as online in the demo (the recorded status confirms it on the first poll).
+- `metro.config.js`: web builds resolve tslib 1.x to `tslib.es6.js` (its ESM wrapper crashed the web bundle at start-up). `app.config.js` (new): the demo export is a single-page app under `/demo`; other builds unchanged.
+- Build: `EXPO_PUBLIC_DEMO_MODE=1 EXPO_PUBLIC_BACKEND_URL=https://demo-api.auditer.invalid npx expo export --platform web --output-dir dist-demo` (ignored), installed by auditer-website `scripts/build-demo.mjs`; data recorded read-only by `scripts/record-demo.mjs`. Normal builds: flag unset, no behaviour change. tsc: no errors in the changed files.
+
 ## 2026-11-04 (23:40) — GST read-only notice (branch `28-10-2026`, local, not pushed)
 
 - `read_only` on `GstConfig` / `GstOverview`; Settings → GST Returns shows a read-only callout and the GST overview card one line while the server only reads from the portal (backend `GST_READ_ONLY`). IMS / deposits already follow the server's `view` / `show`. Username + OTP connect screen unchanged (Settings → GST Returns).
