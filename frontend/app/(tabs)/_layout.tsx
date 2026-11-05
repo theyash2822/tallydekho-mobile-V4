@@ -8,8 +8,6 @@ import { COLORS } from '../../src/constants/colors';
 import QuickActionsModal from '../../src/components/QuickActionsModal';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import Toast from 'react-native-toast-message';
-import { DEMO_MODE } from '../../src/demo/config';
-import { showDemoNotice } from '../../src/demo/demoData';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -139,7 +137,7 @@ function CustomTabBar({ state, emitter, navigateToTab, onFabPress }: CustomTabBa
 
 export default function TabsLayout() {
   const [showActions, setShowActions] = useState(false);
-  const handleFabPress = useCallback(() => (DEMO_MODE ? showDemoNotice() : setShowActions(true)), []);
+  const handleFabPress = useCallback(() => setShowActions(true), []);
   const handleModalClose = useCallback(() => setShowActions(false), []);
   // Memoize the tabBar renderer so React Navigation never sees a prop change
   // and never remounts CustomTabBar (which would reset any internal state)

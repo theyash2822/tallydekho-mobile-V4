@@ -1,3 +1,9 @@
+## 2026-11-05 (19:20) — Demo: "+" opens Quick Actions with the actions off; sheet list fixed on web (branch `cursor`, local, not pushed)
+
+- `(tabs)/_layout.tsx`: "+" opens the Quick Actions sheet in every build again (Yash 18:31).
+- `QuickActionsModal`: in the demo, a line under the title ("Creating entries is turned off in the demo.") and every action shown at 45 % opacity and disabled; sections still expand.
+- `QuickActionsModal` list style: `flexBasis: 'auto'` instead of `flex: 0`. On web, react-native-web turned `flex: 0` into a 0 % basis and the list collapsed to nothing (the sheet showed only its title); native layout is unchanged.
+
 ## 2026-11-05 (17:00) — Website demo mode (branch `cursor` = `28-10-2026` + this, local, not pushed)
 
 For the live app inside the phone on auditer.com (Yash 15:37: browse the app, creating disabled).

@@ -17,6 +17,7 @@ import {
   BACKDATED_ENTRY_MESSAGE,
   canOpenQuickActionCreate,
 } from '../utils/voucherCreateGuard';
+import { DEMO_MODE } from '../demo/config';
 
 const SECTION_COLORS: Record<string, { color: string; bg: string }> = {
   sales:     { color: COLORS.positive,     bg: COLORS.positiveBg },
@@ -202,6 +203,10 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
               <Ionicons name="close" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
+          {/* Website demo: the sheet shows what can be created; the actions themselves are off. */}
+          {DEMO_MODE && (
+            <Text style={s.demoNote}>{t('quickActions.demoOff', 'Creating entries is turned off in the demo.')}</Text>
+          )}
 
           <ScrollView
             // flexGrow:0 → height follows section cards (no reserved blank area)
@@ -251,8 +256,9 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
                       {section.items.map(item => (
                         <TouchableOpacity
                           key={item.id}
-                          style={s.subItem}
+                          style={[s.subItem, DEMO_MODE && s.subItemOff]}
                           onPress={() => handleItemPress(item)}
+                          disabled={DEMO_MODE}
                           activeOpacity={0.6}
                         >
                           <View style={[s.subItemIconWrap, { backgroundColor: theme.bg }]}>
@@ -322,10 +328,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // flexBasis 'auto', not flex: 0 — on web flex: 0 becomes a 0% basis and the list collapses to nothing.
   scroll: {
     flexGrow: 0,
     flexShrink: 1,
-    flex: 0,
+    flexBasis: 'auto',
   },
   listContent: {
     paddingHorizontal: SPACING.md,
@@ -386,6 +393,14 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.base,
     fontWeight: '500',
     color: COLORS.textPrimary,
+  },
+  subItemOff: { opacity: 0.45 },
+  demoNote: {
+    paddingHorizontal: SPACING.md,
+    marginTop: -6,
+    marginBottom: 10,
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
   bottomRow: {
     alignItems: 'center',
