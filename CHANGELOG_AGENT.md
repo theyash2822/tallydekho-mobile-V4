@@ -6,6 +6,7 @@ For the live app inside the phone on auditer.com (Yash 15:37: browse the app, cr
 - `app/_layout.tsx` waits for the demo data; `(tabs)/_layout.tsx` "+" shows the demo notice; `socketService.connect` does nothing in the demo; `AuthContext` starts the desktop as online in the demo (the recorded status confirms it on the first poll).
 - `metro.config.js`: web builds resolve tslib 1.x to `tslib.es6.js` (its ESM wrapper crashed the web bundle at start-up). `app.config.js` (new): the demo export is a single-page app under `/demo`; other builds unchanged.
 - Build: `EXPO_PUBLIC_DEMO_MODE=1 EXPO_PUBLIC_BACKEND_URL=https://demo-api.auditer.invalid npx expo export --platform web --output-dir dist-demo` (ignored), installed by auditer-website `scripts/build-demo.mjs`; data recorded read-only by `scripts/record-demo.mjs`. Normal builds: flag unset, no behaviour change. tsc: no errors in the changed files.
+- 18:15 (Yash 17:23): in the demo, Log Out (AuthContext `signOut`) shows the demo notice and stays signed in; before, it left a sign-in screen that could not be used.
 
 ## 2026-11-04 (23:40) — GST read-only notice (branch `28-10-2026`, local, not pushed)
 

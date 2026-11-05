@@ -26,6 +26,7 @@ import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
 import { DEMO_MODE } from '../demo/config';
+import { showDemoNotice } from '../demo/demoData';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -215,6 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signingOutRef = useRef(false);
   const signOut = useCallback(async () => {
+    // The website demo stays signed in: signing out would leave a sign-in screen that cannot be used.
+    if (DEMO_MODE) { showDemoNotice(); return; }
     if (signingOutRef.current) return;
     signingOutRef.current = true;
     try {
