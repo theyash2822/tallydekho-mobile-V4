@@ -3,13 +3,13 @@ import * as SecureStore from 'expo-secure-store';
 const LEGACY_KEY = 'td_biometric_pin';
 
 /**
- * The PIN is only readable after the OS authenticates the user (Face ID / Touch ID /
- * device credential) and never leaves this device (no iCloud keychain / backup).
- * Devices without a secure enclave reject these options; the catch blocks below
+ * The PIN never leaves this device (no iCloud keychain / backup) and is readable only
+ * while the device is unlocked. The app gates reads with its own Face ID / Touch ID
+ * prompt (verify-pin), so `requireAuthentication` is deliberately off: turning it on
+ * makes the OS show a second prompt at every unlock. Devices that reject these options
  * fall back to a plain keychain item, as before, with a logged warning.
  */
 const PIN_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
-  requireAuthentication: true,
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
