@@ -28,6 +28,7 @@ import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
 import { readAccessToken, writeAccessToken, deleteAccessToken } from '../utils/accessToken';
+import { readUserInfoRaw, writeUserInfo, deleteUserInfo } from '../utils/userInfoStore';
 import { DEMO_MODE } from '../demo/config';
 import { showDemoNotice } from '../demo/demoData';
 
@@ -41,6 +42,7 @@ const storeToken = async (token: string) => {
 const removeToken = async () => {
   await sweepTenantAsyncStorage();
   await deleteAccessToken();
+  await deleteUserInfo();
   await clearPreAuthToken();
   await clearRefreshToken();
 };
@@ -181,15 +183,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     (async () => {
       try {
-        const [tok, [userJson, wsIdPair]] = await Promise.all([
+        // Identity is read from the keychain on native (utils/userInfoStore, SEC-041).
+        const [tok, userRaw, wsId] = await Promise.all([
           getToken(),
-          AsyncStorage.multiGet(['user_info', 'active_workspace_id']),
+          readUserInfoRaw(),
+          AsyncStorage.getItem('active_workspace_id').then((v) => v || null),
         ]);
         if (tok) {
           isAuthenticatedRef.current = true;
           setIsAuthenticated(true);
-          const wsId = wsIdPair[1] || null;
-          const userParsed = userJson[1] ? JSON.parse(userJson[1]) : null;
+          const userParsed = userRaw ? JSON.parse(userRaw) : null;
           const scopedCompanyKey = tenantKey({
             userId: userParsed?.id,
             workspaceId: wsId,
@@ -214,7 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
             }
           }
-          if (userJson[1]) setUserState(JSON.parse(userJson[1]));
+          if (userParsed) setUserState(userParsed);
         }
       } catch {}
       setIsLoading(false);
@@ -233,7 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(true);
     if (userInfo) {
       setUserState(userInfo);
-      AsyncStorage.setItem('user_info', JSON.stringify(userInfo)).catch(() => {});
+      writeUserInfo(userInfo).catch(() => {});
     }
     // Connect socket immediately after login
     socketService.connect(BASE_URL, token);
@@ -354,7 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setUser = useCallback((u: UserInfo) => {
     setUserState(u);
-    AsyncStorage.setItem('user_info', JSON.stringify(u)).catch(() => {});
+    writeUserInfo(u).catch(() => {});
   }, []);
 
   // ── Connect socket when already authenticated (app restart / token restore) ─

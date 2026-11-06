@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { readUserInfo } from './userInfoStore';
 type AppRouter = { replace: any };
 
 const HOME_ROUTE = '/(tabs)';
@@ -14,8 +15,7 @@ export const guideSeenKey = (userId: string | number) => `auditer_guide_v2_seen:
 async function resolveUserId(userId?: string | number | null): Promise<string | null> {
   if (userId != null && String(userId) !== '') return String(userId);
   try {
-    const raw = await AsyncStorage.getItem('user_info');
-    const id = raw ? JSON.parse(raw)?.id : null;
+    const id = (await readUserInfo())?.id;
     return id != null && String(id) !== '' ? String(id) : null;
   } catch {
     return null;

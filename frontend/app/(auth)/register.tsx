@@ -9,7 +9,7 @@ import {
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { writeUserInfo } from '../../src/utils/userInfoStore';
 import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { registerUser, storeSessionTokens, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
@@ -105,14 +105,14 @@ export default function RegisterScreen() {
         // The answer carries new tokens for the OTP sign-in's session, whose refresh token stops working,
         // so these are the ones to keep (signIn() would store them; registration bypasses it).
         await storeSessionTokens(res.data);
-        // Store user info under the correct key (user_info, not user_data)
-        await AsyncStorage.setItem('user_info', JSON.stringify({
+        // Identity goes to the keychain on native (utils/userInfoStore, SEC-041).
+        await writeUserInfo({
           id: res.data.user.id,
           name: res.data.user.name ?? undefined,
           phone: res.data.user.phone,
           email: res.data.user.email,
           language: res.data.user.language,
-        }));
+        });
         router.replace('/(auth)/tally-sync');
       } else {
         setError(t('screens.authRegister.registrationFailed'));
