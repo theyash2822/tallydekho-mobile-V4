@@ -15,6 +15,7 @@ import {
   type ComplianceReportTab,
 } from '../services/api';
 import { shareCompliancePdfSafely } from './voucherPdf';
+import { withTempFile } from './tempFiles';
 import { complianceReportFileName } from './complianceRules';
 import { rowAmount, rowDate, rowEwbNo, rowIrn, rowNumber, rowParty, rowType } from '../components/compliance/complianceShared';
 
@@ -83,7 +84,10 @@ export async function shareSignedJson(companyGuid: string, voucherGuid: string, 
     );
     return false;
   }
-  await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: `IRN-${safe}.json`, UTI: 'public.json' });
+  // The signed payload is deleted once the share sheet closes (SEC-032).
+  await withTempFile(path, () =>
+    Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: `IRN-${safe}.json`, UTI: 'public.json' }),
+  );
   return true;
 }
 
@@ -106,7 +110,9 @@ export async function shareComplianceReport(
     Alert.alert(i18n.t('screens.reportsEinvoiceList.sharingUnavailable', { defaultValue: 'Sharing is not available on this device' }), path);
     return false;
   }
-  await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: name, UTI: 'public.comma-separated-values-text' });
+  await withTempFile(path, () =>
+    Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: name, UTI: 'public.comma-separated-values-text' }),
+  );
   return true;
 }
 

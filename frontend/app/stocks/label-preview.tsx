@@ -14,6 +14,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
 import { encodeCode128B } from '../../src/utils/barcode';
 import { buildLabelHTML, computeGrid, getLabelDims, type PrintItem } from '../../src/utils/labelPrint';
+import { withTempFile } from '../../src/utils/tempFiles';
 
 
 // PreviewItem = PrintItem (shared type from labelPrint.ts)
@@ -129,8 +130,10 @@ export default function LabelPreviewScreen() {
     try {
       const { uri } = await Print.printToFileAsync({ html: getHTML() });
       const canShare = await Sharing.isAvailableAsync();
-      if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksLabelPreview.shareDialogTitle') });
-      else Alert.alert(t('screens.stocksLabelPreview.pdfSaved'), uri);
+      if (canShare) {
+        await withTempFile(uri, () =>
+          Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksLabelPreview.shareDialogTitle') }));
+      } else Alert.alert(t('screens.stocksLabelPreview.pdfSaved'), uri);
     } catch (err: any) {
       if (!err?.message?.includes('cancel'))
         Alert.alert(t('screens.stocksLabelPreview.exportFailed'), err?.message || t('screens.stocksLabelPreview.exportFailedMsg'));

@@ -7,6 +7,7 @@ import {
 } from './tenantStorage';
 import { clearLedgerCache } from './ledgerCache';
 import { clearStockListCache } from './stockCache';
+import { sweepExportCache } from './tempFiles';
 
 export async function sweepTenantAsyncStorage(): Promise<string[]> {
   if (Platform.OS === 'web') {
@@ -26,6 +27,8 @@ export async function sweepTenantAsyncStorage(): Promise<string[]> {
   if (remove.length) await AsyncStorage.multiRemove(remove);
   clearLedgerCache();
   clearStockListCache({ all: true });
+  // Exported PDFs / CSVs / signed JSON must not outlive the sign-in (SEC-032).
+  await sweepExportCache();
   return remove;
 }
 

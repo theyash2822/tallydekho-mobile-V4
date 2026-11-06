@@ -18,6 +18,7 @@ import { currentTenantKey, logoFeature, dropLegacyKeys } from '../../src/utils/t
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
 import { generateDocumentHTML, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
 import { clearVoucherConfigCache } from '../../src/utils/voucherPdf';
+import { withTempFile } from '../../src/utils/tempFiles';
 import {
   ThermalPaperWidth,
   DEFAULT_THERMAL_PAPER_WIDTH,
@@ -613,7 +614,8 @@ export default function VoucherConfigScreen() {
       const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.settingsVoucherConfig.labelPreview', { label }) });
+        await withTempFile(uri, () =>
+          Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.settingsVoucherConfig.labelPreview', { label }) }));
       } else {
         Toast.show({ type: 'info', text1: t('screens.settingsVoucherConfig.pdfGenerated'), text2: t('screens.settingsVoucherConfig.sharingUnavailable') });
       }

@@ -31,6 +31,7 @@ import {
 } from './pdf/thermalShared';
 import { sanitizeImageSrc } from './sanitizeImageSrc';
 import { irnQrDataUrl, withIrnQrImage } from './irnQr';
+import { deleteTempFile } from './tempFiles';
 import {
   normalizeThermalWidth,
   writeLocalVoucherConfig,
@@ -193,6 +194,31 @@ export async function buildVoucherPdf(
 }
 
 /**
+ * Opens the share sheet (or the RN share fallback) and deletes the generated file
+ * once the sheet closes, whatever the outcome (SEC-032). The sign-out sweep in
+ * `logoutCleanup` catches anything a crash leaves behind.
+ */
+async function presentPdfAndDiscard(
+  uri: string,
+  dialogTitle: string,
+  fallback?: () => Promise<void>
+): Promise<void> {
+  try {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
+      return;
+    }
+    if (fallback) {
+      await fallback();
+      return;
+    }
+    await Share.share({ url: uri, title: dialogTitle });
+  } finally {
+    await deleteTempFile(uri);
+  }
+}
+
+/**
  * Renders and opens the native share sheet.
  *
  * `onBeforeShare` runs after rendering but before the share sheet opens, so
@@ -216,15 +242,7 @@ export async function shareVoucherPdf(
   opts.onBeforeShare?.();
 
   const dialogTitle = opts.dialogTitle || opts.fileName || doc.documentNumber;
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  if (opts.fallback) {
-    await opts.fallback();
-    return;
-  }
-  await Share.share({ url: uri, title: doc.documentNumber });
+  await presentPdfAndDiscard(uri, dialogTitle, opts.fallback);
 }
 
 /**
@@ -269,11 +287,7 @@ export async function shareStatementPdf(
   opts.onBeforeShare?.();
 
   const dialogTitle = opts.fileName || `${input.partyName || input.title}.pdf`;
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  await Share.share({ url: uri, title: dialogTitle });
+  await presentPdfAndDiscard(uri, dialogTitle);
 }
 
 /**
@@ -310,11 +324,7 @@ export async function shareMultiStatementPdf(
   opts.onBeforeShare?.();
 
   const dialogTitle = opts.fileName || `Ledgers (${inputs.length}) — Statements.pdf`;
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  await Share.share({ url: uri, title: dialogTitle });
+  await presentPdfAndDiscard(uri, dialogTitle);
 }
 
 /**
@@ -333,11 +343,7 @@ export async function shareMasterPdf(
   opts.onBeforeShare?.();
 
   const dialogTitle = `${master.name || 'Master'}.pdf`;
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  await Share.share({ url: uri, title: dialogTitle });
+  await presentPdfAndDiscard(uri, dialogTitle);
 }
 
 /**
@@ -370,12 +376,7 @@ export async function shareCompliancePdf(
   if (!assertCanSharePdf()) return;
   const { uri, name } = await buildCompliancePdfFile(kind, voucher, company);
   opts.onBeforeShare?.();
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: name, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  await Share.share({ url: uri, title: name });
+  await presentPdfAndDiscard(uri, name);
 }
 
 /** shareCompliancePdf with the standard error toast, for button handlers. */

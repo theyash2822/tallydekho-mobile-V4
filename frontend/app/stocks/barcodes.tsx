@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { stocksBarcodeScan } from '../../src/utils/stocksBarcodeScan';
+import { withTempFile } from '../../src/utils/tempFiles';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -827,11 +828,12 @@ function BarcodesScreenContent() {
       await FileSystem.writeAsStringAsync(path, csvText, { encoding: FileSystem.EncodingType.UTF8 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(path, {
-          mimeType: 'text/csv',
-          dialogTitle: t('screens.stocksBarcodes.templateDialogTitle'),
-          UTI: 'public.comma-separated-values-text',
-        });
+        await withTempFile(path, () =>
+          Sharing.shareAsync(path, {
+            mimeType: 'text/csv',
+            dialogTitle: t('screens.stocksBarcodes.templateDialogTitle'),
+            UTI: 'public.comma-separated-values-text',
+          }));
       } else {
         Alert.alert(t('common.saved'), t('screens.stocksBarcodes.templateSaved'));
       }

@@ -37,6 +37,7 @@ import {
   wrapThermalHtml,
   type ThermalPaperWidth,
 } from './pdf/thermalShared';
+import { deleteTempFile } from './tempFiles';
 
 const A4 = { width: 595, height: 842 };
 
@@ -96,21 +97,26 @@ function extractBody(html: string): string {
   return match ? match[1] : html;
 }
 
+/** Opens the share sheet and deletes the generated file once it closes (SEC-032). */
 async function presentPdfUri(
   uri: string,
   fileName: string,
   onBeforeShare?: () => void
 ): Promise<void> {
   onBeforeShare?.();
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
-      dialogTitle: fileName,
-      UTI: 'com.adobe.pdf',
-    });
-    return;
+  try {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: fileName,
+        UTI: 'com.adobe.pdf',
+      });
+      return;
+    }
+    await Share.share({ url: uri, title: fileName });
+  } finally {
+    await deleteTempFile(uri);
   }
-  await Share.share({ url: uri, title: fileName });
 }
 
 /** Option C — print each HTML at its native page size, merge with pdf-lib, one share. */
@@ -127,13 +133,18 @@ async function mergeHtmlDocsToOnePdf(
   }
 
   const merged = await PDFDocument.create();
-  for (const uri of uris) {
-    const b64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const donor = await PDFDocument.load(b64);
-    const copied = await merged.copyPages(donor, donor.getPageIndices());
-    copied.forEach((p) => merged.addPage(p));
+  try {
+    for (const uri of uris) {
+      const b64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const donor = await PDFDocument.load(b64);
+      const copied = await merged.copyPages(donor, donor.getPageIndices());
+      copied.forEach((p) => merged.addPage(p));
+    }
+  } finally {
+    // The per-page PDFs are only inputs to the merge (SEC-032).
+    for (const uri of uris) await deleteTempFile(uri);
   }
 
   const outB64 = await merged.saveAsBase64({ dataUri: false });

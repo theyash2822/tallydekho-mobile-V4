@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
 import { buildLabelHTML, computeGrid, LABEL_SIZE_KEYS, type PrintItem } from '../../src/utils/labelPrint';
+import { withTempFile } from '../../src/utils/tempFiles';
 
 const AMBER = '#A89060';
 // PrintItem is re-exported from labelPrint.ts — do not redefine here
@@ -107,7 +108,8 @@ function PrintSettingsScreenContent() {
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksPrintSettings.shareDialogTitle') });
+        await withTempFile(uri, () =>
+          Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('screens.stocksPrintSettings.shareDialogTitle') }));
       } else {
         Alert.alert(t('screens.stocksPrintSettings.pdfSaved'), t('screens.stocksPrintSettings.savedTo', { uri }));
       }
