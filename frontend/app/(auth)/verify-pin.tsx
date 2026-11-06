@@ -15,6 +15,8 @@ import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { useTranslation } from 'react-i18next';
 import { getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { getBiometricPin, setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
+import { takeBiometricPinDowngradeNotice } from '../../src/utils/biometricPinNotice';
+import Toast from 'react-native-toast-message';
 import { AuditerWordmark } from '../../src/components/AuditerLogo';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';
 
@@ -72,18 +74,37 @@ export default function VerifyPinScreen() {
 
   const biometricEnabled = biometric === '1';
 
+  /**
+   * SEC-031: the device refused the protected keychain options and the PIN is held
+   * as a plain keychain item. Tell the user once, without blocking the flow.
+   */
+  const surfaceKeychainDowngrade = () => {
+    if (!takeBiometricPinDowngradeNotice()) return;
+    Toast.show({
+      type: 'info',
+      text1: t('auth.keychainDowngradeTitle', { defaultValue: 'Biometric unlock is less protected on this device' }),
+      text2: t('auth.keychainDowngradeBody', {
+        defaultValue: 'Your PIN could not be stored with hardware protection. Turn off biometric unlock in Settings if you prefer to type it.',
+      }),
+      visibilityTime: 6000,
+    });
+  };
+
   const triggerBiometric = async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: t('screens.authVerifyPin.bioPrompt'),
         fallbackLabel: t('screens.authVerifyPin.bioFallback'),
         cancelLabel: t('common.cancel'),
-        disableDeviceFallback: false,
+        // Biometric only (SEC-031): the device passcode must not stand in for the
+        // Auditer PIN. Typing the PIN in this screen remains the fallback.
+        disableDeviceFallback: true,
       });
 
       if (result.success) {
         // Retrieve stored PIN from secure storage
         const storedPin = await getBiometricPin(phone, t('screens.authVerifyPin.bioPrompt'));
+        surfaceKeychainDowngrade();
         const token = preAuthTokenRef.current;
         if (storedPin && token) {
           await doVerify(storedPin, true);
@@ -133,6 +154,7 @@ export default function VerifyPinScreen() {
         // A typed PIN refreshes the copy biometric unlock uses (it may have been changed on the web).
         if (!fromBiometric && biometricEnabled && biometricAvail) {
           await setBiometricPin(phone, enteredPin).catch(() => {});
+          surfaceKeychainDowngrade();
         }
         const { access_token, refresh_token, user, company } = res.data;
         await signIn(

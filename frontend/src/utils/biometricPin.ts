@@ -1,13 +1,16 @@
 import * as SecureStore from 'expo-secure-store';
+import { markBiometricPinDowngrade } from './biometricPinNotice';
 
 const LEGACY_KEY = 'td_biometric_pin';
 
 /**
  * The PIN never leaves this device (no iCloud keychain / backup) and is readable only
  * while the device is unlocked. The app gates reads with its own Face ID / Touch ID
- * prompt (verify-pin), so `requireAuthentication` is deliberately off: turning it on
- * makes the OS show a second prompt at every unlock. Devices that reject these options
- * fall back to a plain keychain item, as before, with a logged warning.
+ * prompt (verify-pin, biometric only — no device-passcode fallback), so
+ * `requireAuthentication` is deliberately off (owner decision): turning it on makes
+ * the OS show a second prompt at every unlock. Devices that reject these options
+ * fall back to a plain keychain item, as before; the downgrade is logged and
+ * surfaced once to the user through `biometricPinNotice` (SEC-031).
  */
 const PIN_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -15,6 +18,7 @@ const PIN_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
 
 let _warnedFallback = false;
 function warnFallback(stage: 'set' | 'get', err: unknown) {
+  markBiometricPinDowngrade(stage);
   if (_warnedFallback) return;
   _warnedFallback = true;
   console.warn(`[biometricPin] protected keychain ${stage} failed; using unprotected item`, err);

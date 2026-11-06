@@ -126,6 +126,8 @@
     "invalidOtpRetry": "Invalid OTP. Please try again.",
     "validMobile": "Please enter a valid {{range}} mobile number",
     "biometricFallback": "Biometric not fully set up. Please enter PIN manually.",
+    "keychainDowngradeTitle": "Biometric unlock is less protected on this device",
+    "keychainDowngradeBody": "Your PIN could not be stored with hardware protection. Turn off biometric unlock in Settings if you prefer to type it.",
     "otpSendFailed": "Could not send OTP. Please try again.",
     "signedOutTitle": "Signed out",
     "signedOutNotice": "You were signed out",
