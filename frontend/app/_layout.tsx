@@ -20,7 +20,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { BottomSheetModalProvider, useBottomSheetModal } from '@gorhom/bottom-sheet';
 import { toastConfig } from '../src/utils/toastConfig';
-import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
+import { registerForPushNotifications, setupNotificationHandlers, warnIfPushProjectIdMissing } from '../src/services/pushNotifications';
 import { navigateAfterAuth } from '../src/utils/onboardingNav';
 import { leaveForSignIn } from '../src/utils/signOutNavigation';
 import { COLORS } from '../src/constants/colors';
@@ -45,6 +45,8 @@ if (__DEV__) {
 }
 
 initMonitoring();
+// Dev-only: a build without an EAS project id never registers for push (SEC-049).
+warnIfPushProjectIdMissing();
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});

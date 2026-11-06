@@ -9,6 +9,26 @@ import { getActiveWorkspaceId, registerPushToken } from './api';
 import { getDeviceId } from './clientIdentity';
 import { safePush } from '../utils/safeNavigation';
 import { complianceLinkRoute, isAllowedPushRoute, isComplianceAlert, notificationRoute } from '../utils/notificationLinks';
+import { pushProjectIdStartupWarning, resolvePushProjectId } from './pushProjectId';
+
+/** The sources `resolvePushProjectId` reads in this runtime. */
+function projectIdSources() {
+  return {
+    env: process.env as Record<string, string | undefined>,
+    extra: Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined,
+    easConfig: Constants.easConfig as { projectId?: string } | null | undefined,
+  };
+}
+
+/**
+ * Dev-only startup check (SEC-049): a build without an EAS project id never
+ * registers for push and would fail silently in release. Logged once.
+ */
+export function warnIfPushProjectIdMissing(): void {
+  if (!__DEV__ || Platform.OS === 'web') return;
+  const msg = pushProjectIdStartupWarning(projectIdSources());
+  if (msg) console.warn(msg);
+}
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
@@ -96,13 +116,10 @@ export async function registerForPushNotifications({ askPermission = true }: { a
   }
 
   try {
-    const projectId =
-      process.env.EXPO_PUBLIC_PROJECT_ID ||
-      Constants.expoConfig?.extra?.eas?.projectId ||
-      Constants.easConfig?.projectId;
+    const projectId = resolvePushProjectId(projectIdSources());
 
     if (!projectId) {
-      console.warn('[Push] No projectId found — set EXPO_PUBLIC_PROJECT_ID in .env');
+      console.warn(pushProjectIdStartupWarning(projectIdSources()));
       return null;
     }
 
