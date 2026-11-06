@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   TextInputInstance,
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
+  TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import { ShimmerBox } from '../../src/components/Skeleton';
 import { pairWorkspaceTally, unpairWorkspaceTally, getTallySyncStatus } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { requestsHref } from '../../src/hooks/usePendingRequests';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HelpSheet — "Where do I find the code?"
@@ -27,6 +28,18 @@ const HELP_STEP_KEYS = [
   'screens.settingsTallySync.helpStep4',
   'screens.settingsTallySync.helpStep5',
 ];
+
+const AGENT_DOWNLOAD_URL = 'https://auditer.com/download';
+
+function openAgentDownload() {
+  Linking.openURL(AGENT_DOWNLOAD_URL).catch(() => {
+    Toast.show({
+      type: 'error',
+      text1: i18n.t('screens.settingsHelp.cannotOpen'),
+      text2: i18n.t('screens.settingsHelp.tryManually', { url: AGENT_DOWNLOAD_URL }),
+    });
+  });
+}
 
 function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { t } = useTranslation();
@@ -62,6 +75,7 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
             style={hs.dlBtn}
             onPress={() => {
               Toast.show({ type: 'info', text1: t('common.download'), text2: t('screens.settingsTallySync.openingSite') });
+              openAgentDownload();
               onClose();
             }}
             activeOpacity={0.85}
@@ -408,7 +422,7 @@ export default function TallySyncScreen() {
             {isOwnerOrAdmin && (
               <TouchableOpacity
                 style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
-                onPress={() => router.push('/settings/approvals')}
+                onPress={() => router.push(requestsHref('approvals'))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
@@ -430,7 +444,7 @@ export default function TallySyncScreen() {
                 {isOwnerOrAdmin && (
                   <TouchableOpacity
                     style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
-                    onPress={() => router.push('/settings/approvals')}
+                    onPress={() => router.push(requestsHref('approvals'))}
                     activeOpacity={0.7}
                   >
                     <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
@@ -472,7 +486,7 @@ export default function TallySyncScreen() {
                 {t('common.download')}{' '}
                 <Text style={s.boldText}>Auditer</Text>
                 {' '}{t('screens.settingsTallySync.agentFrom')}{'\n'}
-                <Text style={s.linkText}>https://www.tallydekho.com/download</Text>
+                <Text style={s.linkText} onPress={openAgentDownload} accessibilityRole="link">auditer.com/download</Text>
               </Text>
             </View>
 

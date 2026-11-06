@@ -6,10 +6,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useNavigationContainerRef, useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { refreshPushRegistration } from '../../src/services/pushNotifications';
+import { leaveForSignIn } from '../../src/utils/signOutNavigation';
 import {
   updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail,
   startAccountDeletion, confirmAccountDeletion, ownedSharedWorkspaces, type OwnedSharedWorkspace,
@@ -159,6 +161,7 @@ function DeleteAccountModal({
   onDeleted: () => void;
 }) {
   const { t } = useTranslation();
+  const { expectSignOut } = useAuth();
   // sending: first code on its way · code: code entry · blocked: owns workspaces with members · failed: no code sent
   const [stage, setStage] = useState<'sending' | 'code' | 'blocked' | 'failed'>('sending');
   const [sendAttempt, setSendAttempt] = useState(0);
@@ -256,6 +259,8 @@ function DeleteAccountModal({
     if (!codeComplete || deleting || resending) return;
     setDeleting(true);
     setCodeError('');
+    // The server's `logout` for every session (this one too) can arrive before this answer: no "signed out" notice.
+    expectSignOut();
     try {
       await confirmAccountDeletion(otp);
     } catch (err: any) {
@@ -460,7 +465,8 @@ function OTPVerifySheet({
 }: {
   visible:          boolean;
   onClose:          () => void;
-  onSuccess:        (newValue: string) => void;
+  /** `revoked`: other devices a phone change signed out. */
+  onSuccess:        (newValue: string, revoked?: number) => void;
   channel:          OTPChannel;
   title:            string;
   inputPlaceholder: string;
@@ -560,7 +566,7 @@ function OTPVerifySheet({
       if (isPhone) {
         // Keep the number exactly as the account stores it (full international digits outside India).
         const res: any = await changePhone({ step: 3, otp });
-        onSuccess(String(res?.data?.newPhone || newVal).trim());
+        onSuccess(String(res?.data?.newPhone || newVal).trim(), Number(res?.data?.revoked) || 0);
       } else {
         await changeEmail({ step: 2, otp, newEmail: newVal });
         onSuccess(newVal.trim());
@@ -750,8 +756,14 @@ function OTPVerifySheet({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigationRef = useNavigationContainerRef();
   const { t } = useTranslation();
   const { user, setUser, signOut } = useAuth();
+  /** A PIN or phone change signs every other device out; the answer says how many. */
+  const othersSignedOut = (revoked: unknown) => {
+    const count = Number(revoked) || 0;
+    return count > 0 ? t('auth.otherDevicesSignedOut', { count }) : null;
+  };
 
   // Form state — pre-filled from AuthContext
   const [name,  setName]  = useState(user?.name || 'Your Name');
@@ -831,12 +843,12 @@ export default function ProfileScreen() {
   const [showEditEmail, setShowEditEmail] = useState(false);
 
   // The server has already ended every session, so the logout call inside signOut may fail;
-  // signOut clears this device either way.
+  // signOut clears this device either way. Nothing of the deleted account may stay under the sign-in screen.
   const handleAccountDeleted = async () => {
     setShowDelete(false);
     await clearBiometricPin(phone);
     await signOut().catch(() => {});
-    router.replace('/(auth)');
+    leaveForSignIn(router, navigationRef);
     setTimeout(() => {
       Alert.alert(t('screens.settingsProfile.accountDeleted'), t('screens.settingsProfile.accountDeletedMsg'));
     }, 300);
@@ -892,8 +904,12 @@ export default function ProfileScreen() {
     setShowPasskey(false);
     // With 2FA already on, this sheet confirms the existing PIN for biometric unlock rather than replacing it.
     const confirmingExisting = twoFA;
+    let othersOut: string | null = null;
     try {
-      await apiSetPin(pin, confirmingExisting ? pin : undefined);
+      const res: any = await apiSetPin(pin, confirmingExisting ? pin : undefined);
+      othersOut = othersSignedOut(res?.data?.revoked);
+      // Ending the other sessions dropped every push token not tied to this one.
+      refreshPushRegistration();
     } catch (err: any) {
       Toast.show({
         type: 'error',
@@ -922,9 +938,9 @@ export default function ProfileScreen() {
     }
 
     if (!confirmingExisting) {
-      Toast.show({ type: 'success', text1: t('screens.settingsProfile.passkeySet'), text2: t('screens.settingsProfile.twoFaEnabled') });
+      Toast.show({ type: 'success', text1: t('screens.settingsProfile.passkeySet'), text2: othersOut || t('screens.settingsProfile.twoFaEnabled') });
     } else if (savedForBiometric) {
-      Toast.show({ type: 'success', text1: t('profile.biometricScreenLock'), text2: t('screens.settingsProfile.biometricEnabled') });
+      Toast.show({ type: 'success', text1: t('profile.biometricScreenLock'), text2: othersOut || t('screens.settingsProfile.biometricEnabled') });
     } else {
       Toast.show({ type: 'error', text1: t('common.error'), text2: t('screens.settingsProfile.couldNotUpdateBiometric') });
     }
@@ -1145,15 +1161,17 @@ export default function ProfileScreen() {
       <OTPVerifySheet
         visible={showEditPhone}
         onClose={() => setShowEditPhone(false)}
-        onSuccess={(newPhone) => {
+        onSuccess={(newPhone, revoked) => {
           setPhone(newPhone);
           if (user) setUser({ ...user, phone: newPhone });
           Toast.show({
             type: 'success',
             text1: t('profile.phoneUpdated'),
-            text2: t('screens.settingsProfile.phoneChanged'),
+            text2: othersSignedOut(revoked) || t('screens.settingsProfile.phoneChanged'),
             visibilityTime: 3000,
           });
+          // Ending the other sessions dropped every push token not tied to this one.
+          refreshPushRegistration();
         }}
         channel="whatsapp"
         title={t('profile.editPhone')}

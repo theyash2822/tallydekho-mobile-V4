@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
-import { socketService } from '../services/socketService';
+import Toast from 'react-native-toast-message';
+import i18n from '../i18n';
+import { socketService, type SessionEndReason } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { clearStockListCache } from '../utils/stockCache';
 import { sweepTenantAsyncStorage } from '../utils/logoutCleanup';
@@ -21,7 +23,7 @@ import {
   logoutOnServer,
   setWriteAsDemo,
 } from '../services/api';
-import { getLastPushToken } from '../services/pushNotifications';
+import { getStoredPushToken } from '../services/pushNotifications';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
@@ -80,6 +82,24 @@ export function fyInfoToParam(fy: FYInfo | null): string | undefined {
   return undefined;
 }
 
+export type { SessionEndReason };
+
+export interface SignOutOptions {
+  /** false when the server has already ended the session: only this device is cleared. */
+  server?: boolean;
+  /** Tells the user why they were signed out. */
+  notice?: SessionEndReason | null;
+}
+
+const SIGN_OUT_NOTICE: Record<SessionEndReason, string> = {
+  signed_out: 'auth.signedOutNotice',
+  signed_out_everywhere: 'auth.signedOutEverywhereNotice',
+  credentials_changed: 'auth.credentialsChangedNotice',
+};
+
+/** How long after expectSignOut() the server ending this session counts as expected. */
+const EXPECTED_SIGN_OUT_MS = 60_000;
+
 /**
  * Auth is user identity only. Pairing is a property of a workspace, not of a
  * user: the same person can own an unpaired workspace and be a member of a
@@ -95,7 +115,10 @@ interface AuthContextType {
   selectedFY: FYInfo | null;
   setSelectedFY: (fy: FYInfo | null) => void;
   signIn: (token: string, userInfo?: UserInfo, refreshToken?: string | null) => Promise<void>;
-  signOut: () => Promise<void>;
+  /** Ends the session on the server (unless `server: false`), then clears this device. Safe to call twice. */
+  signOut: (opts?: SignOutOptions) => Promise<void>;
+  /** The server is about to end this session on purpose (account deletion): its `logout` then signs out without a notice. */
+  expectSignOut: () => void;
   setCompany: (c: Company | null | ((prev: Company | null) => Company | null)) => Promise<void>;
   setUser: (u: UserInfo) => void;
 }
@@ -111,6 +134,7 @@ const AuthContext = createContext<AuthContextType>({
   setSelectedFY: () => {},
   signIn: async () => {},
   signOut: async () => {},
+  expectSignOut: () => {},
   setCompany: async () => {},
   setUser: () => {},
 });
@@ -127,6 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userRef = useRef<UserInfo | null>(null);
   const lastWsStatusRef = useRef('');
   const lastRevisionProbeRef = useRef(0);
+  /** Set where sign-in and sign-out flip it, so a second sign-out right after the first sees it at once. */
+  const isAuthenticatedRef = useRef(false);
   /** Workspace the status poll last reported on — resets derived state on switch. */
   const polledWsRef = useRef<string | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
@@ -157,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
         const tok = token[1];
         if (tok) {
+          isAuthenticatedRef.current = true;
           setIsAuthenticated(true);
           const wsId = wsIdPair[1] || null;
           const userParsed = userJson[1] ? JSON.parse(userJson[1]) : null;
@@ -199,6 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Absent on re-entry paths that only re-assert an existing session — never
     // overwrite a good refresh token with nothing.
     if (refreshToken) await setRefreshToken(refreshToken);
+    isAuthenticatedRef.current = true;
     setIsAuthenticated(true);
     if (userInfo) {
       setUserState(userInfo);
@@ -212,22 +240,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [BASE_URL]);
 
   const signingOutRef = useRef(false);
-  const signOut = useCallback(async () => {
+  const expectedSignOutUntilRef = useRef(0);
+
+  const signOut = useCallback(async ({ server = true, notice = null }: SignOutOptions = {}) => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
     try {
-      const pushToken = getLastPushToken();
-      const serverLogout = await logoutOnServer(pushToken || undefined);
-      if (!serverLogout.ok && __DEV__) {
-        console.warn('[auth] server logout not revoked', serverLogout.reason || 'unknown');
-      }
+      // Already signed out (a late `logout` event, a second tap): nothing to end and nothing to say.
+      if (!isAuthenticatedRef.current && !(await getToken())) return;
+      // Before the server call: the `logout` the server sends this socket for this very sign-out must not
+      // start a second one.
       socketService.disconnect();
+      if (server) {
+        const serverLogout = await logoutOnServer(await getStoredPushToken());
+        if (!serverLogout.ok && __DEV__) {
+          console.warn('[auth] server logout not revoked', serverLogout.reason || 'unknown');
+        }
+      }
       setWriteAsDemo(false);
       setTenantKeyContext(null, null);
       setWorkspaceGeneration(null);
       await removeToken();
       clearVoucherConfigCache();
       clearStockListCache();
+      isAuthenticatedRef.current = false;
       setIsAuthenticated(false);
       setIsDesktopOnlineState(false);
       polledWsRef.current = null;
@@ -236,6 +272,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       companyRef.current = null;
       setSelectedFY(null);
       setUserState(null);
+      if (notice) {
+        Toast.show({ type: 'info', text1: i18n.t('auth.signedOutTitle'), text2: i18n.t(SIGN_OUT_NOTICE[notice]), visibilityTime: 5000 });
+      }
     } finally {
       signingOutRef.current = false;
     }
@@ -247,6 +286,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signOut().catch(() => {});
     });
     return () => setAuthFailureHandler(null);
+  }, [signOut]);
+
+  const expectSignOut = useCallback(() => {
+    expectedSignOutUntilRef.current = Date.now() + EXPECTED_SIGN_OUT_MS;
+  }, []);
+
+  // The server ended this session (signed out elsewhere, Log out of all devices, a PIN or phone change):
+  // clear this device without calling the server again.
+  useEffect(() => {
+    socketService.setOnSessionEnded((reason) => {
+      const expected = Date.now() < expectedSignOutUntilRef.current;
+      signOut({ server: false, notice: expected ? null : reason }).catch(() => {});
+    });
+    return () => socketService.setOnSessionEnded(null);
   }, [signOut]);
 
   // Stable identity — WorkspaceContext refreshContext depends on this; a new
@@ -444,10 +497,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo<AuthContextType>(() => ({
     isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,
     selectedFY, setSelectedFY: setSelectedFYPersisted,
-    signIn, signOut, setCompany, setUser,
+    signIn, signOut, expectSignOut, setCompany, setUser,
   }), [
     isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,
-    selectedFY, setSelectedFYPersisted, signIn, signOut, setCompany, setUser,
+    selectedFY, setSelectedFYPersisted, signIn, signOut, expectSignOut, setCompany, setUser,
   ]);
 
   return (

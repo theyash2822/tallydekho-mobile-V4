@@ -2,7 +2,8 @@
  * GST on PeriOne for Reports → GST (spec 2026-11-04 §3.2, §4.3): an Overview card (portal connection, the
  * due dates with their status, the compliance score) and two sheets — supplier invoices in IMS, every section
  * with a chip per section (Accept / Reject / Keep pending when Settings → GST lets Auditer decide), and GST
- * deposits with their posting state (Post to Tally, or Post again after a failed posting). Filing GSTR-1 /
+ * deposits with their posting state (Post to Tally, or Post again after a failed posting). Two entries open the
+ * invoices as the portal holds them, matched to the books (app/reports/gst-portal.tsx). Filing GSTR-1 /
  * GSTR-3B stays on the web. A server without GST credentials (503 GST_NOT_CONFIGURED) leaves one line.
  */
 import React, { useEffect, useState } from 'react';
@@ -24,15 +25,18 @@ import {
   calendarChip, cashBalanceTotal, depositPostStatus, depositStatusAfterPost, gstPeriodLabel, gstPeriodOf, imsSections, localIsoDay,
   pickCalendarRows, previousGstPeriod, shiftGstPeriod, type ImsSection,
 } from '../../utils/complianceRules';
+import { gstPortalRoute, type GstPortalKind } from '../../utils/gstPortal';
 import { BottomModalShell } from '../forms/BottomModalShell';
 import { StatusChip } from './ComplianceChips';
 import { eventDate } from './complianceShared';
 
-export function GstOverviewSection({ companyGuid, initialSheet, fyRange }: {
+export function GstOverviewSection({ companyGuid, initialSheet, fyRange, onOverview }: {
   companyGuid: string;
   /** Deep link (`?tab=ims|deposits`): open that sheet once. */
   initialSheet?: string;
   fyRange: { from?: string; to?: string };
+  /** The overview once it loaded; null while loading, when GST is not set up on the server, or after a failure. */
+  onOverview?: (overview: GstOverview | null) => void;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -57,6 +61,12 @@ export function GstOverviewSection({ companyGuid, initialSheet, fyRange }: {
       .catch((e) => { if (!cancelled) setState(isGstNotConfigured(e) ? 'not_configured' : 'error'); });
     return () => { cancelled = true; };
   }, [companyGuid, reloadKey]);
+
+  useEffect(() => {
+    onOverview?.(state === 'ready' ? overview : null);
+  }, [state, overview, onOverview]);
+
+  const openPortal = (kind: GstPortalKind) => safePush(router, gstPortalRoute(kind, { frequency: overview?.frequency }) as any);
 
   if (state === 'not_configured') {
     return (
@@ -147,6 +157,22 @@ export function GstOverviewSection({ companyGuid, initialSheet, fyRange }: {
           <Text style={st.navTxt}>{t('screens.reportsGst.deposits')}</Text>
           {cash != null && <Text style={st.meta}>{t('screens.reportsGst.cashBalance', { amount: formatAmount(cash) })}</Text>}
           {!!lastDeposit?.amount && <Text style={st.meta}>{t('screens.reportsGst.lastDeposit', { amount: formatAmount(Number(lastDeposit.amount) || 0), date: formatDate(String(lastDeposit.date || '')) })}</Text>}
+        </View>
+        <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+      </TouchableOpacity>
+      <TouchableOpacity style={st.navRow} onPress={() => openPortal('sales')} activeOpacity={0.7} testID="gst-open-portal-sales">
+        <Ionicons name="cloud-upload-outline" size={17} color={COLORS.textSecondary} />
+        <View style={{ flex: 1 }}>
+          <Text style={st.navTxt}>{t('screens.gstPortal.salesEntry')}</Text>
+          <Text style={st.meta}>{t('screens.gstPortal.entrySub')}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+      </TouchableOpacity>
+      <TouchableOpacity style={st.navRow} onPress={() => openPortal('purchases')} activeOpacity={0.7} testID="gst-open-portal-purchases">
+        <Ionicons name="cloud-download-outline" size={17} color={COLORS.textSecondary} />
+        <View style={{ flex: 1 }}>
+          <Text style={st.navTxt}>{t('screens.gstPortal.purchasesEntry')}</Text>
+          <Text style={st.meta}>{t('screens.gstPortal.entrySub')}</Text>
         </View>
         <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
       </TouchableOpacity>

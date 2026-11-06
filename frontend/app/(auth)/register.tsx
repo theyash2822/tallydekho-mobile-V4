@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { registerUser, setRefreshToken, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
+import { registerUser, storeSessionTokens, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 import { canProceedRegister, isValidWorkspaceName, WORKSPACE_NAME_MAX } from '../../src/utils/registerForm';
@@ -109,10 +109,9 @@ export default function RegisterScreen() {
         // signIn() sets isAuthenticated=true which makes _layout.tsx redirect to /(tabs)
         // before the user reaches tally-sync. Two conflicting navigations = iOS crash.
         // signIn() is called from tally-sync.tsx after pairing (or on skip).
-        await AsyncStorage.setItem('auth_token', res.data.access_token);
-        // signIn() would normally do this; registration bypasses it, and without
-        // the refresh token a brand-new account's first session dies in 15 min.
-        await setRefreshToken(res.data.refresh_token);
+        // The answer carries new tokens for the OTP sign-in's session, whose refresh token stops working,
+        // so these are the ones to keep (signIn() would store them; registration bypasses it).
+        await storeSessionTokens(res.data);
         // Store user info under the correct key (user_info, not user_data)
         await AsyncStorage.setItem('user_info', JSON.stringify({
           id: res.data.user.id,

@@ -3,17 +3,31 @@
 // Note: expo-notifications requires a dev build or production app — not supported in Expo Go SDK 53+
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getActiveWorkspaceId, registerPushToken } from './api';
+import { getDeviceId } from './clientIdentity';
 import { safePush } from '../utils/safeNavigation';
 import { complianceLinkRoute, isComplianceAlert, notificationRoute } from '../utils/notificationLinks';
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
+/** Kept across launches so a sign-out right after a cold start can still name this device's token. */
+const PUSH_TOKEN_KEY = 'td_push_token';
 let _lastPushToken: string | null = null;
 export function getLastPushToken(): string | null {
   return _lastPushToken;
+}
+
+/** This device's Expo push token as last registered (this launch or an earlier one); null when never. */
+export async function getStoredPushToken(): Promise<string | null> {
+  if (_lastPushToken) return _lastPushToken;
+  try {
+    return await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 // Lazily import expo-notifications ONLY in dev/prod builds
@@ -36,8 +50,9 @@ if (!isExpoGo) {
  * Register device for push notifications and save token to backend.
  * Call this after user logs in.
  * Returns the Expo push token string, or null if permission denied / not a device.
+ * `askPermission: false` only re-sends when notifications are already allowed (no system prompt).
  */
-export async function registerForPushNotifications(): Promise<string | null> {
+export async function registerForPushNotifications({ askPermission = true }: { askPermission?: boolean } = {}): Promise<string | null> {
   // Not supported in Expo Go SDK 53+
   if (isExpoGo || !Notifications) {
     console.log('[Push] Expo Go detected — push notifications require a dev build. Skipping.');
@@ -61,7 +76,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
   const existingStatus = permissionStatus(await Notifications.getPermissionsAsync());
   let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
+  if (existingStatus !== 'granted' && askPermission) {
     finalStatus = permissionStatus(await Notifications.requestPermissionsAsync());
   }
 
@@ -94,15 +109,25 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
     _lastPushToken = token;
+    AsyncStorage.setItem(PUSH_TOKEN_KEY, token).catch(() => {});
     if (__DEV__) console.log('[Push] Expo push token registered');
 
-    // Save to backend
-    await registerPushToken(token, Platform.OS);
+    // The server ties the token to this sign-in session and takes it away from any other account.
+    const deviceId = await getDeviceId();
+    await registerPushToken(token, Platform.OS, deviceId || undefined);
     return token;
   } catch (err: any) {
     console.error('[Push] Token registration failed:', err.message);
     return null;
   }
+}
+
+/**
+ * Registers this device's token again for the current session. Ending other sessions (a PIN or phone change,
+ * Log out of all devices with this one kept) deletes every token the server cannot tie to this session.
+ */
+export function refreshPushRegistration(): Promise<string | null> {
+  return registerForPushNotifications({ askPermission: false }).catch(() => null);
 }
 
 /**
@@ -148,7 +173,7 @@ export function setupNotificationHandlers(router: any) {
         safePush(router, '/reports/compliance');
         break;
       case 'restore_request':
-        safePush(router, '/settings/approvals');
+        safePush(router, '/settings/requests?tab=approvals');
         break;
       default:
         safePush(router, '/');

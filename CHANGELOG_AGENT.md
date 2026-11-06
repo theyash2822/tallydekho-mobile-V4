@@ -1,3 +1,24 @@
+## 2026-11-06 (05:26–06:05) — Requests screen, workspace dropdown, voice search (branch `28-10-2026`, local only)
+
+- Settings → Requests (`app/settings/requests.tsx`): approvals ("For this workspace", only for those who can approve) and invitations ("For you", with "Invited by") in one screen with Day Book-style tabs; the old approvals / invitations routes redirect. One `usePendingRequests` hook feeds the Settings badge, the bell badge, the Home banners and a pinned "Needs your action" card in Notifications (one poll, paused in the background).
+- The Settings workspace switcher is a dropdown under the workspace name (`src/components/settings/WorkspaceDropdown.tsx`), styled like the Home company / FY dropdowns, with inline rename; the switch runs after the dropdown has closed.
+- Voice search listens in the app language (en-IN fallback), offers Open Settings when permission is blocked and says so when the phone has no speech recognizer; app.json microphone / speech texts say Auditer. Needs a native build (`npx expo run:android --device` / `npx expo run:ios --device`), not Expo Go.
+- 36 new keys in all 11 languages.
+- **Tested:** tsc 0 errors; eslint no new errors vs HEAD; all 9 verify scripts; locale parity (5,154 keys).
+
+## 2026-11-06 (03:15–05:10) — Keyboard fix, redesigned settings screens, cashflow, ledger PDFs, GST portal, App Guide v2, sessions (branch `28-10-2026`, local only)
+
+- **Keyboard:** `BottomModalShell` keeps its KeyboardAvoidingView mounted (`enabled`, padding on both platforms) — swapping it in when the keyboard opened remounted the sheet and closed the keyboard (GST connect OTP, integration setup, compliance and e-way bill sheets, stock modals). Also: GST / integration scroll views, workspace rename, HSN and create-ledger modals, two gorhom sheets without `adjustResize`.
+- **Approvals:** restore picker shows company names (the folder number stays the key sent); Hard Sync cards show companies inline, a readable title, short device id, expiry; one merged list with pull-to-refresh, toasts, tokens only. Home banner also flags Hard Sync approvals for Owner/Admin.
+- **Redesigned:** Notifications, My Access (no raw GUIDs), Billing & Credits (was License & Credits; links to app.auditer.com) on the shared `src/components/settings/SettingsKit.tsx`.
+- **Cashflow:** the report draws the backend's daily/weekly/monthly series, reloads after a sync and on pull, drops stale answers; Home keeps a chosen 7D; the card shows when its data was loaded.
+- **Ledgers:** Share PDF asks *Transactions only* or *Full details* (details sheet + statement with narrations), on the list (single and multi-select, 5 statements at a time) and the ledger screen; the ledger screen's PDF no longer mixes filtered rows with unfiltered balances.
+- **GST portal:** Reports → GST and the GST overview card open *Sales on the GST portal* (GSTR-1) and *Purchases on the GST portal* (GSTR-2B / 2A) — `app/reports/gst-portal.tsx`, same `/api/gst/portal-sales` and `/api/gst/purchases?source=` as the web.
+- **App Guide v2:** 11 slides on the design tokens (Ionicons, no emoji), shown once after sign-in per user (`auditer_guide_v2_seen:<userId>`); the pre-login first-launch gate is gone.
+- **Sessions:** `X-Client-Type` / `X-Device-Name`; register keeps its new tokens; logout sends `{ refreshToken, pushToken }` (5 s, one retry); push token and a device id persist and re-register after sign-in and credential changes; socket `logout` / SESSION_REVOKED sign out with a reason; sign-out clears the navigation stack; only 400/401 from refresh ends the session (captive Wi-Fi no longer signs out); Settings → Signed-in devices with *Log out of all devices*.
+- **Rebrand:** auditer.com links (About, Tally Sync download), "latest Auditer Agent", Help FAQ for today's tabs. Locales: 11 files, 5,118 keys each, placeholders match.
+- **Tested:** `tsc --noEmit` 0 errors; all 9 `verify:*` pass; ESLint: no changed file worse than HEAD, new files clean. Needs a device check: sheet keyboard on Android, guide layout on small phones, the 1M cashflow chart.
+
 ## 2026-11-04 (23:40) — GST read-only notice (branch `28-10-2026`, local, not pushed)
 
 - `read_only` on `GstConfig` / `GstOverview`; Settings → GST Returns shows a read-only callout and the GST overview card one line while the server only reads from the portal (backend `GST_READ_ONLY`). IMS / deposits already follow the server's `view` / `show`. Username + OTP connect screen unchanged (Settings → GST Returns).

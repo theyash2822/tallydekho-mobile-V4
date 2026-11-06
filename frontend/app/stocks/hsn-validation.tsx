@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Modal, TextInput, ActivityIndicator, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -256,7 +256,7 @@ export default function HsnValidationScreen() {
       )}
 
       <Modal visible={!!enterItem} transparent animationType="slide" onRequestClose={() => setEnterItem(null)}>
-        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior="padding">
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setEnterItem(null)} />
           <View style={s.modalSheet}>
             <View style={s.modalHandle} />

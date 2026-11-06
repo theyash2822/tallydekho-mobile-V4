@@ -22,6 +22,7 @@ import { BACKEND_URL } from '../config/backend';
 import { beginSingleFlight } from '../utils/singleFlight';
 import { reportError } from './monitoring';
 import { DATA_REVISION_HEADER, companyGuidOf, noteRevision } from './dataRevision';
+import { CLIENT_HEADERS } from './clientIdentity';
 
 export {
   ApiError,
@@ -129,11 +130,22 @@ export async function clearRefreshToken(): Promise<void> {
 }
 
 /**
+ * Keeps the tokens a sign-in step answered with. A missing refresh token leaves the stored one alone: only
+ * an answer that carries one replaces it.
+ */
+export async function storeSessionTokens(tokens: { access_token?: string | null; refresh_token?: string | null }): Promise<void> {
+  if (tokens.access_token) await storeAccessToken(String(tokens.access_token));
+  if (tokens.refresh_token) await setRefreshToken(String(tokens.refresh_token));
+}
+
+/**
  * 'refreshed'   — a new access token is stored, replay the request
  * 'rejected'    — the session is gone (revoked / expired / never had a refresh
  *                 token); the caller must sign out
- * 'unavailable' — the refresh endpoint could not be reached; the session may
- *                 still be valid, so surface the 401 but keep the user signed in
+ * 'unavailable' — the refresh endpoint did not answer for itself (offline, a
+ *                 captive portal, a proxy, a rate limit, a server error); the
+ *                 session may still be valid, so surface the 401 but keep the
+ *                 user signed in
  */
 export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
 
@@ -146,7 +158,7 @@ async function performRefresh(): Promise<RefreshOutcome> {
   try {
     res = await fetch(`${BASE_URL}/api/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CLIENT_HEADERS },
       body: JSON.stringify({ refresh_token: refreshToken }),
       cache: 'no-store',
     });
@@ -157,20 +169,22 @@ async function performRefresh(): Promise<RefreshOutcome> {
   }
   const data = await safeParseJson(res);
   const next = data?.data ?? data;
-  if (!res.ok || !next?.access_token) {
-    if (res.status >= 500) {
-      markServerReachable(false);
-      return 'unavailable';
-    }
+  if (res.ok && next?.access_token) {
+    // Only the tokens are touched: the active workspace and the selected company
+    // are deliberately left alone so a mid-session refresh cannot move the user.
+    await storeAccessToken(String(next.access_token));
+    if (next.refresh_token) await setRefreshToken(String(next.refresh_token));
+    markServerReachable(true);
+    return 'refreshed';
+  }
+  // Only the refresh endpoint refusing the token (400 / 401) ends the session, as on the web. A captive
+  // portal or a proxy (200 HTML, 404, 429) or a server error is not an answer about the session.
+  if (res.status === 400 || res.status === 401) {
     await clearRefreshToken();
     return 'rejected';
   }
-  // Only the tokens are touched: the active workspace and the selected company
-  // are deliberately left alone so a mid-session refresh cannot move the user.
-  await storeAccessToken(String(next.access_token));
-  if (next.refresh_token) await setRefreshToken(String(next.refresh_token));
-  markServerReachable(true);
-  return 'refreshed';
+  if (res.status >= 500) markServerReachable(false);
+  return 'unavailable';
 }
 
 const REFRESH_RETRY_MIN_MS = 2_000;
@@ -268,7 +282,7 @@ async function request<T>(
   if (requiresAuth && !token) {
     throw new ApiError('Not authenticated', { status: 401, kind: 'auth', code: 'NO_TOKEN' });
   }
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...CLIENT_HEADERS };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   // Workspace is never in JWT — attach header for all authenticated business calls.
   if (requiresAuth && _activeWorkspaceId) {
@@ -329,8 +343,9 @@ async function request<T>(
     if (!res.ok) {
       const { message, code } = extractErrorMeta(data);
       const kind = kindFromStatus(res.status, code);
-      // A 503 naming a feature the server has switched off (GST_NOT_CONFIGURED) came from a server that is up.
-      const featureOff = res.status === 503 && !!code && /_NOT_CONFIGURED$/.test(code);
+      // A 503 naming a feature the server has switched off (GST_NOT_CONFIGURED), or a 502–504 naming the GST
+      // portal the server could not reach (GST_PORTAL_*), came from a server that is up.
+      const featureOff = !!code && ((res.status === 503 && /_NOT_CONFIGURED$/.test(code)) || /^GST_PORTAL_/.test(code));
       if (featureOff) markServerReachable(true);
       // A refusal of the member's access reads "Not in your access" everywhere, so screens lock instead of erroring.
       const accessRefused = res.status === 403 && !!code && ACCESS_CODES.has(code);
@@ -517,30 +532,75 @@ export function ownedSharedWorkspaces(err: unknown): OwnedSharedWorkspace[] | nu
   return Array.isArray(list) ? list : [];
 }
 
+const LOGOUT_TIMEOUT_MS = 5_000;
+const LOGOUT_RETRY_DELAY_MS = 500;
+
+export type ServerLogoutResult = { ok: boolean; revoked?: number; reason?: string };
+
 /**
- * Server logout without the 401 → signOut interceptor (avoids a logout loop).
- * Network failure is returned, never thrown — caller still clears local state.
+ * Ends this session on the server without the 401 → sign-out interceptor (a logout loop). The session is named
+ * by the access token (an expired one still counts) and the refresh token; `pushToken` stops this device's
+ * notifications. Each try gives up after 5 seconds, and a 503 (LOGOUT_FAILED) or a network failure is tried
+ * once more. Nothing is thrown: the caller clears the device whatever the answer.
  */
-export async function logoutOnServer(pushToken?: string): Promise<{ ok: boolean; reason?: string }> {
-  const token = await getToken();
-  if (!token) return { ok: false, reason: 'no-token' };
+export async function logoutOnServer(pushToken?: string | null): Promise<ServerLogoutResult> {
+  const [access, refresh] = await Promise.all([getToken(), getRefreshToken()]);
+  if (!access && !refresh) return { ok: false, reason: 'no-token' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...CLIENT_HEADERS };
+  if (access) headers.Authorization = `Bearer ${access}`;
+  if (_activeWorkspaceId) headers['X-Workspace-Id'] = _activeWorkspaceId;
+  const body = JSON.stringify({
+    ...(refresh ? { refreshToken: refresh } : {}),
+    ...(pushToken ? { pushToken } : {}),
+  });
+  let result = await logoutOnce(headers, body);
+  if (result.retry) {
+    await new Promise((resume) => setTimeout(resume, LOGOUT_RETRY_DELAY_MS));
+    result = await logoutOnce(headers, body);
+  }
+  return { ok: result.ok, revoked: result.revoked, reason: result.reason };
+}
+
+async function logoutOnce(headers: Record<string, string>, body: string): Promise<ServerLogoutResult & { retry?: boolean }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOGOUT_TIMEOUT_MS);
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-    if (_activeWorkspaceId) headers['X-Workspace-Id'] = _activeWorkspaceId;
     const res = await fetch(`${BASE_URL}/api/auth/logout`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(pushToken ? { pushToken } : {}),
-      cache: 'no-store',
+      method: 'POST', headers, body, signal: controller.signal, cache: 'no-store',
     });
-    return { ok: res.ok, reason: res.ok ? undefined : `http-${res.status}` };
+    const data = await safeParseJson(res);
+    if (res.ok) {
+      const revoked = Number(data?.data?.revoked);
+      return { ok: true, revoked: Number.isFinite(revoked) ? revoked : undefined };
+    }
+    const code = data?.error?.code ? String(data.error.code) : null;
+    // 401 (UNAUTHORIZED / SESSION_INVALID): no token names a live session, so there is nothing left to end.
+    return { ok: false, reason: code || `http-${res.status}`, retry: code === 'LOGOUT_FAILED' || res.status === 503 };
   } catch {
-    return { ok: false, reason: 'network' };
+    return { ok: false, reason: controller.signal.aborted ? 'timeout' : 'network', retry: true };
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+export interface AuthSessionRow {
+  id: string;
+  /** 'app' | 'web'; null for sign-ins from before the server recorded it. */
+  client_type: string | null;
+  /** "Pixel 7 (Android 15)", "Chrome on macOS"; null when the server never learnt it. */
+  device_label: string | null;
+  /** Epoch seconds. */
+  created_at: number | null;
+  last_used_at: number | null;
+  /** The session making this request. */
+  current: boolean;
+}
+/** GET /auth/sessions — this user's signed-in sessions, the calling one first. */
+export const getAuthSessions = () =>
+  get<{ success: boolean; data: { sessions: AuthSessionRow[] } }>('/auth/sessions');
+/** POST /auth/logout-all — ends every session of this user; `keepCurrent` keeps this one signed in. */
+export const logoutAllSessions = (keepCurrent: boolean) =>
+  post<{ success: boolean; data: { revoked: number } }>('/auth/logout-all', keepCurrent ? { keepCurrent: true } : {});
 export const registerPushToken = (token: string, platform: string, deviceId?: string) =>
   post<any>('/push-token', { token, platform, deviceId });
 export const removePushToken = (token?: string) =>
@@ -599,6 +659,8 @@ export const getCashflow = (companyGuid?: string, period = '7D', from?: string, 
         purchase:             d.purchase              ?? 0,
         grossProfitVsSalesPct: d.gross_profit_vs_sales_pct ?? d.grossProfitVsSalesPct
           ?? d.income_percentage ?? d.incomePercentage ?? 0,
+        series:               Array.isArray(d.series) ? d.series : [],
+        interval:             d.interval ?? null,
       };
     });
 
@@ -1018,6 +1080,8 @@ export interface GstCalendarRow {
 export interface GstScore { score: number | null; parts?: { key: string; label: string; value: number | null; weight: number; note?: string | null }[] }
 export interface GstOverview {
   configured_on_server?: boolean; read_only?: boolean; connection?: GstConnection | null; calendar?: GstCalendarRow[]; score?: GstScore | null; cash_balance?: any; last_deposit?: any;
+  /** The filing frequency the server works with: a quarterly filer's GSTR-2B comes per quarter. */
+  frequency?: 'monthly' | 'quarterly' | string | null;
 }
 export interface GstImsRow {
   id: string; section?: string; supplier_gstin?: string; supplier_name?: string; doc_type?: string; doc_no?: string; doc_date?: string;
@@ -1071,6 +1135,130 @@ export const getGstDeposits = (companyGuid: string, params: { from?: string; to?
 export const postGstDeposit = (companyGuid: string, id: string) =>
   post<{ success: boolean; data: GstDepositPostResult }>(`/gst/deposits/${encodeURIComponent(id)}/post`, { companyGuid });
 export const checkGstin = (companyGuid: string, gstin: string) => get<any>(withCompany('/gst/gstin-check', companyGuid, { gstin }));
+
+// ── Invoices as the GST portal holds them, matched to the books (read-only; the server caches a read up to 6 h) ──
+export type GstPortalStatus = 'matched' | 'mismatch' | 'books_only' | 'portal_only';
+/** Without a period the server answers for the latest one with data and names it in `period`. */
+interface GstPortalHead {
+  period: string;
+  period_label?: string;
+  default_period?: string | null;
+  default_period_label?: string | null;
+  /** false: the portal cannot have this period yet — `message` says when; rows are empty. Not an error. */
+  ready: boolean;
+  available_from?: string | null;
+  message?: string | null;
+  /** Epoch seconds of the portal read the answer comes from. */
+  fetched_at?: number | null;
+}
+export interface GstPortalSection {
+  key: string;
+  label?: string;
+  /** null when the section could not be read (`error` says why). */
+  count: number | null;
+  taxable_value?: number;
+  total_tax?: number;
+  invoice_value?: number | null;
+  error?: string | null;
+}
+export interface GstPortalSalesSide {
+  section?: string; doc_no?: string; doc_date?: string | null; counterparty_gstin?: string | null; place_of_supply?: string | null;
+  taxable_value: number; total_tax: number; invoice_value?: number | null; voucher_guid?: string; voucher_number?: string;
+}
+export interface GstPortalSalesRow {
+  status: GstPortalStatus;
+  /** doc_no · gstin · section · place_of_supply · value · tax · date */
+  reasons: string[];
+  section: string;
+  doc_type: string;
+  doc_no: string;
+  doc_date: string | null;
+  counterparty_gstin: string | null;
+  counterparty_name: string | null;
+  place_of_supply: string | null;
+  taxable_value: number;
+  igst?: number; cgst?: number; sgst?: number; cess?: number;
+  total_tax: number;
+  invoice_value: number | null;
+  irn?: string | null;
+  filing_status?: string | null;
+  portal: GstPortalSalesSide | null;
+  books: GstPortalSalesSide | null;
+  /** Books tax − portal tax. */
+  difference: number;
+}
+export interface GstPortalB2csLine {
+  status: GstPortalStatus;
+  reasons?: string[];
+  supply_type: string | null;
+  place_of_supply: string | null;
+  rate: number;
+  taxable_value: number;
+  total_tax: number;
+  portal: { taxable_value: number; total_tax: number } | null;
+  books: { taxable_value: number; total_tax: number } | null;
+  difference: number;
+}
+export interface GstPortalSales extends GstPortalHead {
+  frequency?: string;
+  /** IFF for months 1 and 2 of a quarterly filer, GSTR1 otherwise. */
+  return_form?: string;
+  range?: { from: string; to: string };
+  filing?: { status: 'filed' | 'not_filed' | null; filed_on?: string | null; arn?: string | null } | null;
+  sections?: GstPortalSection[];
+  summary?: {
+    matched: number; mismatch: number; books_only: number; portal_only: number;
+    portal_documents: number; books_documents: number; portal_taxable: number; portal_tax: number;
+    books_taxable: number; books_tax: number; tax_difference: number; books_only_tax: number; portal_only_tax: number;
+  };
+  rows?: GstPortalSalesRow[];
+  b2cs?: GstPortalB2csLine[];
+}
+export interface GstPortalPurchaseRow {
+  status: GstPortalStatus;
+  /** doc_no · value · tax · date */
+  reasons: string[];
+  supplier_gstin: string;
+  /** null when neither the portal nor a ledger names the supplier. */
+  supplier_name: string | null;
+  doc_no: string;
+  doc_type: string;
+  doc_date: string | null;
+  books: { voucher_guid?: string; voucher_number?: string; doc_no?: string; doc_date?: string | null; taxable: number; tax: number } | null;
+  portal: {
+    doc_no?: string; doc_date?: string | null; taxable: number; tax: number; value?: number | null; section?: string | null;
+    /** false: the portal does not let this tax be claimed (yet). */
+    itc_available?: boolean | null;
+    /** GSTR-2A: 'not_filed' while the supplier has not filed the return the document is in. */
+    filing_status?: string | null;
+    place_of_supply?: string | null; irn?: string | null;
+  } | null;
+  /** Books tax − portal tax. */
+  difference: number;
+}
+export type GstPurchaseSource = '2b' | '2a';
+export interface GstPortalPurchases extends GstPortalHead {
+  source: GstPurchaseSource;
+  summary?: { matched: number; mismatch: number; books_only: number; portal_only: number; itc_at_risk: number; itc_in_books: number; portal_only_tax: number };
+  rows?: GstPortalPurchaseRow[];
+  /** GSTR-2A only: b2b and cdn. */
+  sections?: GstPortalSection[];
+}
+/**
+ * A cold read asks the portal three sections at a time, each call up to a minute on the server; waiting longer
+ * than that lets the server's own GST_PORTAL_TIMEOUT arrive instead of a client timeout (which reads as offline).
+ */
+const GST_PORTAL_TIMEOUT_MS = 150_000;
+/** GET /gst/portal-sales — own sales on the portal (GSTR-1 / IFF) against the books. `period` MMYYYY. */
+export const getGstPortalSales = (companyGuid: string, period?: string | null) =>
+  request<{ success: boolean; data: GstPortalSales }>(
+    'GET', withCompany('/gst/portal-sales', companyGuid, { period: period || undefined }), undefined, true, 'api', true, 'json', GST_PORTAL_TIMEOUT_MS,
+  );
+/** GET /gst/purchases — GSTR-2B (the default) or GSTR-2A against the purchases in the books. `period` MMYYYY. */
+export const getGstPortalPurchases = (companyGuid: string, period: string | null | undefined, source: GstPurchaseSource = '2b') =>
+  request<{ success: boolean; data: GstPortalPurchases }>(
+    'GET', withCompany('/gst/purchases', companyGuid, { period: period || undefined, source }), undefined, true, 'api', true, 'json', GST_PORTAL_TIMEOUT_MS,
+  );
 /** The server's "GST filing is not set up on the server yet" answer (503 GST_NOT_CONFIGURED). */
 export const isGstNotConfigured = (err: unknown): boolean => {
   const code = (err as any)?.code;
@@ -1158,7 +1346,7 @@ async function postWithToken<T>(endpoint: string, body: object, customToken: str
   try {
     const res = await fetch(`${BASE_URL}/api${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${customToken}` },
+      headers: { 'Content-Type': 'application/json', ...CLIENT_HEADERS, Authorization: `Bearer ${customToken}` },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

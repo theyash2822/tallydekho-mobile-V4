@@ -17,6 +17,7 @@ can own an unpaired workspace and be a member of a paired one at the same time.
 | user_info | string (JSON) | Additional user info |
 | active_workspace_id | string | Selected workspace |
 | ws:&lt;id&gt;:company_data / :selected_fy | string (JSON) | Per-workspace selection |
+| td_push_token | string | This device's Expo push token (kept across sign-outs; sent with the server logout) |
 
 `is_paired` was removed (2026-09-18). It is only swept from AsyncStorage on
 logout so older installs shed it.
@@ -26,6 +27,7 @@ logout so older installs shed it.
 |-----|---------|
 | td_refresh_token | Refresh token — never AsyncStorage |
 | biometric_pin | PIN revealed behind device biometrics |
+| td_device_id | Random id made once per install; sent as `deviceId` with the push token (AsyncStorage on web) |
 
 ## Web Fallback
 On web (Expo Web), storage uses `window.localStorage` with same keys as fallback.

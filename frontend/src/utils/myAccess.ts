@@ -77,6 +77,9 @@ const SCOPES: { key: string; prefix: string; labelKey: string }[] = [
 
 export const SCOPE_CHIP_LIMIT = 12;
 
+/** One listed scope entry; `named` is false when only its id is known. */
+export type ScopeChip = { text: string; named: boolean };
+
 export type ScopeRow = {
   key: string;
   label: string;
@@ -85,21 +88,28 @@ export type ScopeRow = {
   names: string[];
   /** '+N more' after the first SCOPE_CHIP_LIMIT names. */
   more: string | null;
+  /** Every listed entry, so the app can show a placeholder instead of an id. */
+  chips: ScopeChip[];
 };
 
 export type CompanyRef = { guid?: string | null; name?: string | null };
 
-function scopeItemName(item: unknown, prefix: string, companyNames: Map<string, string> | null): string {
+function scopeEntry(item: unknown, prefix: string, companyNames: Map<string, string> | null): ScopeChip {
   if (typeof item === 'string' || typeof item === 'number') {
     const text = String(item);
-    return companyNames?.get(text) || text;
+    // Outside the company scope a plain value is its own label (a financial year).
+    if (!companyNames) return { text, named: true };
+    const name = companyNames.get(text);
+    return { text: name || text, named: !!name };
   }
   if (item && typeof item === 'object') {
     const row = item as Record<string, unknown>;
-    const name = row[`${prefix}_name`] || row.name || row[`${prefix}_guid`];
-    return name ? String(name) : '';
+    const id = row[`${prefix}_guid`];
+    const name = row[`${prefix}_name`] || row.name || (id ? companyNames?.get(String(id)) : undefined);
+    if (name) return { text: String(name), named: true };
+    return { text: id ? String(id) : '', named: false };
   }
-  return '';
+  return { text: '', named: false };
 }
 
 /** Reads the raw `access.scopes` (names and policy modes), not the GUID-only normalised scope bag. */
@@ -112,9 +122,10 @@ export function scopeRows(rawScopes: unknown, isOwner: boolean, companies: Compa
   }
   return SCOPES.map(({ key, prefix, labelKey }) => {
     const items: unknown[] = Array.isArray(scopes[key]) ? scopes[key] : [];
-    const names = items
-      .map((item) => scopeItemName(item, prefix, key === 'companies' ? companyNames : null))
-      .filter(Boolean);
+    const entries = items
+      .map((item) => scopeEntry(item, prefix, key === 'companies' ? companyNames : null))
+      .filter((entry) => entry.text);
+    const names = entries.map((entry) => entry.text);
     const mode = String(policy[`${prefix}_mode`] || '').toUpperCase();
     let value: string | null = null;
     if (isOwner || mode === 'ALL' || (!mode && !names.length)) value = t(`${K}all`);
@@ -126,6 +137,7 @@ export function scopeRows(rawScopes: unknown, isOwner: boolean, companies: Compa
       value,
       names: listed.slice(0, SCOPE_CHIP_LIMIT),
       more: listed.length > SCOPE_CHIP_LIMIT ? t(`${K}moreCount`, { count: listed.length - SCOPE_CHIP_LIMIT }) : null,
+      chips: value ? [] : entries,
     };
   });
 }
@@ -144,17 +156,26 @@ const SENSITIVE_POLICIES: [string, string][] = [
 
 export type LabelValue = { key: string; label: string; value: string };
 
-function visibilityLabel(raw: unknown, t: Translate): string {
-  if (raw === true || raw === 'VISIBLE') return t(`${K}visible`);
-  if (raw === 'MASKED') return t(`${K}masked`);
-  return t(`${K}hidden`);
+/** 'default' is the one summary row shown when the role sets no per-field policy. */
+export type SensitiveLevel = 'visible' | 'masked' | 'hidden' | 'default';
+export type SensitiveRow = LabelValue & { level: SensitiveLevel };
+
+function visibilityLevel(raw: unknown): Exclude<SensitiveLevel, 'default'> {
+  if (raw === true || raw === 'VISIBLE') return 'visible';
+  if (raw === 'MASKED') return 'masked';
+  return 'hidden';
+}
+
+function sensitiveRow(key: string, label: string, raw: unknown, t: Translate): SensitiveRow {
+  const level = visibilityLevel(raw);
+  return { key, label, value: t(`${K}${level}`), level };
 }
 
 export function sensitivePolicyRows(
   policies: Record<string, unknown> | null | undefined,
   isOwnerOrAdmin: boolean,
   t: Translate,
-): LabelValue[] {
+): SensitiveRow[] {
   const all = policies || {};
   const present = Object.keys(all);
   if (!present.length) {
@@ -162,17 +183,18 @@ export function sensitivePolicyRows(
       key: 'default',
       label: t(`${K}sensitiveFields`),
       value: t(`${K}${isOwnerOrAdmin ? 'visibleDefault' : 'followsRolePolicy'}`),
+      level: 'default',
     }];
   }
   const known = new Set(SENSITIVE_POLICIES.map(([key]) => key));
   return [
     ...SENSITIVE_POLICIES
       .filter(([key]) => present.includes(key))
-      .map(([key, labelKey]) => ({ key, label: t(`${K}${labelKey}`), value: visibilityLabel(all[key], t) })),
+      .map(([key, labelKey]) => sensitiveRow(key, t(`${K}${labelKey}`), all[key], t)),
     ...present
       .filter((key) => !known.has(key))
       .sort()
-      .map((key) => ({ key, label: sentenceCase(key), value: visibilityLabel(all[key], t) })),
+      .map((key) => sensitiveRow(key, sentenceCase(key), all[key], t)),
   ];
 }
 
@@ -200,7 +222,7 @@ export type MyAccessView = {
   roleHint: string;
   modules: ModuleRow[];
   scopes: ScopeRow[];
-  sensitive: LabelValue[];
+  sensitive: SensitiveRow[];
   sensitiveHint: string;
   footnote: string;
 };

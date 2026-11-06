@@ -13,11 +13,19 @@ import { noteRevision, onNewerRevision, isFreshSync } from './dataRevision';
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
 type WorkspaceEventCallback = (event: string, payload?: any) => void;
+/** `reason` of the server's `logout` event; a SESSION_REVOKED refusal reads as 'signed_out'. */
+export type SessionEndReason = 'signed_out' | 'signed_out_everywhere' | 'credentials_changed';
+type SessionEndedCallback = (reason: SessionEndReason) => void;
+
+const SESSION_END_REASONS = new Set<string>(['signed_out', 'signed_out_everywhere', 'credentials_changed']);
 
 let socket: Socket | null = null;
 let onSyncedCallback: SyncedCallback | null = null;
 let onVoucherSyncedCallback: VoucherSyncedCallback | null = null;
 let onWorkspaceEventCallback: WorkspaceEventCallback | null = null;
+let onSessionEndedCallback: SessionEndedCallback | null = null;
+/** The server ended this socket's sign-in session: nothing may reconnect it. */
+let _sessionEnded = false;
 let currentBaseUrl: string = '';
 let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
@@ -63,6 +71,19 @@ onNewerRevision(({ workspaceId, companyGuid }) => {
   onSyncedCallback?.(companyGuid);
 });
 
+/**
+ * `logout` and SESSION_REVOKED both end the session, sometimes back to back: the first one stops the socket
+ * and tells AuthContext, the second does nothing.
+ */
+function endSession(reason: unknown) {
+  if (_sessionEnded) return;
+  _sessionEnded = true;
+  socket?.disconnect();
+  const known = SESSION_END_REASONS.has(String(reason)) ? (String(reason) as SessionEndReason) : 'signed_out';
+  if (__DEV__) console.log('[Socket] session ended:', known);
+  onSessionEndedCallback?.(known);
+}
+
 function emitWorkspaceEvent(event: string, payload?: any) {
   if (!isEventForActiveWorkspace(event, payload)) {
     if (__DEV__) {
@@ -87,6 +108,7 @@ export const socketService = {
 
     currentBaseUrl = baseUrl;
     currentToken = token;
+    _sessionEnded = false;
     socket = io(baseUrl, {
       // RN often fails pure websocket on flaky LAN — allow polling fallback
       transports: ['websocket', 'polling'],
@@ -106,9 +128,25 @@ export const socketService = {
       void registerWithCurrentToken();
     });
 
+    // SESSION_REVOKED: this sign-in was ended elsewhere. SESSION_REQUIRED (a token without a session) and
+    // SESSION_CHECK_UNAVAILABLE (server busy) are not sign-outs.
     // Token expired between refreshes: renew it; the refresh listener re-registers.
     socket.on('error', (payload?: any) => {
+      if (payload?.code === 'SESSION_REVOKED') {
+        endSession('signed_out');
+        return;
+      }
       if (/invalid token/i.test(String(payload?.message || ''))) void tryRefreshSession();
+    });
+
+    // Sent to every socket of a session the server ended (this device's own sign-out too); the server then
+    // disconnects it.
+    socket.on('logout', (payload?: { reason?: string }) => {
+      endSession(payload?.reason);
+    });
+
+    socket.on('workspace_access_denied', (payload?: any) => {
+      if (payload?.code === 'SESSION_REVOKED') endSession('signed_out');
     });
 
     socket.on('registered', ({ status }: { status: boolean }) => {
@@ -198,8 +236,9 @@ export const socketService = {
       if (__DEV__) console.log('[Socket] disconnected:', reason);
       // socket.io does not retry after a server-side disconnect (e.g. access changed).
       // Reconnect once; the server re-checks membership and scope on workspace:register.
-      if (reason === 'io server disconnect') {
-        setTimeout(() => { if (socket && !socket.connected) socket.connect(); }, 3000);
+      // A disconnect that ended the session stays disconnected.
+      if (reason === 'io server disconnect' && !_sessionEnded) {
+        setTimeout(() => { if (socket && !socket.connected && !_sessionEnded) socket.connect(); }, 3000);
       }
     });
 
@@ -244,6 +283,11 @@ export const socketService = {
 
   setOnWorkspaceEvent(cb: WorkspaceEventCallback | null) {
     onWorkspaceEventCallback = cb;
+  },
+
+  /** Called once when the server ends this device's session (`logout`, SESSION_REVOKED). */
+  setOnSessionEnded(cb: SessionEndedCallback | null) {
+    onSessionEndedCallback = cb;
   },
 
   isConnected(): boolean {

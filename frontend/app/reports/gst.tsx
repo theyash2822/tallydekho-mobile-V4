@@ -14,7 +14,8 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { parseISODate } from '../../src/utils/dateRange';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getGSTDetail, getGSTSummary } from '../../src/services/api';
+import { getGSTDetail, getGSTSummary, type GstOverview } from '../../src/services/api';
+import { gstPortalRoute } from '../../src/utils/gstPortal';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -107,9 +108,11 @@ export default function GSTScreen() {
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const { hasCapability } = useWorkspace();
+  const { hasCapability, isOwnerOrAdmin } = useWorkspace();
   // GST on PeriOne (spec 2026-11-04 §4.3): Overview on top; ?tab=ims|deposits (alerts) opens that sheet.
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  // The overview card's answer says whether the GST portal is connected (it holds the portal invoices).
+  const [gstOverview, setGstOverview] = useState<GstOverview | null>(null);
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo = selectedFY?.endDate ?? '';
@@ -438,7 +441,7 @@ export default function GSTScreen() {
         )}
 
         {!!companyGuid && hasCapability('gst.view') && (
-          <GstOverviewSection companyGuid={companyGuid} initialSheet={typeof tabParam === 'string' ? tabParam : undefined} fyRange={{ from: fyFrom || undefined, to: fyTo || undefined }} />
+          <GstOverviewSection companyGuid={companyGuid} initialSheet={typeof tabParam === 'string' ? tabParam : undefined} fyRange={{ from: fyFrom || undefined, to: fyTo || undefined }} onOverview={setGstOverview} />
         )}
 
         {/* ── Summary Card ─────────────────────────────────────────────── */}
@@ -493,17 +496,43 @@ export default function GSTScreen() {
         </ScrollView>
 
 
-        {/* ── GSTR-2A/2B: Portal info banner ─────────────────────────── */}
-        {(activeTab === 'GSTR-2A' || activeTab === 'GSTR-2B') && (
-          <View style={s.portalInfoBanner}>
-            <View style={s.portalInfoIconRow}>
-              <Ionicons name="cloud-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={s.portalInfoTitle}>{t('screens.reportsGst.portalTitle')}</Text>
-            </View>
-            <Text style={s.portalInfoTxt}>
-              {t('screens.reportsGst.portalInfo')}
-            </Text>
-          </View>
+        {/* ── GSTR-1 / 2A / 2B: the invoices as the GST portal holds them, matched to the books ── */}
+        {(activeTab === 'GSTR-1' || activeTab === 'GSTR-2A' || activeTab === 'GSTR-2B') && !!companyGuid
+          && hasCapability('gst.view') && !!gstOverview && gstOverview.configured_on_server !== false && (
+          gstOverview.connection?.status === 'connected' ? (
+            <TouchableOpacity
+              style={s.portalInfoBanner}
+              onPress={() => safePush(router, gstPortalRoute(activeTab === 'GSTR-1' ? 'sales' : 'purchases', {
+                source: activeTab === 'GSTR-2A' ? '2a' : activeTab === 'GSTR-2B' ? '2b' : undefined,
+                frequency: gstOverview.frequency,
+              }) as any)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              testID="gst-portal-entry"
+            >
+              <View style={s.portalInfoIconRow}>
+                <Ionicons name="cloud-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={[s.portalInfoTitle, { flex: 1 }]}>
+                  {activeTab === 'GSTR-1' ? t('screens.gstPortal.salesEntry') : t('screens.gstPortal.purchasesEntry')}
+                </Text>
+                <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+              </View>
+              <Text style={s.portalInfoTxt}>{t('screens.gstPortal.entrySub')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={s.portalInfoBanner}
+              onPress={() => safePush(router, '/settings/gst' as any)}
+              disabled={!(isOwnerOrAdmin || hasCapability('integrations.configure'))}
+              activeOpacity={0.8}
+              testID="gst-portal-connect-hint"
+            >
+              <View style={s.portalInfoIconRow}>
+                <Ionicons name="link-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={[s.portalInfoTitle, { flex: 1 }]}>{t('screens.gstPortal.connectHint')}</Text>
+              </View>
+            </TouchableOpacity>
+          )
         )}
 
         {/* ── GSTR-3B Summary Card (above voucher list) ────────────────── */}

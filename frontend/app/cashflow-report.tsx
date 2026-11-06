@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Animated,
+  ScrollViewInstance,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Animated, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -11,6 +12,7 @@ import { useAuth } from '../src/context/AuthContext';
 import { useSettings } from '../src/context/SettingsContext';
 import { getCashflow } from '../src/services/api';
 import { ErrorBanner } from '../src/components/ApiStateViews';
+import { formatLoadedAt } from '../src/components/CashflowCard';
 import { useTranslation } from 'react-i18next';
 import i18n from '../src/i18n';
 import {
@@ -25,8 +27,9 @@ const SEG_GAP    = 3;
 const BAR_H      = 14;
 const ANIM_MS    = 950;
 
-const PERIODS = ['7D', '1M', '3M'] as const;
-type Period = typeof PERIODS[number];
+/** Same periods as Home; the API answers daily (7D, 1M), weekly (3M) or monthly (6M) points. */
+const PERIODS: readonly DashboardPeriod[] = ['7D', '1M', '3M', '6M'];
+type Period = DashboardPeriod;
 
 // ── Segmented Bar ─────────────────────────────────────────────────────────────
 function SegmentedBar({ value, maxValue, color, delay = 0 }: {
@@ -69,55 +72,99 @@ const b = StyleSheet.create({
   seg: { flex: 1, height: BAR_H, borderRadius: 0 },
 });
 
-// ── Mini Day/Period Chart ─────────────────────────────────────────────────────
-function AnimatedBar({ target, color, delay = 0 }: {
-  target: number; color: string; delay?: number;
-}) {
-  const h = useState(() => new Animated.Value(0))[0];
+// ── Trend Chart (one income + expense pair per API series point) ─────────────
+type TrendPoint = { date: string; label: string; inflow: number; outflow: number };
+
+const CHART_H = 96;
+/** Narrowest slot a point gets; below this the chart scrolls sideways instead. */
+const MIN_SLOT = 10;
+/** Width one x-axis label needs — decides how many points carry a label. */
+const LABEL_W = 44;
+
+function TrendChart({ points }: { points: TrendPoint[] }) {
+  const [width, setWidth] = useState(0);
+  const grow = useState(() => new Animated.Value(0))[0];
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const signature = points.map((p) => `${p.date}:${p.inflow}:${p.outflow}`).join('|');
+
   useEffect(() => {
-    h.setValue(0);
-    const anim = Animated.timing(h, {
-      toValue: target,
+    grow.setValue(0);
+    const anim = Animated.timing(grow, {
+      toValue: 1,
       duration: 550,
-      delay,
       useNativeDriver: false, // height cannot use native driver
     });
     anim.start();
     return () => anim.stop();
-  }, [target, delay]);
-  return <Animated.View style={[ch.bar, { height: h, backgroundColor: color }]} />;
-}
+  }, [signature, grow]);
 
-function TrendChart({ days, maxVal }: {
-  days: { label: string; income: number; expense: number }[];
-  maxVal: number;
-}) {
-  const CHART_H = 72;
-  return (
-    <View style={ch.wrap}>
-      {days.map((d, i) => {
-        const inH = Math.max(3, (d.income / maxVal) * CHART_H);
-        const exH = Math.max(3, (d.expense / maxVal) * CHART_H);
-        return (
-          <View key={i} style={ch.col}>
-            <View style={[ch.bars, { height: CHART_H }]}>
-              <AnimatedBar target={inH} color={COLORS.positive} delay={i * 60} />
-              <AnimatedBar target={exH} color={COLORS.negative} delay={i * 60 + 40} />
-            </View>
-            <Text style={ch.label}>{d.label}</Text>
+  const n = Math.max(points.length, 1);
+  const maxVal = Math.max(1, ...points.map((p) => Math.max(p.inflow, p.outflow)));
+  const slot = width > 0 ? Math.max(MIN_SLOT, width / n) : MIN_SLOT;
+  const contentW = Math.max(width, slot * n);
+  const barW = Math.max(2, Math.min(10, Math.floor((slot - 4) / 2)));
+  const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(contentW / LABEL_W))));
+  const barHeight = (v: number) => (v > 0 ? Math.max(2, (v / maxVal) * CHART_H) : 0);
+
+  const body = (
+    <View style={{ width: contentW }}>
+      <View style={[ch.plot, { height: CHART_H }]}>
+        {points.map((p, i) => (
+          <View key={`${p.date}-${i}`} style={[ch.slot, { width: slot }]}>
+            <Animated.View
+              style={[ch.bar, {
+                width: barW,
+                backgroundColor: COLORS.positive,
+                height: grow.interpolate({ inputRange: [0, 1], outputRange: [0, barHeight(p.inflow)] }),
+              }]}
+            />
+            <Animated.View
+              style={[ch.bar, {
+                width: barW,
+                backgroundColor: COLORS.negative,
+                height: grow.interpolate({ inputRange: [0, 1], outputRange: [0, barHeight(p.outflow)] }),
+              }]}
+            />
           </View>
-        );
-      })}
+        ))}
+      </View>
+      <View style={ch.axis}>
+        {points.map((p, i) => {
+          if (i % labelEvery !== 0) return null;
+          const left = Math.min(Math.max(0, i * slot + slot / 2 - LABEL_W / 2), Math.max(0, contentW - LABEL_W));
+          return (
+            <Text key={`${p.date}-${i}`} numberOfLines={1} style={[ch.label, { left }]}>{p.label}</Text>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {width === 0 ? null : contentW > width + 1 ? (
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        >
+          {body}
+        </ScrollView>
+      ) : body}
     </View>
   );
 }
 
 const ch = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  col:  { flex: 1, alignItems: 'center', gap: 5 },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, width: '100%', justifyContent: 'center' },
-  bar:  { width: 7, borderRadius: 0 },
-  label:{ fontSize: 9, color: COLORS.textTertiary, fontWeight: '500' },
+  plot:  { flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  slot:  { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 1 },
+  bar:   { borderRadius: 0 },
+  axis:  { height: 14, marginTop: 5 },
+  label: {
+    position: 'absolute', top: 0, width: LABEL_W, textAlign: 'center',
+    fontSize: 9, color: COLORS.textTertiary, fontWeight: '500',
+  },
 });
 
 // ── Metric Card ───────────────────────────────────────────────────────────────
@@ -145,7 +192,7 @@ const mc = StyleSheet.create({
 export default function CashflowReportScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { company, selectedFY } = useAuth();
+  const { company, selectedFY, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmountCompact, formatAmount } = useSettings();
   const fmt = (v: number) => formatAmountCompact(Math.round(v));
@@ -154,17 +201,17 @@ export default function CashflowReportScreen() {
   const [period, setPeriod] = useState<Period>('7D');
   const [periodReady, setPeriodReady] = useState(false);
   const [cf, setCf] = useState<any>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  /** Bumped per request — a response to an older period / company is dropped. */
+  const requestGenRef = useRef(0);
 
   const readStoredPeriod = useCallback(() => {
     return AsyncStorage.getItem(CASHFLOW_PERIOD_KEY)
       .then((saved) => {
-        if (saved && (PERIODS as readonly string[]).includes(saved)) {
-          setPeriod(saved as Period);
-        } else if (isSyncPeriod(saved) && saved === '6M') {
-          setPeriod('3M');
-        }
+        if (isSyncPeriod(saved)) setPeriod(saved);
       })
       .catch(() => { /* ignore */ });
   }, []);
@@ -182,22 +229,39 @@ export default function CashflowReportScreen() {
 
   const fetchCashflow = useCallback(() => {
     if (!companyGuid || !periodReady) return;
-    new Promise<any>((resolve) => {
-      const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
-        from: fyStart,
-        to: fyEnd,
+    const gen = ++requestGenRef.current;
+    Promise.resolve()
+      .then(() => {
+        const { from, to } = resolvePeriodDates(period, { from: fyStart, to: fyEnd });
+        return getCashflow(companyGuid, period, from, to);
+      })
+      .then((data) => {
+        if (gen !== requestGenRef.current) return;
+        setCf(data);
+        setLoadedAt(new Date());
+        setApiError(null);
+      })
+      .catch((err: any) => {
+        if (gen !== requestGenRef.current) return;
+        setApiError(err?.message || i18n.t('screens.cashflowReport.loadFailed'));
+      })
+      .finally(() => {
+        if (gen !== requestGenRef.current) return;
+        setLoading(false);
+        setRefreshing(false);
       });
-      resolve(getCashflow(companyGuid, period, from, to));
-    })
-      .then((data) => { setCf(data); })
-      .catch((err: any) => { setApiError(err?.message || i18n.t('screens.cashflowReport.loadFailed')); })
-      .finally(() => { setLoading(false); });
   }, [companyGuid, period, periodReady, fyStart, fyEnd]);
 
   const load = useCallback(() => {
     if (!companyGuid || !periodReady) return;
     setLoading(true);
     setApiError(null);
+    fetchCashflow();
+  }, [companyGuid, periodReady, fetchCashflow]);
+
+  const onRefresh = useCallback(() => {
+    if (!companyGuid || !periodReady) return;
+    setRefreshing(true);
     fetchCashflow();
   }, [companyGuid, periodReady, fetchCashflow]);
 
@@ -213,7 +277,8 @@ export default function CashflowReportScreen() {
     }
   }
 
-  useEffect(() => { fetchCashflow(); }, [fetchCashflow]);
+  // A finished Tally sync bumps lastSyncAt: refetch in place, keeping the figures on screen.
+  useEffect(() => { fetchCashflow(); }, [fetchCashflow, lastSyncAt]);
 
   const changePeriod = (p: Period) => {
     setPeriod(p);
@@ -226,8 +291,23 @@ export default function CashflowReportScreen() {
   const incomePct = Number(cf?.incomePercentage ?? 0);
   const maxVal = Math.max(income, expense, 1);
   const isHealthy = netCash >= 0;
-  const days = [{ label: period, income, expense }];
-  const maxDayVal = Math.max(income, expense, 1);
+
+  const series: TrendPoint[] = (Array.isArray(cf?.series) ? cf.series : []).map((p: any) => ({
+    date: String(p?.date ?? ''),
+    label: String(p?.label || p?.date || ''),
+    inflow: Math.abs(Number(p?.inflow) || 0),
+    outflow: Math.abs(Number(p?.outflow) || 0),
+  }));
+  // An API without series still gets one income / expense pair for the whole period.
+  const trendPoints: TrendPoint[] = series.length
+    ? series
+    : (income || expense) ? [{ date: period, label: period, inflow: income, outflow: expense }] : [];
+  const hasMovement = trendPoints.some((p) => p.inflow > 0 || p.outflow > 0);
+  const trendTitle = cf?.interval === 'month'
+    ? t('screens.cashflowReport.monthlyTrend')
+    : cf?.interval === 'week'
+      ? t('screens.cashflowReport.weeklyTrend')
+      : t('screens.cashflowReport.dailyTrend');
 
   if (loading && !cf) {
     return (
@@ -250,7 +330,7 @@ export default function CashflowReportScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('screens.cashflowReport.title')}</Text>
+        <Text style={s.headerTitle} numberOfLines={1}>{t('screens.cashflowReport.title')}</Text>
         {/* Period Chips */}
         <View style={s.periodRow}>
           {PERIODS.map(p => (
@@ -269,6 +349,7 @@ export default function CashflowReportScreen() {
       <ScrollView
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
       >
         {/* ── Net Cash Hero ── */}
         <View style={s.heroCard}>
@@ -276,7 +357,9 @@ export default function CashflowReportScreen() {
             <View>
               <Text style={s.heroLabel}>{t('dashboard.netCash')}</Text>
               <Text style={s.heroValue}>₹{netCash.toLocaleString('en-IN')}</Text>
-              <Text style={s.heroSub}>{t('screens.cashflowReport.updated', { time: cf?.updatedAt || t('dashboard.justNow') })}</Text>
+              {loadedAt ? (
+                <Text style={s.heroSub}>{t('screens.cashflowReport.updated', { time: formatLoadedAt(loadedAt) })}</Text>
+              ) : null}
             </View>
             <View style={[s.statusPill, { backgroundColor: isHealthy ? COLORS.positiveBg : COLORS.negativeBg }]}>
               <Ionicons
@@ -330,7 +413,7 @@ export default function CashflowReportScreen() {
         {/* ── Trend Chart ── */}
         <View style={s.card}>
           <View style={s.chartHeader}>
-            <Text style={s.sectionTitle}>{t('screens.cashflowReport.dailyTrend')}</Text>
+            <Text style={s.sectionTitle}>{trendTitle}</Text>
             <View style={s.legend}>
               <View style={[s.legendDot, { backgroundColor: COLORS.positive }]} />
               <Text style={s.legendTxt}>{t('dashboard.income')}</Text>
@@ -338,7 +421,11 @@ export default function CashflowReportScreen() {
               <Text style={s.legendTxt}>{t('dashboard.expense')}</Text>
             </View>
           </View>
-          <TrendChart key={period} days={days} maxVal={maxDayVal} />
+          {hasMovement ? (
+            <TrendChart points={trendPoints} />
+          ) : (
+            <Text style={s.chartEmpty}>{t('screens.cashflowReport.noMovement')}</Text>
+          )}
         </View>
 
         {/* ── Metrics Grid ── */}
@@ -409,7 +496,7 @@ const s = StyleSheet.create({
   },
   periodRow: { flexDirection: 'row', gap: 4 },
   periodChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
+    paddingHorizontal: 8, paddingVertical: 5,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.pageBg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
@@ -485,6 +572,7 @@ const s = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 0 },
   legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  chartEmpty: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', paddingVertical: SPACING.lg },
 
   // Metrics
   metricsGrid: { flexDirection: 'row', gap: SPACING.sm },

@@ -443,7 +443,7 @@ export default function IntegrationSettingsScreen({ domain, title, ns, portalUrl
           onRetry={() => { setLoadState('loading'); refetch(); }}
         />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} />}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} />}>
           {gateway && !anyNotApplicable && (
             <View style={s.card}>
               <View style={s.cardHdr}>

@@ -412,7 +412,6 @@ const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
       backdropComponent={renderBackdrop}
       keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
       backgroundStyle={ps.sheetBg}
       handleIndicatorStyle={ps.handle}
       topInset={insets.top + 16}

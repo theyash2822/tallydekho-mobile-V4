@@ -2,825 +2,665 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ScrollViewInstance,
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, ScrollView, Dimensions,
+  Animated, ScrollView, BackHandler, useWindowDimensions,
+  type DimensionValue,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-import { markOnboardingCompleted } from '../src/utils/onboardingNav';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
+import { useAuth } from '../src/context/AuthContext';
+import { useSettings } from '../src/context/SettingsContext';
+import { markGuideSeen, guideDestination } from '../src/utils/onboardingNav';
 import { AuditerMark, AuditerWordmark } from '../src/components/AuditerLogo';
 
-const { width: SW } = Dimensions.get('window');
-const PAGE_BG  = '#F5F4EF';
-const CARD_BG  = '#FFFFFF';
-const BORDER   = '#E9E8E3';
-const DARK     = '#1A1A1A';
-const GOLD     = '#A89060';
-const TEXT_PRI = '#1A1A1A';
-const TEXT_SEC = '#787774';
-const TEXT_TER = '#AEACA8';
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+type MockProps = { active: boolean };
+
+/** Every illustration gets the same frame, so titles sit at the same height on each slide. */
+const MOCK_H = 268;
+const ACTION_W = 58;
+const PAIR_CODE = ['4', '8', '2', '9', '1', '7'];
+
+/** "FY 2026-27" for today — the illustration's fallback before a year is picked. */
+function currentFyLabel(d: Date = new Date()): string {
+  const start = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+  return `FY ${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 1 — Hero (light theme)
+// Building blocks — the app's own cards, pills and icon dots
 // ─────────────────────────────────────────────────────────────────────────────
-function HeroSlide() {
-  const { t } = useTranslation();
-  const logoScale   = useState(() => new Animated.Value(0.3))[0];
-  const logoOpacity = useState(() => new Animated.Value(0))[0];
-  const textOpacity = useState(() => new Animated.Value(0))[0];
-  const textY       = useState(() => new Animated.Value(24))[0];
 
+/** A ring round the control a slide is about; animates only on the visible slide. */
+function Pulse({ active, radius = RADIUS.md, children }: {
+  active: boolean; radius?: number; children: React.ReactNode;
+}) {
+  const v = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(logoScale,   { toValue: 1, useNativeDriver: true, tension: 65, friction: 8 }),
-        Animated.timing(logoOpacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-      ]),
-      Animated.parallel([
-        Animated.timing(textOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(textY,       { toValue: 0, duration: 500, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, []);
-
+    v.setValue(0);
+    if (!active) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 800, useNativeDriver: true }),
+      Animated.delay(300),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [active, v]);
   return (
-    <View style={hero.container}>
-      {/* App logo */}
-      <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }], marginBottom: 28 }}>
-        <View style={hero.logoBox}>
-          <AuditerMark height={40} color="#FFFFFF" />
-        </View>
-      </Animated.View>
-
-      {/* Text */}
-      <Animated.View style={{ alignItems: 'center', opacity: textOpacity, transform: [{ translateY: textY }] }}>
-        <View style={hero.appName}><AuditerWordmark height={40} color={TEXT_PRI} /></View>
-        <Text style={hero.tagline}>Ab Hisab Ungaliyon Par</Text>
-        <View style={hero.divider} />
-        <Text style={hero.subtitle}>
-          {t('screens.onboarding.heroSubtitle')}
-        </Text>
-      </Animated.View>
+    <View>
+      <Animated.View
+        pointerEvents="none"
+        style={[m.pulse, {
+          borderRadius: radius + 4,
+          opacity: v,
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.04] }) }],
+        }]}
+      />
+      {children}
     </View>
   );
 }
 
-const hero = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  logoBox:   {
-    width: 96, height: 96, borderRadius: 26,
-    backgroundColor: DARK, alignItems: 'center', justifyContent: 'center',
-    shadowColor: DARK, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22, shadowRadius: 20, elevation: 10,
-  },
-  appName:  { marginBottom: 10 },
-  tagline:  { fontSize: 16, fontWeight: '600', color: GOLD, textAlign: 'center', letterSpacing: 0.4 },
-  divider:  { width: 40, height: 2, backgroundColor: GOLD, borderRadius: 1, marginVertical: 16, opacity: 0.6 },
-  subtitle: { fontSize: 13, color: TEXT_SEC, textAlign: 'center', lineHeight: 21 },
-});
+/** Placeholder text line, as the app's loading rows draw it. */
+function Line({ w, h = 8, color = COLORS.borderDefault }: { w: DimensionValue; h?: number; color?: string }) {
+  return <View style={{ width: w, height: h, borderRadius: h / 2, backgroundColor: color }} />;
+}
+
+function IconDot({ name, size = 30, bg = COLORS.pageBg, color = COLORS.textPrimary }: {
+  name: IconName; size?: number; bg?: string; color?: string;
+}) {
+  return (
+    <View style={[m.iconDot, { width: size, height: size, borderRadius: size / 2, backgroundColor: bg }]}>
+      <Ionicons name={name} size={Math.round(size * 0.5)} color={color} />
+    </View>
+  );
+}
+
+function SwipeAction({ icon, label, bg }: { icon: IconName; label: string; bg: string }) {
+  return (
+    <View style={[m.action, { backgroundColor: bg }]}>
+      <Ionicons name={icon} size={16} color={COLORS.white} />
+      <Text style={m.actionTxt} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 2 — Swipe Demo (BOTH directions)
+// Slide illustrations
 // ─────────────────────────────────────────────────────────────────────────────
-function SwipeDemo() {
-  const { t } = useTranslation();
-  const slideX        = useState(() => new Animated.Value(0))[0];
-  const leftActionOp  = useState(() => new Animated.Value(0))[0];  // Transfer (swipe right)
-  const rightActionOp = useState(() => new Animated.Value(0))[0];  // Edit Stock (swipe left)
 
+function WelcomeMock({ active }: MockProps) {
+  const rise = useState(() => new Animated.Value(1))[0];
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(500),
-        // ── Cycle 1: swipe RIGHT → Transfer revealed on LEFT ──
-        Animated.parallel([
-          Animated.timing(slideX,       { toValue: 88,  duration: 520, useNativeDriver: true }),
-          Animated.timing(leftActionOp, { toValue: 1,   duration: 420, useNativeDriver: true }),
-        ]),
-        Animated.delay(1200),
-        Animated.parallel([
-          Animated.timing(slideX,       { toValue: 0, duration: 420, useNativeDriver: true }),
-          Animated.timing(leftActionOp, { toValue: 0, duration: 320, useNativeDriver: true }),
-        ]),
-        Animated.delay(500),
-        // ── Cycle 2: swipe LEFT → Edit Stock revealed on RIGHT ──
-        Animated.parallel([
-          Animated.timing(slideX,        { toValue: -88, duration: 520, useNativeDriver: true }),
-          Animated.timing(rightActionOp, { toValue: 1,   duration: 420, useNativeDriver: true }),
-        ]),
-        Animated.delay(1200),
-        Animated.parallel([
-          Animated.timing(slideX,        { toValue: 0, duration: 420, useNativeDriver: true }),
-          Animated.timing(rightActionOp, { toValue: 0, duration: 320, useNativeDriver: true }),
-        ]),
-        Animated.delay(500),
-      ])
-    );
+    if (!active) return;
+    rise.setValue(0);
+    const anim = Animated.spring(rise, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 });
     anim.start();
     return () => anim.stop();
-  }, []);
-
+  }, [active, rise]);
   return (
-    <View style={sd.wrap}>
-      {/* LEFT revealed: Transfer (dark #1A1A1A like actual app) */}
-      <Animated.View style={[sd.actionLeft, { opacity: leftActionOp }]}>
-        <Ionicons name="swap-horizontal-outline" size={20} color="#fff" />
-        <Text style={sd.actionLbl}>{t('screens.onboarding.transfer')}</Text>
+    <View style={m.center}>
+      <Animated.View
+        style={[m.logoBox, {
+          opacity: rise,
+          transform: [{ scale: rise.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }],
+        }]}
+      >
+        <AuditerMark height={34} color={COLORS.white} />
       </Animated.View>
-
-      {/* RIGHT revealed: Edit Stock (gold #A89060 like actual app) */}
-      <Animated.View style={[sd.actionRight, { opacity: rightActionOp }]}>
-        <Ionicons name="create-outline" size={20} color="#fff" />
-        <Text style={sd.actionLbl}>{t('screens.onboarding.editStock')}</Text>
-      </Animated.View>
-
-      {/* Main stock card */}
-      <Animated.View style={[sd.card, { transform: [{ translateX: slideX }] }]}>
-        <View style={sd.cardIcon}>
-          <Ionicons name="cube-outline" size={16} color={GOLD} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={sd.cardName}>Cotton Fabric — White</Text>
-          <Text style={sd.cardSub}>CF001 · Textiles</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 3 }}>
-          <Text style={sd.cardVal}>₹12,500</Text>
-          <View style={sd.qtyBadge}><Text style={sd.qtyTxt}>{t('screens.onboarding.units', { qty: 240 })}</Text></View>
-        </View>
-        <Ionicons name="chevron-forward" size={13} color={TEXT_TER} style={{ marginLeft: 2 }} />
-      </Animated.View>
-
-      {/* Ghost card */}
-      <View style={[sd.card, { opacity: 0.38, marginTop: 8 }]}>
-        <View style={sd.cardIcon}><Ionicons name="cube-outline" size={16} color={TEXT_TER} /></View>
-        <View style={{ flex: 1, gap: 5 }}>
-          <View style={[sd.shimmer, { width: '55%' }]} />
-          <View style={[sd.shimmer, { width: '38%', opacity: 0.5 }]} />
-        </View>
+      <View style={{ marginTop: SPACING.md }}>
+        <AuditerWordmark height={26} color={COLORS.textPrimary} />
       </View>
-
-      {/* Direction hint tags */}
-      <View style={sd.hintRow}>
-        <Animated.View style={[sd.hintTag, sd.hintDark, { opacity: leftActionOp }]}>
-          <Ionicons name="arrow-forward-outline" size={10} color="#fff" />
-          <Text style={[sd.hintTxt, { color: '#fff' }]}>{t('screens.onboarding.swipeRightHint')}</Text>
-        </Animated.View>
-        <Animated.View style={[sd.hintTag, sd.hintGold, { opacity: rightActionOp }]}>
-          <Ionicons name="arrow-back-outline" size={10} color="#fff" />
-          <Text style={[sd.hintTxt, { color: '#fff' }]}>{t('screens.onboarding.swipeLeftHint')}</Text>
-        </Animated.View>
+      <View style={m.flowRow}>
+        <View style={m.flowPill}>
+          <Ionicons name="desktop-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={m.flowTxt}>TallyPrime</Text>
+        </View>
+        <Ionicons name="sync-outline" size={16} color={COLORS.positive} />
+        <View style={m.flowPill}>
+          <Ionicons name="phone-portrait-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={m.flowTxt}>Auditer</Text>
+        </View>
       </View>
     </View>
   );
 }
 
-const sd = StyleSheet.create({
-  wrap:        { width: '100%', overflow: 'hidden' },
-  actionLeft:  {
-    position: 'absolute', left: 0, top: 0, bottom: 8, width: 84,
-    backgroundColor: DARK, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center', gap: 5, zIndex: 0,
-  },
-  actionRight: {
-    position: 'absolute', right: 0, top: 0, bottom: 8, width: 84,
-    backgroundColor: GOLD, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center', gap: 5, zIndex: 0,
-  },
-  actionLbl: { fontSize: 10, fontWeight: '700', color: '#fff' },
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: CARD_BG, borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: BORDER, zIndex: 1,
-  },
-  cardIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#FBF7EE', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#F0E8D5',
-  },
-  cardName: { fontSize: 12, fontWeight: '700', color: TEXT_PRI },
-  cardSub:  { fontSize: 10, color: TEXT_SEC, marginTop: 2 },
-  cardVal:  { fontSize: 12, fontWeight: '700', color: TEXT_PRI },
-  qtyBadge: { backgroundColor: PAGE_BG, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: BORDER },
-  qtyTxt:   { fontSize: 9, color: TEXT_SEC },
-  shimmer:  { height: 8, backgroundColor: BORDER, borderRadius: 4 },
-  hintRow:  { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  hintTag:  { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 },
-  hintDark: { backgroundColor: DARK },
-  hintGold: { backgroundColor: GOLD },
-  hintTxt:  { fontSize: 10, fontWeight: '600' },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 3 — Multi-Select Demo (light theme)
-// ─────────────────────────────────────────────────────────────────────────────
-function MultiSelectDemo() {
+function ConnectMock({ active }: MockProps) {
   const { t } = useTranslation();
-  const a1 = useState(() => new Animated.Value(0))[0];
-  const a2 = useState(() => new Animated.Value(0))[0];
-  const a3 = useState(() => new Animated.Value(0))[0];
-  const barY  = useState(() => new Animated.Value(50))[0];
-  const barOp = useState(() => new Animated.Value(0))[0];
+  return (
+    <View style={m.stack}>
+      <View style={m.card}>
+        <View style={m.rowStart}>
+          <IconDot name="desktop-outline" bg={COLORS.activeBg} />
+          <Text style={m.cardTitle} numberOfLines={1}>{t('screens.settingsTallySync.desktopAgent')}</Text>
+        </View>
+        <View style={{ marginTop: SPACING.sm + 2 }}>
+          <Pulse active={active}>
+            <View style={m.codeRow}>
+              {PAIR_CODE.map((d, i) => (
+                <View key={i} style={m.codeBox}><Text style={m.codeTxt}>{d}</Text></View>
+              ))}
+            </View>
+          </Pulse>
+        </View>
+      </View>
+      <Ionicons name="arrow-down" size={18} color={COLORS.textTertiary} style={{ alignSelf: 'center' }} />
+      <View style={[m.card, m.rowBetween]}>
+        <View style={m.rowStart}>
+          <IconDot name="home-outline" />
+          <Line w={84} />
+        </View>
+        <View style={m.demoPill}>
+          <Text style={m.demoTxt} numberOfLines={1}>{t('screens.settingsMyAccess.demoMode')}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
+function CompanyMock({ active }: MockProps) {
+  const { t } = useTranslation();
+  const { company, selectedFY, user } = useAuth();
+  const companyName = company?.name || t('home.myCompany');
+  const fyLabel = selectedFY?.label || currentFyLabel();
+  const initial = (user?.name || companyName).trim().charAt(0).toUpperCase();
+  return (
+    <View style={m.stack}>
+      <View style={[m.card, m.rowBetween]}>
+        <View style={{ flex: 1, marginRight: SPACING.sm }}>
+          <Pulse active={active} radius={RADIUS.sm}>
+            <View style={m.rowStart}>
+              <Text style={m.companyTxt} numberOfLines={1}>{companyName}</Text>
+              <Ionicons name="chevron-down" size={12} color={COLORS.brandPrimary} />
+            </View>
+          </Pulse>
+          <View style={[m.rowStart, m.syncRow]}>
+            <Ionicons name="sync-outline" size={11} color={COLORS.textTertiary} />
+            <Text style={m.mutedTxt} numberOfLines={1}>{t('screens.componentsHeader.synced', { time: '10:42' })}</Text>
+          </View>
+        </View>
+        <View style={m.rowStart}>
+          <Pulse active={active} radius={RADIUS.sm}>
+            <View style={m.fyPill}>
+              <Text style={m.fyTxt}>{fyLabel}</Text>
+              <Ionicons name="chevron-down" size={10} color={COLORS.brandPrimary} />
+            </View>
+          </Pulse>
+          <Ionicons name="notifications-outline" size={18} color={COLORS.textPrimary} />
+          <View style={m.avatar}><Text style={m.avatarTxt}>{initial}</Text></View>
+        </View>
+      </View>
+      <View style={m.card}>
+        <View style={m.listRow}>
+          <Text style={m.listTxt} numberOfLines={1}>{companyName}</Text>
+          <Ionicons name="checkmark-circle" size={16} color={COLORS.brandPrimary} />
+        </View>
+        <View style={[m.listRow, m.listRowLast]}>
+          <Line w="55%" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function HomeMock({ active }: MockProps) {
+  const { t } = useTranslation();
+  const { formatAmountCompact } = useSettings();
+  return (
+    <View style={m.stack}>
+      <View style={[m.card, m.rowBetween]}>
+        <View style={m.rowStart}>
+          <IconDot name="trending-up-outline" bg={COLORS.positiveBg} color={COLORS.positive} />
+          <View>
+            <Text style={m.mutedTxt}>{t('dashboard.totalSales')}</Text>
+            <Text style={m.kpiValue}>{formatAmountCompact(482500)}</Text>
+          </View>
+        </View>
+        <View style={m.trendPill}><Text style={m.trendTxt}>+12%</Text></View>
+      </View>
+      <View style={m.dotsRow}>
+        <View style={[m.miniDot, m.miniDotOn]} />
+        <View style={m.miniDot} />
+        <View style={m.miniDot} />
+      </View>
+      <View style={m.periodRow}>
+        {['7D', '1M', '3M', '6M'].map((p) => (
+          <View key={p} style={[m.periodPill, p === '1M' && m.periodPillOn]}>
+            <Text style={[m.periodTxt, p === '1M' && m.periodTxtOn]}>{p}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={m.card}>
+        <View style={m.rowBetween}>
+          <View style={m.rowStart}>
+            <IconDot name="analytics-outline" size={24} />
+            <Text style={m.cardTitle} numberOfLines={1}>{t('dashboard.cashflow')}</Text>
+          </View>
+          <Pulse active={active} radius={RADIUS.sm}>
+            <View style={m.squareBtn}><Ionicons name="expand-outline" size={14} color={COLORS.textSecondary} /></View>
+          </Pulse>
+        </View>
+        <View style={[m.barTrack, { marginTop: SPACING.sm }]}>
+          <View style={[m.barFill, { width: '72%', backgroundColor: COLORS.positive }]} />
+        </View>
+        <View style={[m.barTrack, { marginTop: 6 }]}>
+          <View style={[m.barFill, { width: '46%', backgroundColor: COLORS.negative }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const SEARCH_ROWS: { icon: IconName; w: DimensionValue }[] = [
+  { icon: 'document-text-outline', w: '62%' },
+  { icon: 'person-outline', w: '48%' },
+  { icon: 'cube-outline', w: '55%' },
+];
+
+function VoiceMock({ active }: MockProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={m.stack}>
+      <View style={m.searchBar}>
+        <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+        <Text style={m.searchTxt} numberOfLines={1}>{t('dashboard.searchPlaceholder')}</Text>
+        <Pulse active={active} radius={RADIUS.full}>
+          <View style={m.micBtn}><Ionicons name="mic" size={14} color={COLORS.white} /></View>
+        </Pulse>
+      </View>
+      <View style={m.card}>
+        {SEARCH_ROWS.map((r, i) => (
+          <View key={r.icon} style={[m.listRow, i === SEARCH_ROWS.length - 1 && m.listRowLast]}>
+            <IconDot name={r.icon} size={26} />
+            <View style={m.lines}>
+              <Line w={r.w} />
+              <Line w="30%" h={6} />
+            </View>
+            <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const CREATE_SECTIONS: { icon: IconName; key: string }[] = [
+  { icon: 'receipt-outline', key: 'quickActions.sales' },
+  { icon: 'bag-handle-outline', key: 'quickActions.purchase' },
+  { icon: 'wallet-outline', key: 'quickActions.voucher' },
+  { icon: 'layers-outline', key: 'quickActions.inventory' },
+  { icon: 'book-outline', key: 'quickActions.ledgers' },
+];
+
+function CreateMock({ active }: MockProps) {
+  const { t } = useTranslation();
+  return (
+    <View>
+      <View style={m.sheet}>
+        <View style={m.sheetHandle} />
+        <Text style={m.cardTitle} numberOfLines={1}>{t('quickActions.title')}</Text>
+        {CREATE_SECTIONS.map((sec) => (
+          <View key={sec.key} style={m.sheetRow}>
+            <IconDot name={sec.icon} size={22} />
+            <Text style={m.listTxt} numberOfLines={1}>{t(sec.key)}</Text>
+            <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
+          </View>
+        ))}
+      </View>
+      <View style={m.plusWrap}>
+        <Pulse active={active} radius={RADIUS.full}>
+          <View style={m.plusBtn}><Ionicons name="add" size={26} color={COLORS.white} /></View>
+        </Pulse>
+      </View>
+    </View>
+  );
+}
+
+function SwipeMock({ active }: MockProps) {
+  const { t } = useTranslation();
+  const partyX = useState(() => new Animated.Value(0))[0];
+  const stockX = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(500),
-        Animated.timing(a1, { toValue: 1, duration: 260, useNativeDriver: false }),
-        Animated.delay(140),
-        Animated.timing(a2, { toValue: 1, duration: 260, useNativeDriver: false }),
-        Animated.delay(140),
-        Animated.timing(a3, { toValue: 1, duration: 260, useNativeDriver: false }),
-        Animated.parallel([
-          Animated.timing(barY,  { toValue: 0,  duration: 360, useNativeDriver: true }),
-          Animated.timing(barOp, { toValue: 1,  duration: 360, useNativeDriver: true }),
-        ]),
-        Animated.delay(1400),
-        Animated.parallel([
-          Animated.timing(barY,  { toValue: 50, duration: 280, useNativeDriver: true }),
-          Animated.timing(barOp, { toValue: 0,  duration: 240, useNativeDriver: true }),
-          Animated.timing(a3,    { toValue: 0,  duration: 180, useNativeDriver: false }),
-          Animated.timing(a2,    { toValue: 0,  duration: 180, useNativeDriver: false }),
-          Animated.timing(a1,    { toValue: 0,  duration: 180, useNativeDriver: false }),
-        ]),
-        Animated.delay(600),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
-  const rows = [
-    { anim: a1, name: 'Cotton Fabric', sub: t('screens.onboarding.units', { qty: 240 }) },
-    { anim: a2, name: 'Silk Dupatta',  sub: t('screens.onboarding.units', { qty: 120 }) },
-    { anim: a3, name: 'Linen Blend',   sub: t('screens.onboarding.units', { qty: 85 }) },
-  ];
+    partyX.setValue(0);
+    stockX.setValue(0);
+    if (!active) return;
+    const move = (v: Animated.Value, toValue: number) =>
+      Animated.timing(v, { toValue, duration: 420, useNativeDriver: true });
+    const loop = Animated.loop(Animated.sequence([
+      Animated.delay(500),
+      move(partyX, -ACTION_W * 2), Animated.delay(1100), move(partyX, 0),
+      Animated.delay(300),
+      move(stockX, ACTION_W * 2), Animated.delay(1100), move(stockX, 0),
+      Animated.delay(300),
+      move(stockX, -ACTION_W), Animated.delay(1100), move(stockX, 0),
+      Animated.delay(400),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [active, partyX, stockX]);
 
   return (
-    <View style={msd.wrap}>
-      {rows.map((row, i) => (
-        <Animated.View
-          key={i}
-          style={[
-            msd.row,
-            {
-              backgroundColor: row.anim.interpolate({ inputRange: [0, 1], outputRange: [CARD_BG, '#FBF7EE'] }),
-              borderColor:     row.anim.interpolate({ inputRange: [0, 1], outputRange: [BORDER, '#F0E8D5'] }),
-            },
-          ]}
-        >
-          <Animated.View
-            style={[
-              msd.checkbox,
-              {
-                backgroundColor: row.anim.interpolate({ inputRange: [0, 1], outputRange: ['transparent', DARK] }),
-                borderColor:     row.anim.interpolate({ inputRange: [0, 1], outputRange: [TEXT_TER, DARK] }),
-              },
-            ]}
-          >
-            <Animated.View style={{ opacity: row.anim }}>
-              <Ionicons name="checkmark" size={9} color="#fff" />
-            </Animated.View>
-          </Animated.View>
-          <View style={msd.cardIcon}>
-            <Ionicons name="cube-outline" size={14} color={i === 0 ? GOLD : TEXT_TER} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={msd.rowName}>{row.name}</Text>
-            <Text style={msd.rowSub}>{row.sub}</Text>
-          </View>
+    <View style={m.stack}>
+      {/* Party: swipe left for Call / WhatsApp */}
+      <View style={m.swipeRow}>
+        <View style={[m.actions, m.actionsRight]}>
+          <SwipeAction icon="call" label={t('screens.tabsLedger.call')} bg={COLORS.brandPrimary} />
+          <SwipeAction icon="logo-whatsapp" label="WhatsApp" bg={COLORS.positive} />
+        </View>
+        <Animated.View style={[m.swipeCard, { transform: [{ translateX: partyX }] }]}>
+          <IconDot name="person-outline" size={28} />
+          <View style={m.lines}><Line w="58%" /><Line w="34%" h={6} /></View>
         </Animated.View>
+      </View>
+      {/* Stock: right for Transfer / Adjust, left for Edit */}
+      <View style={m.swipeRow}>
+        <View style={[m.actions, m.actionsLeft]}>
+          <SwipeAction icon="swap-horizontal-outline" label={t('screens.stocksTotalStock.transfer')} bg={COLORS.brandPrimary} />
+          <SwipeAction icon="options-outline" label={t('screens.stocksTotalStock.adjust')} bg={COLORS.textSecondary} />
+        </View>
+        <View style={[m.actions, m.actionsRight]}>
+          <SwipeAction icon="create-outline" label={t('common.edit')} bg={COLORS.textSecondary} />
+        </View>
+        <Animated.View style={[m.swipeCard, { transform: [{ translateX: stockX }] }]}>
+          <IconDot name="cube-outline" size={28} />
+          <View style={m.lines}><Line w="50%" /><Line w="28%" h={6} /></View>
+        </Animated.View>
+      </View>
+      {/* Long-press: select many, share one PDF */}
+      <View style={m.selectBar}>
+        <View style={m.rowStart}>
+          <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+          <Text style={m.selectTxt} numberOfLines={1}>{t('common.selected', { count: 3 })}</Text>
+        </View>
+        <View style={m.rowStart}>
+          <Ionicons name="share-outline" size={14} color={COLORS.white} />
+          <Text style={m.selectTxt} numberOfLines={1}>{t('pdf.sharePdf')}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const REPORT_TILES: { icon: IconName; key: string }[] = [
+  { icon: 'stats-chart-outline', key: 'reports.financial' },
+  { icon: 'receipt-outline', key: 'reports.gstReturns' },
+  { icon: 'document-text-outline', key: 'reports.einvoices' },
+  { icon: 'navigate-outline', key: 'reports.ewayBills' },
+  { icon: 'git-branch-outline', key: 'reports.auditTrail' },
+  { icon: 'sparkles-outline', key: 'reports.aiInsights' },
+];
+
+function ReportsMock() {
+  const { t } = useTranslation();
+  return (
+    <View style={m.grid}>
+      {REPORT_TILES.map((tile) => (
+        <View key={tile.key} style={m.tile}>
+          <Ionicons name={tile.icon} size={18} color={COLORS.textPrimary} />
+          <Text style={m.tileTxt} numberOfLines={2}>{t(tile.key)}</Text>
+        </View>
       ))}
-
-      {/* Sliding action bar (same as real app) */}
-      <Animated.View style={[msd.actionBar, { transform: [{ translateY: barY }], opacity: barOp }]}>
-        <Text style={msd.barCount}>{t('common.selected', { count: 3 })}</Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <View style={[msd.barBtn, { backgroundColor: GOLD }]}>
-            <Ionicons name="share-outline" size={11} color="#fff" />
-            <Text style={msd.barBtnTxt}>{t('screens.onboarding.pdf')}</Text>
-          </View>
-          <View style={[msd.barBtn, { backgroundColor: '#444' }]}>
-            <Ionicons name="swap-horizontal-outline" size={11} color="#fff" />
-            <Text style={msd.barBtnTxt}>{t('screens.onboarding.transfer')}</Text>
-          </View>
-        </View>
-      </Animated.View>
     </View>
   );
 }
 
-const msd = StyleSheet.create({
-  wrap:      { width: '100%', gap: 6, overflow: 'hidden' },
-  row:       { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
-  checkbox:  { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  cardIcon:  { width: 30, height: 30, borderRadius: 8, backgroundColor: PAGE_BG, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: BORDER },
-  rowName:   { fontSize: 11, fontWeight: '700', color: TEXT_PRI },
-  rowSub:    { fontSize: 9, color: TEXT_SEC, marginTop: 2 },
-  actionBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: DARK, borderRadius: 10, padding: 10, marginTop: 2,
-  },
-  barCount:  { fontSize: 11, fontWeight: '700', color: '#fff' },
-  barBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  barBtnTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
-});
+const ALERT_ROWS: { icon: IconName; key: string; color: string; bg: string }[] = [
+  { icon: 'cube-outline', key: 'notifications.filterStock', color: COLORS.warning, bg: COLORS.warningBg },
+  { icon: 'time-outline', key: 'notifications.filterReceivables', color: COLORS.negative, bg: COLORS.negativeBg },
+  { icon: 'shield-checkmark-outline', key: 'notifications.filterCompliance', color: COLORS.info, bg: COLORS.infoBg },
+  { icon: 'sync-outline', key: 'notifications.sync', color: COLORS.textSecondary, bg: COLORS.activeBg },
+];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 4 — Cashflow Ring Demo (light theme)
-// ─────────────────────────────────────────────────────────────────────────────
-function CashflowDemo() {
+function AlertsMock({ active }: MockProps) {
   const { t } = useTranslation();
-  const tapScale    = useState(() => new Animated.Value(1))[0];
-  const rippleScale = useState(() => new Animated.Value(0))[0];
-  const rippleOp    = useState(() => new Animated.Value(0))[0];
-  const tooltipOp   = useState(() => new Animated.Value(0))[0];
-  const tooltipSc   = useState(() => new Animated.Value(0.85))[0];
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(900),
-        Animated.parallel([
-          Animated.timing(tapScale,    { toValue: 0.92, duration: 110, useNativeDriver: true }),
-          Animated.timing(rippleScale, { toValue: 2.0,  duration: 400, useNativeDriver: true }),
-          Animated.timing(rippleOp,    { toValue: 0.5,  duration: 120, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(tapScale, { toValue: 1,   duration: 150, useNativeDriver: true }),
-          Animated.timing(rippleOp, { toValue: 0,   duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(tooltipOp, { toValue: 1, duration: 360, useNativeDriver: true }),
-          Animated.spring(tooltipSc, { toValue: 1, useNativeDriver: true, tension: 90, friction: 8 }),
-        ]),
-        Animated.delay(1500),
-        Animated.parallel([
-          Animated.timing(tooltipOp,   { toValue: 0,    duration: 280, useNativeDriver: true }),
-          Animated.timing(tooltipSc,   { toValue: 0.85, duration: 280, useNativeDriver: true }),
-          Animated.timing(rippleScale, { toValue: 0,    duration: 200, useNativeDriver: true }),
-        ]),
-        Animated.delay(700),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
   return (
-    <View style={cfd.wrap}>
-      {/* Card matching actual CashflowCard */}
-      <View style={cfd.card}>
-        {/* Card header */}
-        <View style={cfd.cardHeader}>
-          <View style={cfd.headerIcon}>
-            <Ionicons name="eye-outline" size={13} color={TEXT_SEC} />
-          </View>
-          <Text style={cfd.cardTitle}>{t('dashboard.cashflow')}</Text>
-          <Text style={cfd.tapHint}>{t('screens.onboarding.tapRingHint')}</Text>
-        </View>
-
-        {/* Ring */}
-        <View style={cfd.ringArea}>
-          <Animated.View style={{ transform: [{ scale: tapScale }] }}>
-            <Animated.View style={[cfd.ripple, { transform: [{ scale: rippleScale }], opacity: rippleOp }]} />
-            <View style={cfd.ring}>
-              <View style={cfd.ringCenter}>
-                <Text style={cfd.ringLbl}>{t('screens.onboarding.netCash')}</Text>
-                <Text style={cfd.ringVal}>₹8,500</Text>
-              </View>
+    <View style={m.stack}>
+      <View style={m.card}>
+        <View style={m.rowBetween}>
+          <Text style={m.cardTitle} numberOfLines={1}>{t('notifications.title')}</Text>
+          <Pulse active={active} radius={RADIUS.full}>
+            <View style={m.bellWrap}>
+              <Ionicons name="notifications-outline" size={18} color={COLORS.textPrimary} />
+              <View style={m.badge}><Text style={m.badgeTxt}>4</Text></View>
             </View>
-            {/* Tooltip */}
-            <Animated.View style={[cfd.tooltip, { opacity: tooltipOp, transform: [{ scale: tooltipSc }] }]}>
-              <View style={cfd.ttRow}>
-                <View style={[cfd.ttDot, { backgroundColor: DARK }]} />
-                <Text style={cfd.ttLbl}>{t('dashboard.income')}</Text>
-                <Text style={cfd.ttVal}>₹37,440</Text>
-              </View>
-              <View style={cfd.ttDiv} />
-              <View style={cfd.ttRow}>
-                <View style={[cfd.ttDot, { backgroundColor: '#A0A0A0' }]} />
-                <Text style={cfd.ttLbl}>{t('dashboard.expense')}</Text>
-                <Text style={cfd.ttVal}>₹28,940</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
+          </Pulse>
+        </View>
+        {ALERT_ROWS.map((r, i) => (
+          <View key={r.key} style={[m.listRow, m.listRowTight, i === ALERT_ROWS.length - 1 && m.listRowLast]}>
+            <IconDot name={r.icon} size={22} bg={r.bg} color={r.color} />
+            <Text style={m.listTxt} numberOfLines={1}>{t(r.key)}</Text>
+            <Line w={44} h={6} />
+          </View>
+        ))}
+      </View>
+      <View style={[m.card, m.rowBetween]}>
+        <View style={[m.rowStart, m.shrink]}>
+          <IconDot name="shield-checkmark-outline" size={22} bg={COLORS.activeBg} />
+          <Text style={m.cardTitle} numberOfLines={1}>{t('screens.settings.requests')}</Text>
+        </View>
+        <View style={m.rowStart}>
+          <View style={m.chip}><Text style={m.chipTxt} numberOfLines={1}>{t('screens.settingsApprovals.typeRestore')}</Text></View>
+          <View style={m.chip}><Text style={m.chipTxt} numberOfLines={1}>{t('screens.settingsApprovals.typeHardSync')}</Text></View>
         </View>
       </View>
     </View>
   );
 }
 
-const cfd = StyleSheet.create({
-  wrap:       { width: '100%' },
-  card:       { backgroundColor: CARD_BG, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: BORDER },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  headerIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: PAGE_BG, alignItems: 'center', justifyContent: 'center' },
-  cardTitle:  { fontSize: 13, fontWeight: '600', color: TEXT_PRI },
-  tapHint:    { flex: 1, textAlign: 'right', fontSize: 9, color: TEXT_TER },
-  ringArea:   { alignItems: 'center', paddingVertical: 4 },
-  ripple:     { position: 'absolute', width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(168,144,96,0.15)' },
-  ring:       {
-    width: 110, height: 110, borderRadius: 55, borderWidth: 14,
-    borderTopColor: DARK, borderRightColor: DARK,
-    borderBottomColor: '#E0DEDA', borderLeftColor: '#E0DEDA',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  ringCenter: { alignItems: 'center' },
-  ringLbl:    { fontSize: 9, color: TEXT_SEC },
-  ringVal:    { fontSize: 14, fontWeight: '800', color: TEXT_PRI, marginTop: 1 },
-  tooltip: {
-    position: 'absolute', right: -90, top: 8,
-    backgroundColor: CARD_BG, borderRadius: 10, padding: 10,
-    borderWidth: 1, borderColor: BORDER, minWidth: 130,
-    shadowColor: DARK, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
-  },
-  ttRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ttDot:    { width: 8, height: 8, borderRadius: 4 },
-  ttLbl:    { flex: 1, fontSize: 10, color: TEXT_SEC },
-  ttVal:    { fontSize: 10, fontWeight: '700', color: TEXT_PRI },
-  ttDiv:    { height: 1, backgroundColor: BORDER, marginVertical: 5 },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 5 — Voice Search Demo (light theme)
-// ─────────────────────────────────────────────────────────────────────────────
-function VoiceDemo() {
+function WorkspaceMock({ active }: MockProps) {
   const { t } = useTranslation();
-  const micScale = useState(() => new Animated.Value(1))[0];
-  const pulse1   = useState(() => new Animated.Value(1))[0];
-  const pulse2   = useState(() => new Animated.Value(1))[0];
-  const textOp   = useState(() => new Animated.Value(0))[0];
-  const textY    = useState(() => new Animated.Value(8))[0];
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(400),
-        Animated.timing(micScale, { toValue: 1.1, duration: 180, useNativeDriver: true }),
-        Animated.parallel([
-          Animated.loop(
-            Animated.parallel([
-              Animated.sequence([
-                Animated.timing(pulse1, { toValue: 1.75, duration: 650, useNativeDriver: true }),
-                Animated.timing(pulse1, { toValue: 1,    duration: 0,   useNativeDriver: true }),
-              ]),
-              Animated.sequence([
-                Animated.delay(320),
-                Animated.timing(pulse2, { toValue: 2.1, duration: 650, useNativeDriver: true }),
-                Animated.timing(pulse2, { toValue: 1,   duration: 0,   useNativeDriver: true }),
-              ]),
-            ]),
-            { iterations: 3 }
-          ),
-        ]),
-        Animated.parallel([
-          Animated.timing(textOp, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(textY,  { toValue: 0, duration: 400, useNativeDriver: true }),
-        ]),
-        Animated.delay(1200),
-        Animated.parallel([
-          Animated.timing(textOp,   { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.timing(textY,    { toValue: 8, duration: 300, useNativeDriver: true }),
-          Animated.timing(micScale, { toValue: 1, duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.delay(500),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
   return (
-    <View style={vd.wrap}>
-      {/* Search bar matching actual app style */}
-      <View style={vd.searchBar}>
-        <Ionicons name="search-outline" size={14} color={TEXT_TER} />
-        <Animated.Text style={[vd.searchText, { opacity: textOp, transform: [{ translateY: textY }] }]}>
-          {t('screens.onboarding.salesInvoice')}
-        </Animated.Text>
-        <View style={vd.micWrap}>
-          <Animated.View style={[vd.pulseRing, { transform: [{ scale: pulse1 }], opacity: pulse1.interpolate({ inputRange: [1, 1.75], outputRange: [0.3, 0] }) }]} />
-          <Animated.View style={[vd.pulseRing, { width: 34, height: 34, borderRadius: 17, transform: [{ scale: pulse2 }], opacity: pulse2.interpolate({ inputRange: [1, 2.1], outputRange: [0.2, 0] }) }]} />
-          <Animated.View style={[vd.micCircle, { transform: [{ scale: micScale }] }]}>
-            <Ionicons name="mic" size={13} color="#fff" />
-          </Animated.View>
+    <View style={m.stack}>
+      <View style={m.card}>
+        <View style={m.listRow}>
+          <IconDot name="business-outline" size={26} />
+          <Text style={m.listTxt} numberOfLines={1}>{t('screens.settings.switchWorkspace')}</Text>
+          <Pulse active={active} radius={RADIUS.full}>
+            <View style={m.roundBtn}><Ionicons name="swap-horizontal-outline" size={14} color={COLORS.brandPrimary} /></View>
+          </Pulse>
+        </View>
+        <View style={m.listRow}>
+          <IconDot name="key-outline" size={26} />
+          <Text style={m.listTxt} numberOfLines={1}>{t('screens.settings.myAccess')}</Text>
+          <View style={m.chip}><Text style={m.chipTxt} numberOfLines={1}>{t('screens.settings.owner')}</Text></View>
+        </View>
+        <View style={[m.listRow, m.listRowLast]}>
+          <IconDot name="card-outline" size={26} />
+          <Text style={m.listTxt} numberOfLines={1}>{t('settings.license')}</Text>
+          <Text style={m.creditTxt} numberOfLines={1}>120 {t('screens.settingsLicense.credits')}</Text>
         </View>
       </View>
-
-      {/* Results preview */}
-      <Animated.View style={[vd.resultCard, { opacity: textOp }]}>
-        <Ionicons name="document-text-outline" size={14} color={GOLD} />
-        <View style={{ flex: 1 }}>
-          <Text style={vd.resultTitle}>{t('screens.onboarding.salesInvoiceNo', { no: 1042 })}</Text>
-          <Text style={vd.resultSub}>Rajesh Traders · ₹24,500</Text>
+      <View style={[m.card, m.rowBetween]}>
+        <View style={m.rowStart}>
+          <IconDot name="globe-outline" size={26} bg={COLORS.infoBg} color={COLORS.info} />
+          <Line w={80} />
         </View>
-        <Ionicons name="chevron-forward" size={12} color={TEXT_TER} />
-      </Animated.View>
-
-      {/* Listening hint */}
-      <Animated.View style={[vd.listenRow, { opacity: textOp }]}>
-        <View style={vd.listenDot} />
-        <Text style={vd.listenTxt}>{t('screens.onboarding.listening')}</Text>
-      </Animated.View>
+        <View style={m.rowStart}>
+          <Ionicons name="people-outline" size={16} color={COLORS.textSecondary} />
+          <Ionicons name="receipt-outline" size={16} color={COLORS.textSecondary} />
+        </View>
+      </View>
     </View>
   );
 }
 
-const vd = StyleSheet.create({
-  wrap:        { width: '100%', paddingHorizontal: 2, gap: 10 },
-  searchBar:   {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: CARD_BG, borderRadius: 30,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: BORDER, gap: 8,
-  },
-  searchText:  { flex: 1, fontSize: 12, color: TEXT_PRI, fontWeight: '500' },
-  micWrap:     { alignItems: 'center', justifyContent: 'center', width: 28, height: 28 },
-  pulseRing:   { position: 'absolute', width: 26, height: 26, borderRadius: 13, backgroundColor: GOLD },
-  micCircle:   { width: 26, height: 26, borderRadius: 13, backgroundColor: GOLD, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  resultCard:  {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: CARD_BG, borderRadius: 10, padding: 10,
-    borderWidth: 1, borderColor: BORDER,
-  },
-  resultTitle: { fontSize: 11, fontWeight: '700', color: TEXT_PRI },
-  resultSub:   { fontSize: 9, color: TEXT_SEC, marginTop: 1 },
-  listenRow:   { flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 4 },
-  listenDot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: GOLD },
-  listenTxt:   { fontSize: 11, color: TEXT_SEC, fontStyle: 'italic' },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SLIDE 6 — Quick Actions Bottom Sheet Demo (matches actual QuickActionsModal)
-// ─────────────────────────────────────────────────────────────────────────────
-function QuickAddDemo() {
+function HelpMock({ active }: MockProps) {
   const { t } = useTranslation();
-  const sheetY   = useState(() => new Animated.Value(240))[0];
-  const sheetOp  = useState(() => new Animated.Value(0))[0];
-  const expandH  = useState(() => new Animated.Value(0))[0];
-  const chevronR = useState(() => new Animated.Value(0))[0];
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.delay(400),
-        // Sheet slides up
-        Animated.parallel([
-          Animated.spring(sheetY,  { toValue: 0, useNativeDriver: true, tension: 68, friction: 11 }),
-          Animated.timing(sheetOp, { toValue: 1, duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.delay(700),
-        // Sales section expands
-        Animated.parallel([
-          Animated.timing(expandH,  { toValue: 1, duration: 360, useNativeDriver: false }),
-          Animated.timing(chevronR, { toValue: 1, duration: 360, useNativeDriver: true }),
-        ]),
-        Animated.delay(1500),
-        // Sales section collapses
-        Animated.parallel([
-          Animated.timing(expandH,  { toValue: 0, duration: 300, useNativeDriver: false }),
-          Animated.timing(chevronR, { toValue: 0, duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.delay(500),
-        // Sheet slides down
-        Animated.parallel([
-          Animated.timing(sheetY,  { toValue: 240, duration: 380, useNativeDriver: true }),
-          Animated.timing(sheetOp, { toValue: 0,   duration: 280, useNativeDriver: true }),
-        ]),
-        Animated.delay(700),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []);
-
-  const chevronDeg = chevronR.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
-
-  const SECTIONS = [
-    { label: t('voucher.sales'), icon: 'receipt-outline',    color: '#2D7D46', bg: '#F0FBF4',
-      items: [t('quickActions.createInvoice'), t('screens.onboarding.createQuotation'), t('screens.onboarding.salesOrder')] },
-    { label: t('voucher.purchase'), icon: 'bag-handle-outline', color: '#C0392B', bg: '#FDECEA', items: [] },
-    { label: t('quickActions.voucher'), icon: 'wallet-outline',     color: '#D97706', bg: '#FFFBEB', items: [] },
-  ];
-
   return (
-    <View style={qad.outerWrap}>
-      {/* Dim overlay (shows when sheet opens) */}
-      <Animated.View style={[qad.dimOverlay, { opacity: sheetOp.interpolate({ inputRange: [0, 1], outputRange: [0, 0.3] }) }]} />
-
-      {/* Bottom Sheet */}
-      <Animated.View style={[qad.sheet, { transform: [{ translateY: sheetY }], opacity: sheetOp }]}>
-        {/* Handle */}
-        <View style={qad.handle} />
-
-        {/* Header */}
-        <View style={qad.sheetHeader}>
-          <Text style={qad.sheetTitle}>{t('quickActions.title')}</Text>
-          <View style={qad.closeBtn}>
-            <Ionicons name="close" size={16} color={TEXT_PRI} />
+    <View style={m.stack}>
+      <View style={m.card}>
+        <View style={m.rowStart}>
+          <IconDot name="sparkles-outline" size={26} bg={COLORS.brandPrimary} color={COLORS.white} />
+          <Text style={m.cardTitle} numberOfLines={1}>{t('screens.settingsHelp.aiSupport')}</Text>
+        </View>
+        <View style={m.bubbleBot}>
+          <Line w="85%" />
+          <Line w="60%" />
+        </View>
+        <View style={m.bubbleUser}>
+          <Line w={84} color={COLORS.inactiveNavText} />
+        </View>
+        <View style={m.askBar}>
+          <Text style={m.searchTxt} numberOfLines={1}>{t('screens.settingsHelp.askFollowUp')}</Text>
+          <Ionicons name="arrow-up-circle" size={20} color={COLORS.brandPrimary} />
+        </View>
+      </View>
+      <Pulse active={active}>
+        <View style={[m.card, m.rowBetween]}>
+          <View style={m.rowStart}>
+            <IconDot name="compass-outline" size={26} />
+            <Text style={m.cardTitle} numberOfLines={1}>{t('settings.appGuide')}</Text>
           </View>
+          <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
         </View>
-
-        {/* Section cards */}
-        <View style={qad.sections}>
-          {SECTIONS.map((sec, i) => (
-            <View key={i} style={[qad.sectionCard, i === 0 && { borderLeftWidth: 3, borderLeftColor: sec.color }]}>
-              <View style={qad.sectionRow}>
-                <View style={[qad.secIcon, { backgroundColor: sec.bg }]}>
-                  <Ionicons name={sec.icon as any} size={18} color={sec.color} />
-                </View>
-                <Text style={qad.secLabel}>{sec.label}</Text>
-                {i === 0 ? (
-                  <Animated.View style={{ transform: [{ rotate: chevronDeg }] }}>
-                    <Ionicons name="chevron-down" size={16} color={sec.color} />
-                  </Animated.View>
-                ) : (
-                  <Ionicons name="chevron-down" size={16} color={TEXT_TER} />
-                )}
-              </View>
-
-              {/* Expanding items for Sales */}
-              {i === 0 && (
-                <Animated.View style={[qad.itemsWrap, {
-                  maxHeight: expandH.interpolate({ inputRange: [0, 1], outputRange: [0, 110] }),
-                  opacity: expandH,
-                  overflow: 'hidden',
-                }]}>
-                  {sec.items.map((item, j) => (
-                    <View key={j} style={[qad.subItem, j < sec.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER }]}>
-                      <View style={[qad.subItemIcon, { backgroundColor: sec.bg }]}>
-                        <Ionicons name="document-text-outline" size={12} color={sec.color} />
-                      </View>
-                      <Text style={qad.subItemTxt}>{item}</Text>
-                      <Ionicons name="chevron-forward" size={11} color={sec.color + '80'} />
-                    </View>
-                  ))}
-                </Animated.View>
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* Close circle button */}
-        <View style={qad.bottomRow}>
-          <View style={qad.bottomClose}>
-            <Ionicons name="close" size={18} color="#fff" />
-          </View>
-        </View>
-      </Animated.View>
+      </Pulse>
     </View>
   );
 }
 
-const qad = StyleSheet.create({
-  outerWrap:  { width: '100%', height: 260, overflow: 'hidden', position: 'relative' },
-  dimOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
-  sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#F4F4F4', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: 12,
-  },
-  handle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
-  sheetTitle:  { fontSize: 16, fontWeight: '700', color: TEXT_PRI },
-  closeBtn:    { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  sections:    { paddingHorizontal: 12, gap: 6 },
-  sectionCard: { backgroundColor: CARD_BG, borderRadius: 12, borderWidth: 1.5, borderColor: BORDER, overflow: 'hidden' },
-  sectionRow:  { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, gap: 10 },
-  secIcon:     { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  secLabel:    { flex: 1, fontSize: 14, fontWeight: '700', color: TEXT_PRI },
-  itemsWrap:   { borderTopWidth: 1, borderTopColor: BORDER },
-  subItem:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, paddingHorizontal: 12 },
-  subItemIcon: { width: 26, height: 26, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  subItemTxt:  { flex: 1, fontSize: 12, fontWeight: '500', color: TEXT_PRI },
-  bottomRow:   { alignItems: 'center', paddingTop: 10 },
-  bottomClose: { width: 44, height: 44, borderRadius: 22, backgroundColor: DARK, alignItems: 'center', justifyContent: 'center' },
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
-// SLIDE DATA
+// Slides
 // ─────────────────────────────────────────────────────────────────────────────
-const SLIDE_KEYS: Array<{
+const SLIDES: {
   id: string;
-  isHero?: boolean;
-  emoji?: string;
-  titleKey?: string;
-  descKey?: string;
-  Demo?: React.FC;
-}> = [
-  { id: 'hero', isHero: true },
-  { id: 'swipe', emoji: '👈👉', titleKey: 'onboarding.swipeTitle', descKey: 'onboarding.swipeDesc', Demo: SwipeDemo },
-  { id: 'multiselect', emoji: '👆', titleKey: 'onboarding.multiselectTitle', descKey: 'onboarding.multiselectDesc', Demo: MultiSelectDemo },
-  { id: 'cashflow', emoji: '📊', titleKey: 'onboarding.cashflowTitle', descKey: 'onboarding.cashflowDesc', Demo: CashflowDemo },
-  { id: 'voice', emoji: '🎤', titleKey: 'onboarding.voiceTitle', descKey: 'onboarding.voiceDesc', Demo: VoiceDemo },
-  { id: 'quickadd', emoji: '➕', titleKey: 'onboarding.quickaddTitle', descKey: 'onboarding.quickaddDesc', Demo: QuickAddDemo },
+  icon: IconName;
+  titleKey: string;
+  descKey: string;
+  Mock: React.ComponentType<MockProps>;
+}[] = [
+  { id: 'welcome',   icon: 'sparkles-outline',        titleKey: 'onboarding.welcomeTitle',   descKey: 'onboarding.welcomeDesc',   Mock: WelcomeMock },
+  { id: 'connect',   icon: 'link-outline',            titleKey: 'onboarding.connectTitle',   descKey: 'onboarding.connectDesc',   Mock: ConnectMock },
+  { id: 'company',   icon: 'business-outline',        titleKey: 'onboarding.companyTitle',   descKey: 'onboarding.companyDesc',   Mock: CompanyMock },
+  { id: 'home',      icon: 'home-outline',            titleKey: 'onboarding.homeTitle',      descKey: 'onboarding.homeDesc',      Mock: HomeMock },
+  { id: 'voice',     icon: 'mic-outline',             titleKey: 'onboarding.voiceTitle',     descKey: 'onboarding.voiceDesc',     Mock: VoiceMock },
+  { id: 'create',    icon: 'add-circle-outline',      titleKey: 'onboarding.createTitle',    descKey: 'onboarding.createDesc',    Mock: CreateMock },
+  { id: 'swipe',     icon: 'swap-horizontal-outline', titleKey: 'onboarding.swipeTitle',     descKey: 'onboarding.swipeDesc',     Mock: SwipeMock },
+  { id: 'reports',   icon: 'bar-chart-outline',       titleKey: 'onboarding.reportsTitle',   descKey: 'onboarding.reportsDesc',   Mock: ReportsMock },
+  { id: 'alerts',    icon: 'notifications-outline',   titleKey: 'onboarding.alertsTitle',    descKey: 'onboarding.alertsDesc',    Mock: AlertsMock },
+  { id: 'workspace', icon: 'people-outline',          titleKey: 'onboarding.workspaceTitle', descKey: 'onboarding.workspaceDesc', Mock: WorkspaceMock },
+  { id: 'help',      icon: 'help-circle-outline',     titleKey: 'onboarding.helpTitle',      descKey: 'onboarding.helpDesc',      Mock: HelpMock },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN SCREEN
+// Screen — once after sign-in (navigateAfterAuth), or replayed from Settings → App Guide
 // ─────────────────────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const { t } = useTranslation();
-  const router         = useRouter();
-  const params         = useLocalSearchParams<{ replay?: string }>();
-  const isReplay       = params.replay === 'true';
-  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ replay?: string; next?: string }>();
+  const isReplay = params.replay === 'true';
+  const { user } = useAuth();
+  const { width: pageW } = useWindowDimensions();
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [slideH,       setSlideH]       = useState(520);
+  const [pageH, setPageH] = useState(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const finishingRef = useRef(false);
 
   const goToIndex = useCallback((idx: number) => {
-    scrollRef.current?.scrollTo({ x: idx * SW, animated: true });
+    scrollRef.current?.scrollTo({ x: idx * pageW, animated: true });
     setCurrentIndex(idx);
-  }, []);
+  }, [pageW]);
 
+  // Finishing or skipping marks the guide seen; a replay never touches the flag.
   const finishGuide = useCallback(async () => {
     if (isReplay) {
-      router.back();
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)');
       return;
     }
-    await markOnboardingCompleted();
-    router.replace(isAuthenticated ? '/(tabs)' : '/(auth)');
-  }, [isReplay, router, isAuthenticated]);
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    await markGuideSeen(user?.id).catch(() => {});
+    router.replace(guideDestination(params.next) as Href);
+  }, [isReplay, router, user?.id, params.next]);
 
   const goNext = useCallback(() => {
-    if (currentIndex < SLIDE_KEYS.length - 1) {
-      goToIndex(currentIndex + 1);
-    } else {
-      finishGuide();
-    }
+    if (currentIndex < SLIDES.length - 1) goToIndex(currentIndex + 1);
+    else finishGuide();
   }, [currentIndex, goToIndex, finishGuide]);
 
-  const onScroll = useCallback((e: any) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
-    setCurrentIndex(idx);
-  }, []);
+  // Android back steps through the slides; on the first one it skips the guide.
+  useEffect(() => {
+    if (isReplay) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (currentIndex > 0) goToIndex(currentIndex - 1);
+      else finishGuide();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isReplay, currentIndex, goToIndex, finishGuide]);
 
-  const isLast = currentIndex === SLIDE_KEYS.length - 1;
+  const onScrollEnd = useCallback((e: any) => {
+    setCurrentIndex(Math.round(e.nativeEvent.contentOffset.x / pageW));
+  }, [pageW]);
+
+  const isLast = currentIndex === SLIDES.length - 1;
+  const ctaLabel = !isLast
+    ? t('onboarding.next')
+    : isReplay ? t('onboarding.done') : t('onboarding.getStarted');
 
   return (
     <View style={s.container}>
-      {/* Skip button */}
-      {!isLast && (
-        <SafeAreaView edges={['top']} style={s.skipWrap}>
-          <TouchableOpacity style={s.skipBtn} onPress={finishGuide} activeOpacity={0.7}>
+      <SafeAreaView edges={['top']} style={s.topBar}>
+        <Text style={s.stepTxt}>{currentIndex + 1} / {SLIDES.length}</Text>
+        {!isLast && (
+          <TouchableOpacity style={s.skipBtn} onPress={finishGuide} activeOpacity={0.7} accessibilityRole="button">
             <Text style={s.skipTxt}>{t('onboarding.skip')}</Text>
           </TouchableOpacity>
-        </SafeAreaView>
-      )}
+        )}
+      </SafeAreaView>
 
-      {/* Slides */}
       <ScrollView
         ref={scrollRef}
-        horizontal pagingEnabled scrollEventThrottle={16}
+        horizontal
+        pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScroll}
-        onLayout={(e) => setSlideH(e.nativeEvent.layout.height)}
-        style={{ flex: 1 }}
+        onMomentumScrollEnd={onScrollEnd}
+        onLayout={(e) => setPageH(e.nativeEvent.layout.height)}
+        style={s.pager}
         bounces={false}
       >
-        {SLIDE_KEYS.map((slide) => {
-          if (slide.isHero) {
-            return (
-              <View key={slide.id} style={{ width: SW, height: slideH }}>
-                <HeroSlide />
-              </View>
-            );
-          }
-          const DemoComponent = slide.Demo!;
+        {pageH > 0 && SLIDES.map((slide, i) => {
+          const Mock = slide.Mock;
           return (
-            <View key={slide.id} style={{ width: SW, height: slideH, paddingTop: 68, paddingHorizontal: 22 }}>
-              {/* Demo frame card */}
-              <View style={s.demoFrame}>
-                <View style={s.frameBar} />
-                <DemoComponent />
+            <ScrollView
+              key={slide.id}
+              style={{ width: pageW, height: pageH }}
+              contentContainerStyle={s.page}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              <View style={s.mockFrame}>
+                <Mock active={i === currentIndex} />
               </View>
-
-              {/* Slide text */}
               <View style={s.textBlock}>
-                <Text style={s.slideEmoji}>{slide.emoji}</Text>
-                <Text style={s.slideTitle}>{t(slide.titleKey!)}</Text>
-                <Text style={s.slideDesc}>{t(slide.descKey!)}</Text>
+                <View style={s.titleIcon}>
+                  <Ionicons name={slide.icon} size={18} color={COLORS.brandPrimary} />
+                </View>
+                <Text style={s.title}>{t(slide.titleKey)}</Text>
+                <Text style={s.desc}>{t(slide.descKey)}</Text>
               </View>
-            </View>
+            </ScrollView>
           );
         })}
       </ScrollView>
 
-      {/* Bottom nav */}
       <SafeAreaView edges={['bottom']} style={s.bottomNav}>
         <View style={s.dotsRow}>
-          {SLIDE_KEYS.map((_, i) => (
-            <TouchableOpacity key={i} onPress={() => goToIndex(i)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+          {SLIDES.map((slide, i) => (
+            <TouchableOpacity key={slide.id} onPress={() => goToIndex(i)} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}>
               <View style={[s.dot, i === currentIndex && s.dotActive]} />
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity style={[s.ctaBtn, isLast && s.ctaBtnGold]} onPress={goNext} activeOpacity={0.85}>
-          <Text style={s.ctaTxt}>{isLast ? `${t('onboarding.getStarted')}  →` : `${t('onboarding.next')}  →`}</Text>
+        <TouchableOpacity style={s.ctaBtn} onPress={goNext} activeOpacity={0.85} accessibilityRole="button">
+          <Text style={s.ctaTxt}>{ctaLabel}</Text>
+          <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={18} color={COLORS.white} />
         </TouchableOpacity>
       </SafeAreaView>
     </View>
@@ -828,35 +668,228 @@ export default function OnboardingScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STYLES
+// Styles
 // ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: PAGE_BG },
+  container: { flex: 1, backgroundColor: COLORS.pageBg },
 
-  skipWrap:   { position: 'absolute', top: 0, right: 16, zIndex: 20 },
-  skipBtn:    { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(26,26,26,0.07)', marginTop: 10, borderWidth: 1, borderColor: BORDER },
-  skipTxt:    { fontSize: 13, fontWeight: '600', color: TEXT_SEC },
-
-  demoFrame:  {
-    backgroundColor: CARD_BG, borderRadius: 18, padding: 14,
-    borderWidth: 1.5, borderColor: BORDER,
-    shadowColor: DARK, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
-    overflow: 'hidden',
+  topBar: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md + 6,
   },
-  frameBar:   { height: 3, backgroundColor: GOLD, borderRadius: 2, marginBottom: 12, width: 36, alignSelf: 'center', opacity: 0.85 },
+  stepTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, marginTop: SPACING.sm + 2 },
+  skipBtn: {
+    paddingHorizontal: 14, paddingVertical: 7, marginTop: SPACING.sm + 2,
+    borderRadius: RADIUS.full, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  skipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
 
-  textBlock:  { paddingTop: 18 },
-  slideEmoji: { fontSize: 28, marginBottom: 8 },
-  slideTitle: { fontSize: 22, fontWeight: '800', color: TEXT_PRI, marginBottom: 6, letterSpacing: -0.3 },
-  slideDesc:  { fontSize: 13, color: TEXT_SEC, lineHeight: 21 },
+  pager: { flex: 1 },
+  page: {
+    flexGrow: 1, justifyContent: 'center',
+    paddingTop: SPACING.xxl + SPACING.sm, paddingBottom: SPACING.md, paddingHorizontal: SPACING.md + 6,
+  },
+  mockFrame: {
+    height: MOCK_H, justifyContent: 'center', overflow: 'hidden',
+    backgroundColor: COLORS.hoverBg, borderRadius: RADIUS.xl, padding: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  textBlock: { paddingTop: SPACING.lg },
+  titleIcon: {
+    width: 36, height: 36, borderRadius: 18, marginBottom: SPACING.sm + 4,
+    backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3, marginBottom: SPACING.sm },
+  desc: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, lineHeight: 22 },
 
-  bottomNav:  { paddingHorizontal: 22, paddingBottom: 12, paddingTop: 6, backgroundColor: PAGE_BG, borderTopWidth: 1, borderTopColor: BORDER },
-  dotsRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 14 },
-  dot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(26,26,26,0.15)' },
-  dotActive:  { width: 22, height: 6, borderRadius: 3, backgroundColor: GOLD },
+  bottomNav: {
+    paddingHorizontal: SPACING.md + 6, paddingTop: SPACING.sm, paddingBottom: SPACING.sm + 4,
+    backgroundColor: COLORS.pageBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  dotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: SPACING.md },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.borderStrong },
+  dotActive: { width: 20, backgroundColor: COLORS.brandPrimary },
+  ctaBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15,
+  },
+  ctaTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.2 },
+});
 
-  ctaBtn:     { backgroundColor: DARK, borderRadius: 13, paddingVertical: 15, alignItems: 'center' },
-  ctaBtnGold: { backgroundColor: GOLD },
-  ctaTxt:     { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+const m = StyleSheet.create({
+  pulse: {
+    position: 'absolute', top: -4, left: -4, right: -4, bottom: -4,
+    borderWidth: 2, borderColor: COLORS.info,
+  },
+  iconDot: { alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center' },
+  stack: { gap: SPACING.sm },
+  shrink: { flexShrink: 1 },
+  lines: { flex: 1, gap: 5 },
+  rowStart: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm },
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: SPACING.sm + 4,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  cardTitle: { flexShrink: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  mutedTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  listRow: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 7,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  listRowTight: { paddingVertical: 4 },
+  listRowLast: { borderBottomWidth: 0 },
+  listTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textPrimary },
+  chip: {
+    paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+
+  // Welcome
+  logoBox: {
+    width: 76, height: 76, borderRadius: RADIUS.xl, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  flowRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.lg },
+  flowPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: SPACING.sm + 4, paddingVertical: 6, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  flowTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+
+  // Connect
+  codeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
+  codeBox: {
+    flex: 1, height: 40, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: COLORS.borderStrong, backgroundColor: COLORS.pageBg,
+  },
+  codeTxt: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
+  demoPill: {
+    flexShrink: 1, paddingHorizontal: SPACING.sm + 2, paddingVertical: 4, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.warningBg, borderWidth: 1, borderColor: COLORS.warning,
+  },
+  demoTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.warning },
+
+  // Company & year
+  companyTxt: { flexShrink: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  syncRow: { gap: 4, marginTop: 4 },
+  fyPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: SPACING.sm, paddingVertical: 5,
+    borderWidth: 1.5, borderColor: COLORS.borderStrong, borderStyle: 'dashed', borderRadius: RADIUS.sm,
+  },
+  fyTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
+  avatar: {
+    width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.white },
+
+  // Home
+  kpiValue: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  trendPill: { paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full, backgroundColor: COLORS.positiveBg },
+  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.positive },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  miniDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderStrong },
+  miniDotOn: { width: 14, backgroundColor: COLORS.brandPrimary },
+  periodRow: {
+    flexDirection: 'row', alignSelf: 'flex-start', gap: 2, padding: 3, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  periodPill: { paddingHorizontal: SPACING.sm + 4, paddingVertical: 4, borderRadius: RADIUS.full },
+  periodPillOn: { backgroundColor: COLORS.cardBg },
+  periodTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary },
+  periodTxtOn: { fontWeight: '800', color: COLORS.textPrimary },
+  squareBtn: {
+    width: 28, height: 28, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  barTrack: { height: 8, backgroundColor: COLORS.borderDefault },
+  barFill: { height: 8 },
+
+  // Search
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full, paddingLeft: 14, paddingRight: 6, paddingVertical: 6,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  searchTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  micBtn: {
+    width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Create
+  sheet: {
+    backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm + 4, paddingTop: SPACING.sm, paddingBottom: SPACING.md + 4,
+    borderWidth: 1, borderColor: COLORS.borderDefault, gap: 2,
+  },
+  sheetHandle: { width: 32, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 6 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 2 },
+  plusWrap: { alignItems: 'center', marginTop: -22 },
+  plusBtn: {
+    width: 46, height: 46, borderRadius: 23, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: COLORS.hoverBg,
+  },
+
+  // Swipe & select
+  swipeRow: { height: 52, borderRadius: RADIUS.md, overflow: 'hidden', justifyContent: 'center' },
+  actions: { position: 'absolute', top: 0, bottom: 0, flexDirection: 'row' },
+  actionsLeft: { left: 0 },
+  actionsRight: { right: 0 },
+  action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
+  actionTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
+  swipeCard: {
+    height: 52, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.sm + 2,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  selectBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm + 4, paddingVertical: 10,
+  },
+  selectTxt: { flexShrink: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
+
+  // Reports
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: SPACING.sm },
+  tile: {
+    width: '31.5%', minHeight: 84, gap: 6, padding: SPACING.sm + 2,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  tileTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+
+  // Alerts
+  bellWrap: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    position: 'absolute', top: 1, right: 1, minWidth: 14, height: 14, borderRadius: 7, paddingHorizontal: 3,
+    backgroundColor: COLORS.negative, alignItems: 'center', justifyContent: 'center',
+  },
+  badgeTxt: { fontSize: TYPOGRAPHY.xs - 2, fontWeight: '800', color: COLORS.white },
+
+  // Workspace
+  roundBtn: {
+    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  creditTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.positive },
+
+  // Help
+  bubbleBot: {
+    alignSelf: 'flex-start', width: '78%', gap: 6, marginTop: SPACING.sm, padding: SPACING.sm,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, borderTopLeftRadius: 2,
+  },
+  bubbleUser: {
+    alignSelf: 'flex-end', marginTop: 6, padding: SPACING.sm,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, borderTopRightRadius: 2,
+  },
+  askBar: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.sm,
+    paddingLeft: 12, paddingRight: 4, paddingVertical: 4, borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
 });

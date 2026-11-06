@@ -88,7 +88,10 @@ export interface WorkspaceContextValue {
   isOwnerOrAdmin: boolean;
   /** True only for Workspace OWNER (billing / transfer / reset / close). */
   isOwner: boolean;
-  /** Changes whenever a restore request of the active workspace is created, decided or cancelled. */
+  /**
+   * Changes whenever a restore request of the active workspace is created, decided or cancelled, and when
+   * Desktop asks for a Hard Sync.
+   */
   restoreSignal: number;
   capabilities: Set<string>;
   entryMode: EntryMode;
@@ -106,6 +109,7 @@ export interface WorkspaceContextValue {
     items: T[],
     kind: 'ledgers' | 'godowns' | 'companies' | 'fys' | 'costCentres'
   ) => T[];
+  /** Resolves to the new list, or null when it could not be loaded (the list on screen is kept). */
   refreshInvitations: () => Promise<any>;
   acceptInvite: (id: string) => Promise<any>;
   declineInvite: (id: string) => Promise<void>;
@@ -201,6 +205,14 @@ function pickPreferredWorkspaceId(
   };
 }
 
+/** Who sent an invitation: a name, else a phone or email, when the server includes one. */
+function inviterOf(inv: any): string | null {
+  const by = [inv?.invited_by, inv?.invitedBy, inv?.inviter].find((v) => v && typeof v === 'object');
+  const who = inv?.invited_by_name || inv?.invitedByName || inv?.inviter_name || inv?.inviterName || by?.name
+    || inv?.invited_by_mobile || inv?.inviter_mobile || inv?.inviter_phone || by?.mobile || by?.phone || by?.email;
+  return who ? String(who) : null;
+}
+
 function normalizeList(raw: any): WorkspaceSummary[] {
   const list = raw?.data ?? raw ?? [];
   if (!Array.isArray(list)) return [];
@@ -276,6 +288,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const res: any = await listMyInvitations();
       const list = res?.data ?? res ?? [];
+      // Expiry is judged against when the list arrived, not the clock at render time.
+      const fetchedAt = Date.now();
       const next = Array.isArray(list)
         ? list.map((inv: any) => ({
             id: String(inv?.id || ''),
@@ -285,16 +299,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               inv?.role_display_name || inv?.role_name || inv?.roleName
               || inv?.role?.display_name || inv?.role?.displayName || 'Member'
             ),
+            invited_by_name: inviterOf(inv),
             status: inv?.status || 'PENDING',
             expires_at: inv?.expires_at,
             created_at: inv?.created_at,
+            fetched_at: fetchedAt,
           })).filter((inv: any) => inv.id)
         : [];
       setInvitations(next);
       return next;
     } catch {
-      setInvitations([]);
-      return [];
+      // A failed refresh keeps the invitations already shown.
+      return null;
     }
   }, [isAuthenticated]);
 
@@ -552,6 +568,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!isAuthenticated) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- logout reset must stay in lockstep with the module-level active-workspace globals cleared by applyActiveWorkspace
       setWorkspaces([]);
+      // A failed first refresh after the next sign-in keeps the list, so it must not be this user's.
+      setInvitations([]);
       setAccess(null);
       applyActiveWorkspace(null);
       setLoading(false);
@@ -629,8 +647,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               type: 'info',
               text1: 'Workspace invitation',
               text2: n > 0
-                ? 'Open Settings → Invitations to accept'
-                : 'Pull to refresh Invitations',
+                ? 'Open Settings → Requests to accept'
+                : 'Pull to refresh Settings → Requests',
               visibilityTime: 4000,
             });
           })
@@ -648,10 +666,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       if (event === 'hard_sync_request') {
         refreshContext();
+        setRestoreSignal((n) => n + 1);
         Toast.show({
           type: 'info',
           text1: 'Hard Sync requested',
-          text2: 'Owner/Admin: Settings → Approvals',
+          text2: 'Owner/Admin: Settings → Requests',
         });
         return;
       }
@@ -676,7 +695,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           Toast.show({
             type: 'info',
             text1: 'Restore request waiting',
-            text2: 'Review it on Home or in Settings → Approvals',
+            text2: 'Review it on Home or in Settings → Requests',
           });
         }
       }
@@ -782,6 +801,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const acceptInvite = useCallback(
     async (id: string) => {
       const res: any = await acceptInvitation(id);
+      // Gone from the list even if the refresh below fails.
+      setInvitations((cur) => cur.filter((inv) => inv.id !== id));
       await refreshInvitations();
       await refreshWorkspaces();
       return res?.data ?? res;
@@ -792,6 +813,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const declineInvite = useCallback(
     async (id: string) => {
       await declineInvitation(id);
+      setInvitations((cur) => cur.filter((inv) => inv.id !== id));
       await refreshInvitations();
     },
     [refreshInvitations]

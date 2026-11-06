@@ -13,8 +13,8 @@
         "NSCameraUsageDescription": "Scan vendor bills to auto-fill purchase invoices",
         "NSPhotoLibraryUsageDescription": "Upload your company logo from photo library",
         "NSDocumentsFolderUsageDescription": "Attach documents to Help Center support chat",
-        "NSMicrophoneUsageDescription": "Use the microphone for voice search on the dashboard",
-        "NSSpeechRecognitionUsageDescription": "Convert your speech to text for dashboard search",
+        "NSMicrophoneUsageDescription": "Auditer uses the microphone for voice search, so you can find invoices, parties and items by speaking.",
+        "NSSpeechRecognitionUsageDescription": "Auditer turns what you say into search text for voice search, so you can find invoices, parties and items by speaking.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true
@@ -87,8 +87,8 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Allow Auditer to use the microphone for voice search.",
-          "speechRecognitionPermission": "Allow Auditer to use speech recognition for voice search."
+          "microphonePermission": "Auditer uses the microphone for voice search, so you can find invoices, parties and items by speaking.",
+          "speechRecognitionPermission": "Auditer turns what you say into search text for voice search, so you can find invoices, parties and items by speaking."
         }
       ],
       "expo-font",

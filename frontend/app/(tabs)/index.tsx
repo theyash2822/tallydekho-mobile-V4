@@ -28,6 +28,7 @@ import { SEARCH_PLACEHOLDERS, PLACEHOLDER_ROTATE_MS } from '../../src/utils/glob
 import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
 import PairingBanner from '../../src/components/PairingBanner';
 import RestoreRequestBanner from '../../src/components/RestoreRequestBanner';
+import { requestsHref } from '../../src/hooks/usePendingRequests';
 import OfflineBadge from '../../src/components/OfflineBadge';
 import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
@@ -51,6 +52,8 @@ import { useTabAccess } from '../../src/components/RequireCapability';
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
+/** Set once the old stored 7D → 1M migration has run on this device. */
+const CASHFLOW_7D_MIGRATED_KEY = 'cashflow_period_7d_migrated';
 
 /** Home KPI strip id → sensitive policy key */
 const KPI_SENSITIVE: Record<string, string> = {
@@ -397,12 +400,16 @@ export default function HomeScreen() {
   }, [lastSyncAt, dataReady, companyGuid, loadData]);
 
   const readStoredPeriod = useCallback(() => {
-    AsyncStorage.getItem(CASHFLOW_PERIOD_KEY).then((saved) => {
-      // Migrate sticky 7D → 1M: short windows often show ₹0 when last invoice is >7 days ago.
-      if (saved === '7D') {
-        setActiveFilter('1M');
-        AsyncStorage.setItem(CASHFLOW_PERIOD_KEY, '1M').catch(() => {});
-        return;
+    AsyncStorage.multiGet([CASHFLOW_PERIOD_KEY, CASHFLOW_7D_MIGRATED_KEY]).then(([[, saved], [, migrated]]) => {
+      // One-time move off a sticky 7D (short windows often showed ₹0 when the last invoice
+      // was >7 days ago). A 7D the user picks after that is kept.
+      if (!migrated) {
+        AsyncStorage.setItem(CASHFLOW_7D_MIGRATED_KEY, '1').catch(() => {});
+        if (saved === '7D') {
+          setActiveFilter('1M');
+          AsyncStorage.setItem(CASHFLOW_PERIOD_KEY, '1M').catch(() => {});
+          return;
+        }
       }
       if (isSyncPeriod(saved)) setActiveFilter(saved);
     }).catch(() => { /* ignore */ });
@@ -589,7 +596,7 @@ export default function HomeScreen() {
         {/* Status banners */}
         {invitations?.length > 0 && (
           <TouchableOpacity
-            onPress={() => safePush(router, '/settings/invitations')}
+            onPress={() => safePush(router, requestsHref('invitations'))}
             style={{
               marginHorizontal: SPACING.md, marginTop: 8, marginBottom: 4,
               padding: 12, borderRadius: 10, backgroundColor: '#EFF6FF',
@@ -598,7 +605,7 @@ export default function HomeScreen() {
           >
             <Ionicons name="mail-unread-outline" size={18} color="#2563EB" />
             <Text style={{ flex: 1, color: '#1E40AF', fontWeight: '600', fontSize: 13 }}>
-              {invitations.length} workspace invitation{invitations.length > 1 ? 's' : ''} — tap to accept
+              {t('home.invitationsWaiting', { count: invitations.length })}
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#2563EB" />
           </TouchableOpacity>
@@ -708,7 +715,7 @@ export default function HomeScreen() {
                 onRetry={() => loadData({ soft: true })}
               />
             ) : null}
-            <CashflowCard {...(cashflow || {})} />
+            <CashflowCard {...(cashflow || {})} asOf={dataAsOf} />
           </>
         )}
 

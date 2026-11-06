@@ -1,9 +1,12 @@
 /**
  * BottomModalShell — shared RN Modal bottom-sheet layout for stock/ledger forms.
  *
- * Must sit flush to the bottom edge (full-width white sheet). Avoid KAV
- * `behavior="height"` when the keyboard is closed — that leaves a gap under
- * the Save button where the screen behind peeks through.
+ * Must sit flush to the bottom edge (full-width white sheet). The
+ * KeyboardAvoidingView stays mounted for as long as the sheet is: mounting it
+ * only once the keyboard opens remounts the sheet, which blurs the focused
+ * input and closes the keyboard again. `padding` on both platforms — the Modal
+ * is edge-to-edge, so on Android nothing else lifts the sheet, and `height`
+ * leaves a gap under the Save button once the keyboard closes.
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -27,7 +30,7 @@ type Props = {
   headerExtra?: React.ReactNode;
   /** Pass ScrollView ref when parent needs scrollToEnd */
   scrollRef?: React.RefObject<ScrollViewInstance | null>;
-  /** Enable keyboard avoidance only while keyboard is open (default true) */
+  /** Lift the sheet above the keyboard (default true) */
   keyboardAvoiding?: boolean;
   sheetStyle?: ViewStyle;
   scrollContentStyle?: ViewStyle;
@@ -71,12 +74,15 @@ export function BottomModalShell({
 
   // Cap sheet only — do NOT put maxHeight on ScrollView (causes empty white gap).
   const sheetMaxHeight = Math.round(windowHeight * 0.92);
-  const bottomPad = Math.max(insets.bottom, 12);
+  // Lifted onto the keyboard, the home-indicator inset is covered anyway.
+  const lifted = keyboardAvoiding && keyboardOpen;
+  const bottomPad = lifted ? 12 : Math.max(insets.bottom, 12);
 
   const sheet = (
     <View
       style={[
         ms.sheet,
+        shell.sheet,
         {
           maxHeight: sheetMaxHeight,
           width: '100%',
@@ -120,10 +126,6 @@ export function BottomModalShell({
     </View>
   );
 
-  // Only apply KAV while keyboard is open — closed KAV (esp. Android `height`)
-  // lifts the sheet and leaves a gap where the list peeks under Save.
-  const useKav = keyboardAvoiding && keyboardOpen;
-
   return (
     <Modal
       visible={visible}
@@ -139,17 +141,14 @@ export function BottomModalShell({
           activeOpacity={1}
           onPress={onClose}
         />
-        {useKav ? (
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={0}
-            style={shell.kav}
-          >
-            {sheet}
-          </KeyboardAvoidingView>
-        ) : (
-          sheet
-        )}
+        <KeyboardAvoidingView
+          enabled={keyboardAvoiding}
+          behavior="padding"
+          keyboardVerticalOffset={0}
+          style={shell.kav}
+        >
+          {sheet}
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -164,8 +163,14 @@ const shell = StyleSheet.create({
   backdrop: {
     flex: 1,
   },
+  // Capped at the screen: with the keyboard up a tall sheet shrinks and its body
+  // scrolls, so the footer stays above the keyboard and the title on screen.
   kav: {
     width: '100%',
+    maxHeight: '100%',
+  },
+  sheet: {
+    flexShrink: 1,
   },
   scroll: {
     flexGrow: 0,

@@ -66,7 +66,7 @@ await check('api GETs retry an older response once and synced records the revisi
 });
 
 await check('approvals show companies, years and identity replacement', () => {
-  const src = read('app/settings/approvals.tsx');
+  const src = read('src/components/requests/ApprovalsList.tsx');
   assert.match(src, /r\.scope\?\.companies/);
   assert.match(src, /r\.scope\?\.replacement/);
 });

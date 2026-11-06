@@ -174,7 +174,6 @@ export default function BottomSheetSearch({
         backdropComponent={renderBackdrop}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
-        android_keyboardInputMode="adjustResize"
         backgroundStyle={s.sheetBg}
         handleIndicatorStyle={s.handle}
         topInset={insets.top + 16}

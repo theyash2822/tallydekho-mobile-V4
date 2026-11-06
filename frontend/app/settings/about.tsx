@@ -42,9 +42,9 @@ const CHANGELOG = [
 ];
 
 const LINKS = [
-  { icon:'globe-outline',           labelKey:'screens.settingsAbout.website',          action:()=>Linking.openURL('https://tallydekho.com'),                  color:COLORS.info },
-  { icon:'shield-checkmark-outline', labelKey:'screens.settingsAbout.privacyPolicy',   action:()=>Linking.openURL('https://www.tallydekho.com/privacy-policy.html'), color:'#7C3AED' },
-  { icon:'document-text-outline',   labelKey:'screens.settingsAbout.termsOfService', action:()=>Linking.openURL('https://staticv2.tallydekho.com/TallyDekho_TermsOfService.pdf'), color:COLORS.warning },
+  { icon:'globe-outline',           labelKey:'screens.settingsAbout.website',          action:()=>Linking.openURL('https://auditer.com'),         color:COLORS.info },
+  { icon:'shield-checkmark-outline', labelKey:'screens.settingsAbout.privacyPolicy',   action:()=>Linking.openURL('https://auditer.com/privacy'), color:'#7C3AED' },
+  { icon:'document-text-outline',   labelKey:'screens.settingsAbout.termsOfService', action:()=>Linking.openURL('https://auditer.com/terms'),   color:COLORS.warning },
 ];
 
 export default function AboutScreen() {

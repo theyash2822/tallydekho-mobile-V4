@@ -7,12 +7,17 @@ Prefix: `/api/*` for most calls, `/tally/*` for write-back. Live Mobile has no `
 ## Auth Header
 Token from AsyncStorage `auth_token` → `Authorization: Bearer <token>`
 
+Every request (sign-in, refresh, logout included) also sends `X-Client-Type: app` and
+`X-Device-Name: encodeURIComponent("Pixel 7 (Android 15)")` (≤ 80 chars, `src/services/clientIdentity.ts`);
+the server labels the sign-in session with them (Settings → Signed-in devices).
+
 ## Access Token Renewal
 Access tokens expire after 15 minutes. On a 401, `request()` calls
 `tryRefreshSession()` once — `POST /api/auth/refresh` with the SecureStore
 refresh token — and replays the original request. Concurrent 401s share the one
-in-flight refresh. Sign-out happens only when the refresh is rejected; a 403 or
-RBAC denial never signs the user out.
+in-flight refresh. Sign-out happens only when the refresh endpoint answers 400 or
+401 (as on the web); a captive portal, proxy or rate limit (200 HTML, 404, 429, 5xx)
+keeps the session and retries. A 403 or RBAC denial never signs the user out.
 
 ## Company + FY Pattern
 ```ts
@@ -43,7 +48,11 @@ tallyPost('/endpoint', b) // POST /tally/endpoint — Demo context routes to /ap
 | setBiometric | PATCH | /api/auth/set-biometric |
 | getMe | GET | /api/auth/me |
 | logout | POST | /api/auth/logout |
-| register | POST | /api/auth/register |
+| logoutOnServer _(sign-out)_ | POST | /api/auth/logout — Bearer (expired is fine) + `{ refreshToken, pushToken }`; 5 s per try, one retry on 503 LOGOUT_FAILED / network; 401 = already ended |
+| logoutAllSessions | POST | /api/auth/logout-all `{ keepCurrent?: true }` → `{ revoked }` |
+| getAuthSessions | GET | /api/auth/sessions → `{ sessions: [{ id, client_type, device_label, created_at, last_used_at, current }] }` |
+| register | POST | /api/auth/register — answers new access + refresh tokens for the same session (stored; the verify-otp refresh token stops working) |
+| registerPushToken | POST | /api/push-token `{ token, platform, deviceId }` — after every sign-in, a PIN / phone change and Log out of all devices (keep this one) |
 
 ## Pairing / Sync
 | Function | Path |
@@ -136,6 +145,10 @@ getGstOverview — GET /api/gst/overview
 getGstIms / saveGstImsActions — GET /api/gst/ims?period=MMYYYY · POST /api/gst/ims/action (accepted | rejected | pending)
 getGstDeposits / postGstDeposit — GET /api/gst/deposits?from&to · POST /api/gst/deposits/:id/post
 checkGstin — GET /api/gst/gstin-check?gstin (party create Verify)
+getGstPortalSales(companyGuid, period?) — GET /api/gst/portal-sales?companyGuid&period (GSTR-1 / IFF on the portal against the books; no period → the server's latest)
+getGstPortalPurchases(companyGuid, period?, source) — GET /api/gst/purchases?companyGuid&period&source=2b|2a (GSTR-2B / 2A against the books)
+Both: `ready: false` is information (200, empty rows, `message`), 409 GST_NOT_CONNECTED / GST_SESSION_EXPIRED, 400 COMPANY_GSTIN_MISSING,
+502/503 GST_PORTAL_UNREACHABLE, 504 GST_PORTAL_TIMEOUT (these GST_PORTAL_* answers do not mark the server unreachable); cached ≤ 6 h (`fetched_at`), no credits.
 
 ## AI Insights
 getAIInsights, getAIInsightsHistory — GET /api/ai/insights + ?companyGuid&fy

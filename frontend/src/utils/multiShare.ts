@@ -9,6 +9,7 @@
  * - Mixed sizes / stitch failure: print each silently → pdf-lib merge (C)
  */
 import { Alert, Share } from 'react-native';
+import type { TFunction } from 'i18next';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -20,6 +21,8 @@ import { resolvePdfOptions } from './voucherPdf';
 import { generateDocumentHTML } from './documentHelpers';
 import { DayBookInput, DayBookRow, renderDayBookHTML, RegisterCompany } from './pdf/dayBookSheet';
 import { StockRegisterInput, renderStockRegisterHTML } from './pdf/stockRegisterSheet';
+import { renderMasterSheetHTML, MasterSheetInput, MasterSheetCompany } from './pdf/masterSheet';
+import { renderTallyStatementHTML, StatementInput, StatementRow } from './pdf/tallyLayout';
 import {
   ComplianceVoucher,
   ComplianceCompany,
@@ -143,12 +146,13 @@ async function mergeHtmlDocsToOnePdf(
   await presentPdfUri(outPath, fileName, onBeforeShare);
 }
 
-function stitchA4HtmlDocs(htmlDocuments: string[]): string {
+function stitchA4HtmlDocs(htmlDocuments: string[], pagePadding?: string): string {
+  const padStyle = pagePadding ? `padding:${pagePadding};` : '';
   const sections = htmlDocuments
     .map((full, idx) => {
       const body = extractBody(full);
       const breakStyle = idx === 0 ? '' : 'page-break-before:always;';
-      return `<div style="${breakStyle}">${body}</div>`;
+      return `<div style="${breakStyle}${padStyle}">${body}</div>`;
     })
     .join('\n');
 
@@ -187,7 +191,12 @@ function pickThermalWidth(kinds: PageKind[]): ThermalPaperWidth {
  */
 export async function shareMultiPageHtmlPdf(
   htmlDocuments: string[],
-  opts: { fileName?: string; onBeforeShare?: () => void } = {}
+  opts: {
+    fileName?: string;
+    onBeforeShare?: () => void;
+    /** A4 stitch only: each document's body padding is dropped with its <head>; this puts it back. */
+    pagePadding?: string;
+  } = {}
 ): Promise<void> {
   if (!assertCanSharePdf()) return;
   if (!htmlDocuments.length) throw new Error('No documents to share.');
@@ -205,7 +214,7 @@ export async function shareMultiPageHtmlPdf(
   // Classic / Executive (all A4): keep working HTML stitch
   if (allA4) {
     try {
-      const html = stitchA4HtmlDocs(htmlDocuments);
+      const html = stitchA4HtmlDocs(htmlDocuments, opts.pagePadding);
       const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
       await presentPdfUri(uri, fileName, opts.onBeforeShare);
       return;
@@ -252,6 +261,95 @@ export async function shareStockRegisterPdf(
 ): Promise<void> {
   const html = renderStockRegisterHTML(input);
   await shareHtmlPdf(html, opts.fileName || `${input.title}.pdf`, opts.onBeforeShare);
+}
+
+// ── Ledger PDF: "Transactions only" or "Full details" ────────────────────────
+
+export type LedgerShareMode = 'transactions' | 'full';
+
+/** Ask what a ledger PDF carries: the statement alone, or each ledger's details sheet first. */
+export function promptLedgerShareMode(t: TFunction, onChoose: (mode: LedgerShareMode) => void): void {
+  Alert.alert(
+    t('pdf.sharePdf'),
+    t('ledger.shareWhat'),
+    [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('ledger.shareTransactions'), onPress: () => onChoose('transactions') },
+      { text: t('ledger.shareFullDetails'), onPress: () => onChoose('full') },
+    ],
+    { cancelable: true }
+  );
+}
+
+/**
+ * The ledger row of GET /api/ledgers/:id/statement (`data.ledger`, every ledgers column) as a
+ * details sheet. `opening` is the statement's own opening so the two pages agree.
+ */
+export function ledgerDetailsSheet(
+  ledger: Record<string, any> | null | undefined,
+  opts: { title: string; name?: string; opening?: { amount?: number | null; side?: string | null } }
+): MasterSheetInput {
+  const l = ledger || {};
+  const address = String(l.address ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(', ');
+  const openingRaw = opts.opening?.amount ?? (l.opening_balance != null ? parseFloat(l.opening_balance) : null);
+  const opening = openingRaw != null && Number.isFinite(openingRaw) ? Math.round(Math.abs(openingRaw)) : null;
+  const phone = String(l.phone ?? '').trim();
+  const mobile = String(l.mobile ?? '').trim();
+  return {
+    title: opts.title,
+    name: l.name || opts.name,
+    parent: l.parent || null,
+    payload: {
+      gstin: l.gstin,
+      gstRegType: l.gst_registration_type,
+      pan: l.pan,
+      address,
+      state: l.state_name || l.state,
+      pincode: l.pincode,
+      phone,
+      mobile: mobile !== phone ? mobile : '',
+      email: l.email,
+      openingBalance: opening,
+      isCr: (opts.opening?.side ?? l.balance_type) === 'Cr',
+      accountNumber: l.bank_account_no,
+      ifsc: l.bank_ifsc,
+      accountType: l.bank_account_type,
+    },
+  };
+}
+
+/** Each transaction's narration as an indented row under it, as Tally prints a ledger. */
+export function withNarrationRows(
+  rows: StatementRow[],
+  narrations: (string | null | undefined)[]
+): StatementRow[] {
+  return rows.flatMap((row, i) => {
+    const text = String(narrations[i] ?? '').trim();
+    return text ? [row, { date: row.date, particulars: text, indent: true }] : [row];
+  });
+}
+
+export type LedgerFullDetails = { details: MasterSheetInput; statement: StatementInput };
+
+/**
+ * "Full details": per ledger its details sheet, then its statement — one PDF, one share sheet,
+ * with the 10mm margin `shareMultiStatementPdf` gives every statement page.
+ */
+export async function shareLedgerFullDetailsPdf(
+  ledgers: LedgerFullDetails[],
+  company: MasterSheetCompany,
+  opts: { fileName?: string; onBeforeShare?: () => void } = {}
+): Promise<void> {
+  if (!ledgers.length) throw new Error('No ledgers to share');
+  const pages = ledgers.flatMap(({ details, statement }) => [
+    renderMasterSheetHTML(details, company),
+    renderTallyStatementHTML(statement),
+  ]);
+  await shareMultiPageHtmlPdf(pages, { ...opts, pagePadding: '10mm' });
 }
 
 /** Load voucher + Spec HTML. Returns null on failure. */

@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { HOME_POLL_MS, usePendingRequests } from '../hooks/usePendingRequests';
 import { getCompanies, getCompanyYears } from '../services/api';
 import { safePush } from '../utils/safeNavigation';
 import { filterCompaniesForPairing } from '../utils/isDemoCompany';
@@ -57,6 +58,9 @@ const Header: React.FC<HeaderProps> = ({
   const { t } = useTranslation();
   const { company, setCompany, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
   const { pairingStatus, filterScoped, demoMode } = useWorkspace();
+  // The bell also counts requests waiting for this user (approvals and invitations).
+  const { counts: pendingRequests } = usePendingRequests({ pollMs: HOME_POLL_MS });
+  const bellCount = notificationCount + pendingRequests.total;
   const [selectedFY, setSelectedFY] = useState(contextFY?.label || fyYear);
   const [selectedCompany, setSelectedCompany] = useState(company?.name || companyName);
   const [companies, setCompanies] = useState<any[]>([]);
@@ -284,9 +288,9 @@ const Header: React.FC<HeaderProps> = ({
 
           <TouchableOpacity style={styles.iconBtn} onPress={handleNotification} activeOpacity={0.7}>
             <Ionicons name="notifications-outline" size={21} color={COLORS.textPrimary} />
-            {notificationCount > 0 && (
+            {bellCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{notificationCount}</Text>
+                <Text style={styles.badgeText}>{bellCount > 99 ? '99+' : bellCount}</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -429,7 +433,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.white },
   badge: {
     position: 'absolute', top: 2, right: 2,
-    width: 15, height: 15, borderRadius: 8,
+    minWidth: 15, height: 15, borderRadius: 8, paddingHorizontal: 3,
     backgroundColor: '#E53935', alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { fontSize: 8, color: COLORS.white, fontWeight: '700' },

@@ -252,7 +252,7 @@ await check('Delete Account uses the real endpoints and signs out through AuthCo
   assert.match(sheet, /<ActivityIndicator/, 'missing /<ActivityIndicator/');
   assert.ok(!sheet.includes('accountDeleted'), 'the sheet never reports success on its own');
   assert.ok(!sheet.includes('changeNumberMsg'), 'the change-number alert is gone');
-  assert.match(profile, /await signOut\(\)\.catch\(\(\) => \{\}\);\n\s+router\.replace\('\/\(auth\)'\);/, 'missing /await signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\);\\n\\s+router\\.replace\\(\'\\/\\(auth\\)\'\\);/');
+  assert.match(profile, /await signOut\(\)\.catch\(\(\) => \{\}\);\n\s+leaveForSignIn\(router, navigationRef\);/, 'missing /await signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\);\\n\\s+leaveForSignIn\\(router, navigationRef\\);/');
   assert.match(profile, /'screens\.settingsProfile\.accountDeleted'\), t\('screens\.settingsProfile\.accountDeletedMsg'\)/, 'missing /\'screens\\.settingsProfile\\.accountDeleted\'\\), t\\(\'screens\\.settingsProfile\\.accountDeletedMsg\'\\)/');
 });
 

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, LogBox } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -21,7 +21,8 @@ import Toast from 'react-native-toast-message';
 import { BottomSheetModalProvider, useBottomSheetModal } from '@gorhom/bottom-sheet';
 import { toastConfig } from '../src/utils/toastConfig';
 import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
-import { ONBOARDING_COMPLETED_KEY } from '../src/utils/onboardingNav';
+import { navigateAfterAuth } from '../src/utils/onboardingNav';
+import { leaveForSignIn } from '../src/utils/signOutNavigation';
 import { COLORS } from '../src/constants/colors';
 import ServerReachabilityBanner from '../src/components/ServerReachabilityBanner';
 import { ErrorState } from '../src/components/ApiStateViews';
@@ -82,6 +83,7 @@ function StatusBarCover() {
 function RootNavigation() {
   const { isAuthenticated, isLoading, setUser } = useAuth();
   const router = useRouter();
+  const navigationRef = useNavigationContainerRef();
   const segments = useSegments();
 
   const { dismissAll: dismissSheets } = useBottomSheetModal();
@@ -143,20 +145,14 @@ function RootNavigation() {
 
     if (inOnboarding) return;
 
-    (async () => {
-      const onboardingDone = (await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)) === 'true';
-
-      if (!onboardingDone) {
-        router.replace('/onboarding');
-        return;
-      }
-
-      if (!isAuthenticated && !inAuth) {
-        router.replace('/(auth)');
-      } else if (isAuthenticated && inAuth) {
-        router.replace('/(tabs)');
-      }
-    })();
+    if (!isAuthenticated && !inAuth) {
+      dismissSheets();
+      leaveForSignIn(router, navigationRef);
+    } else if (isAuthenticated && inAuth) {
+      // Same decision as the sign-in screens (App Guide once per user, then Home), so a fresh
+      // sign-in and a restored session never race to two different screens.
+      navigateAfterAuth(router).catch(() => router.replace('/(tabs)'));
+    }
   }, [isAuthenticated, isLoading, segments]);
 
   return <Stack screenOptions={{ headerShown: false }} />;

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, Animated, Switch, TextInput, Alert, ActivityIndicator,
+  Modal, Animated, Switch, type ViewInstance,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,8 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
+import WorkspaceDropdown, { type DropdownAnchor } from '../../src/components/settings/WorkspaceDropdown';
+import { requestsHref, usePendingRequests } from '../../src/hooks/usePendingRequests';
 
 type SectionId = 'account' | 'preferences' | 'notifications' | 'integrations' | 'contact';
 
@@ -43,11 +45,11 @@ const SECTIONS: Section[] = [
     icon: 'person-circle-outline', iconColor: '#7C3AED', iconBg: '#F5F3FF',
     subItems: [
       { id: 'profile', label: 'Profile', icon: 'person-outline', route: '/settings/profile' },
+      { id: 'devices', label: 'Signed-in devices', icon: 'phone-portrait-outline', route: '/settings/devices' },
       { id: 'my_access', label: 'My Access', icon: 'key-outline', route: '/settings/my-access' },
       { id: 'company', label: 'Company Information', icon: 'business-outline', route: '/settings/company' },
-      { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license' },
-      { id: 'approvals', label: 'Approvals', icon: 'shield-checkmark-outline', route: '/settings/approvals' },
-      { id: 'invitations', label: 'Invitations', icon: 'mail-outline', route: '/settings/invitations' },
+      { id: 'license', label: 'Billing & Credits', icon: 'card-outline', route: '/settings/license' },
+      { id: 'requests', label: 'Requests', icon: 'file-tray-full-outline', route: '/settings/requests' },
     ],
   },
   {
@@ -95,11 +97,11 @@ const SECTIONS: Section[] = [
 // ── Sub-item translation key map ─────────────────────────────────────────────
 const SUBITEM_KEY: Record<string, string> = {
   profile:      'settings.profile',
+  devices:      'screens.settingsDevices.title',
   my_access:    'screens.settings.myAccess',
   company:      'settings.companyInfo',
   license:      'settings.license',
-  approvals:    'screens.settings.approvals',
-  invitations:  'screens.settings.invitations',
+  requests:     'screens.settings.requests',
   language:     'settings.language',
   currency:     'settings.currency',
   voucher:      'settings.voucher',
@@ -238,13 +240,14 @@ export default function SettingsScreen() {
     isOwner,
     hasCapability,
   } = useWorkspace();
+  // One row for both kinds of request: invitations for this user and approvals they may decide.
+  const { counts: requestCounts, firstTab: requestsTab } = usePendingRequests();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameText, setRenameText] = useState('');
-  const [renameBusy, setRenameBusy] = useState(false);
+  const [workspaceAnchor, setWorkspaceAnchor] = useState<DropdownAnchor | null>(null);
+  const workspaceRowRef = useRef<ViewInstance>(null);
   // Stores all toggle values keyed by toggleKey
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
@@ -297,8 +300,12 @@ export default function SettingsScreen() {
             <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
             {/* Workspace picker — under Name/phone per Mobile handoff */}
             <TouchableOpacity
+              ref={workspaceRowRef}
               style={styles.workspaceRow}
-              onPress={() => setShowWorkspacePicker(true)}
+              onPress={() => workspaceRowRef.current?.measureInWindow((x, y, width, height) => {
+                setWorkspaceAnchor({ x, y, width, height });
+                setShowWorkspacePicker(true);
+              })}
               activeOpacity={0.75}
             >
               <Ionicons name="briefcase-outline" size={14} color={COLORS.brandPrimary} />
@@ -315,7 +322,7 @@ export default function SettingsScreen() {
               </Text>
             ) : null}
             {invitations?.length > 0 ? (
-              <TouchableOpacity onPress={() => safePush(router, '/settings/invitations' as any)}>
+              <TouchableOpacity onPress={() => safePush(router, requestsHref('invitations'))}>
                 <Text style={styles.inviteHint}>{invitations.length > 1 ? t('screens.settings.pendingInvitations', { count: invitations.length }) : t('screens.settings.pendingInvitation', { count: invitations.length })}</Text>
               </TouchableOpacity>
             ) : null}
@@ -351,7 +358,6 @@ export default function SettingsScreen() {
                     {section.subItems
                       .filter((sub) => {
                         if ((sub.id === 'ewaybill' || sub.id === 'einvoice' || sub.id === 'gst') && !(isOwnerOrAdmin || hasCapability('integrations.configure'))) return false;
-                        if (sub.id === 'approvals' && !(isOwnerOrAdmin || hasCapability('tally.restore_replace'))) return false;
                         return true;
                       })
                       .map((sub, idx, arr) => {
@@ -365,6 +371,7 @@ export default function SettingsScreen() {
                           style={[styles.subItem, idx < arr.length - 1 && styles.subItemBorder]}
                           onPress={() => {
                             if (isToggleItem && sub.toggleKey) handleToggle(sub.toggleKey, !toggleVal);
+                            else if (sub.id === 'requests') safePush(router, requestsHref(requestsTab));
                             else if (sub.route) safePush(router, sub.route as any);
                           }}
                           activeOpacity={isToggleItem ? 1 : 0.75}
@@ -376,6 +383,11 @@ export default function SettingsScreen() {
                             <Text style={styles.subLabel}>{t(SUBITEM_KEY[sub.id] || sub.label)}</Text>
                           </View>
                           <View style={styles.subRight}>
+                            {sub.id === 'requests' && requestCounts.total > 0 ? (
+                              <View style={styles.countBadge} testID="settings-requests-count">
+                                <Text style={styles.countBadgeText}>{requestCounts.total}</Text>
+                              </View>
+                            ) : null}
                             {sub.badge && (() => {
                               // Resolve dynamic tally status badge from Workspace pairingStatus
                               const ps = String(pairingStatus || '').toUpperCase();
@@ -443,105 +455,16 @@ export default function SettingsScreen() {
         onConfirm={() => { setShowLogoutSheet(false); signOut(); }}
       />
 
-      <Modal visible={showWorkspacePicker} transparent animationType="slide" onRequestClose={() => setShowWorkspacePicker(false)}>
-        <TouchableOpacity style={styles.wsOverlay} activeOpacity={1} onPress={() => setShowWorkspacePicker(false)}>
-          <View style={styles.wsSheet} onStartShouldSetResponder={() => true}>
-            <Text style={styles.wsTitle}>{t('screens.settings.switchWorkspace')}</Text>
-            {workspaces.map((w) => {
-              const selected = w.id === workspaceId;
-              const unavailable = isWorkspaceUnavailable(w);
-              const canRename = String(w.membershipType || '').toUpperCase() === 'OWNER';
-              const editing = renamingId === w.id;
-              return (
-                <View
-                  key={w.id}
-                  style={[styles.wsItem, selected && styles.wsItemSelected, unavailable && { opacity: 0.55 }]}
-                >
-                  {editing ? (
-                    <View style={{ flex: 1, gap: 8 }}>
-                      <TextInput
-                        value={renameText}
-                        onChangeText={setRenameText}
-                        autoFocus
-                        style={styles.wsRenameInput}
-                        placeholder={t('screens.settings.workspaceName')}
-                        placeholderTextColor={COLORS.textTertiary}
-                      />
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity
-                          style={styles.wsRenameBtn}
-                          disabled={renameBusy}
-                          onPress={async () => {
-                            setRenameBusy(true);
-                            try {
-                              await renameWorkspace(w.id, renameText);
-                              setRenamingId(null);
-                              Alert.alert(t('screens.settings.renamed'), t('screens.settings.workspaceNameUpdated'));
-                            } catch (e: any) {
-                              Alert.alert(t('screens.settings.renameFailed'), e?.message || t('screens.settings.tryAgain'));
-                            } finally {
-                              setRenameBusy(false);
-                            }
-                          }}
-                        >
-                          {renameBusy ? <ActivityIndicator size="small" color="#fff" /> : (
-                            <Text style={styles.wsRenameBtnTxt}>{t('common.save')}</Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.wsRenameBtn, styles.wsRenameBtnGhost]}
-                          onPress={() => setRenamingId(null)}
-                        >
-                          <Text style={[styles.wsRenameBtnTxt, { color: COLORS.textPrimary }]}>{t('common.cancel')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={{ flex: 1 }}
-                        disabled={unavailable}
-                        onPress={async () => {
-                          setShowWorkspacePicker(false);
-                          if (w.id !== workspaceId) await switchWorkspace(w.id);
-                        }}
-                      >
-                        <Text style={styles.wsItemName}>{w.name}</Text>
-                        <Text style={styles.wsItemMeta}>
-                          {unavailable
-                            ? t('screens.settings.accessUnavailable')
-                            : `${
-                                String(w.membershipType || '').toUpperCase() === 'OWNER'
-                                  ? t('screens.settings.owner')
-                                  : (w.roleDisplayName || w.role_display_name || w.roleSystemKey || w.role_system_key || t('screens.settings.member'))
-                              }${w.tallyConnection ? ` · ${w.tallyConnection}` : ''}`}
-                        </Text>
-                      </TouchableOpacity>
-                      {canRename && !unavailable ? (
-                        <TouchableOpacity
-                          hitSlop={10}
-                          onPress={() => {
-                            setRenamingId(w.id);
-                            setRenameText(w.name);
-                          }}
-                          style={{ padding: 6 }}
-                        >
-                          <Ionicons name="pencil-outline" size={18} color={COLORS.brandPrimary} />
-                        </TouchableOpacity>
-                      ) : null}
-                      {selected && !unavailable ? <Ionicons name="checkmark-circle" size={20} color={COLORS.brandPrimary} /> : null}
-                      {unavailable ? <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} /> : null}
-                    </>
-                  )}
-                </View>
-              );
-            })}
-            <TouchableOpacity style={styles.wsCancel} onPress={() => { setRenamingId(null); setShowWorkspacePicker(false); }}>
-              <Text style={styles.wsCancelTxt}>{t('common.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <WorkspaceDropdown
+        visible={showWorkspacePicker}
+        anchor={workspaceAnchor}
+        workspaces={workspaces}
+        workspaceId={workspaceId}
+        isUnavailable={isWorkspaceUnavailable}
+        onSwitch={switchWorkspace}
+        onRename={renameWorkspace}
+        onClose={() => setShowWorkspacePicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -579,32 +502,6 @@ const styles = StyleSheet.create({
   workspaceName: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
   demoHint: { fontSize: 11, color: '#D97706', marginTop: 4, fontWeight: '600' },
   inviteHint: { fontSize: 11, color: COLORS.brandPrimary, marginTop: 4, fontWeight: '600' },
-  wsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  wsSheet: {
-    backgroundColor: COLORS.cardBg, borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    padding: 20, paddingBottom: 32, maxHeight: '70%',
-  },
-  wsTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
-  wsItem: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  wsItemSelected: { backgroundColor: COLORS.pageBg, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 8 },
-  wsItemName: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  wsItemMeta: { fontSize: 11, color: COLORS.textTertiary, marginTop: 2 },
-  wsRenameInput: {
-    borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg,
-  },
-  wsRenameBtn: {
-    backgroundColor: COLORS.brandPrimary, borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 8, minWidth: 72, alignItems: 'center',
-  },
-  wsRenameBtnGhost: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  wsRenameBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  wsCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: 12 },
-  wsCancelTxt: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
 
   // Accordion
   accordionContainer: {
@@ -639,6 +536,11 @@ const styles = StyleSheet.create({
   subRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   badge:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   badgeText: { fontSize: 11, fontWeight: '700' },
+  countBadge: {
+    minWidth: 20, height: 20, borderRadius: RADIUS.full, paddingHorizontal: 6,
+    backgroundColor: COLORS.negative, alignItems: 'center', justifyContent: 'center',
+  },
+  countBadgeText: { fontSize: 11, fontWeight: '800', color: COLORS.white },
 
   // Footer
   footer: { alignItems: 'center', paddingVertical: 20, gap: 4 },

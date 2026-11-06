@@ -13,6 +13,8 @@ const esc = (v: any): string => String(v ?? '')
   .replace(/>/g, '&gt;');
 
 export interface MasterSheetInput {
+  /** Sheet heading; defaults to typeLabel. */
+  title?: string;
   typeLabel?: string;
   name?: string;
   parent?: string | null;
@@ -42,6 +44,7 @@ function detailRows(master: MasterSheetInput): { label: string; value: string }[
     { label: 'State', value: p.state },
     { label: 'Pincode', value: p.pincode },
     { label: 'Phone', value: p.phone },
+    { label: 'Mobile', value: p.mobile },
     { label: 'E-Mail', value: p.email },
     p.openingBalance != null && Number(p.openingBalance) !== 0
       ? { label: 'Opening Balance', value: `${money(p.openingBalance)} ${p.isCr ? 'Cr' : 'Dr'}` }
@@ -76,7 +79,7 @@ export function renderMasterSheetHTML(
   company: MasterSheetCompany = {}
 ): string {
   const rows = detailRows(master);
-  const title = (master.typeLabel || 'Master').toUpperCase();
+  const title = (master.title || master.typeLabel || 'Master').toUpperCase();
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>

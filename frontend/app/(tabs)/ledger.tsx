@@ -4,7 +4,7 @@ import {
   ViewInstance,
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Alert, ActivityIndicator, Animated,
+  Linking, Alert, ActivityIndicator, Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -16,7 +16,15 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getLedgers, createLedger, getLedgerStatement, getActiveWorkspaceId } from '../../src/services/api';
 import { getLedgerListCache, ledgerCacheKey } from '../../src/utils/ledgerCache';
 import { shareMultiStatementPdf } from '../../src/utils/voucherPdf';
-import type { StatementInput } from '../../src/utils/pdf/tallyLayout';
+import {
+  promptLedgerShareMode,
+  ledgerDetailsSheet,
+  withNarrationRows,
+  shareLedgerFullDetailsPdf,
+  type LedgerShareMode,
+  type LedgerFullDetails,
+} from '../../src/utils/multiShare';
+import type { StatementRow } from '../../src/utils/pdf/tallyLayout';
 
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -58,6 +66,22 @@ interface LedgerItem {
 }
 
 const _ledgerCache = getLedgerListCache() as Record<string, { data: LedgerItem[]; total: number; ts: number }>;
+
+/** Statements fetched at once for a multi-ledger PDF — Select all can pick 200+ ledgers. */
+const STATEMENT_FETCH_CONCURRENCY = 5;
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 // ─── Ledger Creation Sheet ────────────────────────────────────────────────────
 interface SectionProps {
@@ -173,7 +197,7 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
       <View style={cs.overlay}>
         <TouchableOpacity style={cs.backdrop} onPress={onClose} activeOpacity={1} />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={cs.sheetWrap}
         >
           <View style={cs.sheet}>
@@ -620,12 +644,22 @@ export default function LedgerScreen() {
     return `${parseInt(parts[2], 10)} ${months[parseInt(parts[1], 10) - 1] || ''}`;
   };
 
-  const handleShareSelected = async () => {
+  /** Statements fetched so far while a multi-ledger PDF is being prepared. */
+  const [shareProgress, setShareProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const handleShareSelected = () => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    promptLedgerShareMode(t, (mode) => { shareSelectedLedgers(mode); });
+  };
+
+  const shareSelectedLedgers = async (mode: LedgerShareMode) => {
     if (!companyGuid || selected.length === 0 || isSharing) return;
     const ledgers = filtered.filter(i => selected.includes(i.id));
     if (ledgers.length === 0) return;
+    const fullDetails = mode === 'full';
 
     setIsSharing(true);
+    setShareProgress({ done: 0, total: ledgers.length });
     try {
       const fyParams = selectedFY?.startDate && selectedFY?.endDate
         ? { from: selectedFY.startDate, to: selectedFY.endDate }
@@ -641,12 +675,15 @@ export default function LedgerScreen() {
         state: (company as any)?.state,
       };
 
-      const results = await Promise.all(
-        ledgers.map(async (item): Promise<StatementInput | null> => {
+      let done = 0;
+      const results = await mapWithConcurrency(
+        ledgers,
+        STATEMENT_FETCH_CONCURRENCY,
+        async (item): Promise<LedgerFullDetails | null> => {
           try {
             const res: any = await getLedgerStatement(companyGuid, item.id, undefined, fyParams);
             const ledger = res?.data?.ledger;
-            const txns = res?.data?.transactions || [];
+            const txns: any[] = res?.data?.transactions || [];
             const openingBal = res?.data?.opening_balance != null
               ? Math.round(Math.abs(parseFloat(res.data.opening_balance)))
               : undefined;
@@ -656,57 +693,87 @@ export default function LedgerScreen() {
             const openingSide = (res?.data?.opening_balance_type === 'Cr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr';
             const closingSide = (res?.data?.closing_balance_type === 'Cr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr';
 
+            const rows: StatementRow[] = txns.map((tx: any) => ({
+              date: isoToDisplay(tx.date || ''),
+              particulars: tx.party_name || tx.voucher_type || '',
+              vchType: tx.voucher_type,
+              vchNo: tx.voucher_number,
+              debit: tx.dr_cr === 'Dr' ? Math.abs(tx.debit || tx.credit || 0) : null,
+              credit: tx.dr_cr === 'Dr' ? null : Math.abs(tx.debit || tx.credit || 0),
+            }));
+
             return {
-              company: companyBlock,
-              title: t('screens.tabsLedger.ledgerAccount'),
-              partyName: ledger?.name || item.name,
-              partyAddress: ledger?.address,
-              period,
-              openingLabel: t('ledger.opening'),
-              openingAmount: openingBal,
-              openingSide,
-              rows: txns.map((t: any) => ({
-                date: isoToDisplay(t.date || ''),
-                particulars: t.party_name || t.voucher_type || '',
-                vchType: t.voucher_type,
-                vchNo: t.voucher_number,
-                debit: t.dr_cr === 'Dr' ? Math.abs(t.debit || t.credit || 0) : null,
-                credit: t.dr_cr === 'Dr' ? null : Math.abs(t.debit || t.credit || 0),
-              })),
-              closingLabel: t('ledger.closing'),
-              closingAmount: closingBal,
-              closingSide,
+              details: ledgerDetailsSheet(ledger, {
+                title: t('screens.ledgerId.ledgerDetails'),
+                name: item.name,
+                opening: { amount: openingBal, side: openingSide },
+              }),
+              statement: {
+                company: companyBlock,
+                title: t('screens.tabsLedger.ledgerAccount'),
+                partyName: ledger?.name || item.name,
+                partyAddress: ledger?.address,
+                period,
+                openingLabel: t('ledger.opening'),
+                openingAmount: openingBal,
+                openingSide,
+                rows: fullDetails
+                  ? withNarrationRows(rows, txns.map((tx: any) => (tx.restricted ? null : tx.narration)))
+                  : rows,
+                closingLabel: t('ledger.closing'),
+                closingAmount: closingBal,
+                closingSide,
+              },
             };
           } catch {
             // Never invent a balance-only "statement" — incomplete PDFs mislead recipients.
             return null;
+          } finally {
+            done += 1;
+            if (done === ledgers.length || done % STATEMENT_FETCH_CONCURRENCY === 0) {
+              setShareProgress({ done, total: ledgers.length });
+            }
           }
-        })
+        }
       );
 
-      const inputs = results.filter((x): x is StatementInput => x != null);
-      const failed = ledgers.length - inputs.length;
-      if (!inputs.length) {
+      const loaded = results.filter((x): x is LedgerFullDetails => x != null);
+      const failed = ledgers.length - loaded.length;
+      if (!loaded.length) {
         Alert.alert(t('common.error'), t('screens.tabsLedger.statementsLoadFailed'));
         return;
       }
+
+      const sharePdf = async () => {
+        const party = loaded[0].statement.partyName || 'Ledger';
+        if (fullDetails) {
+          await shareLedgerFullDetailsPdf(loaded, companyBlock, {
+            fileName: loaded.length === 1 ? `${party} — Full Details.pdf` : `Ledgers (${loaded.length}) — Full Details.pdf`,
+          });
+        } else {
+          await shareMultiStatementPdf(loaded.map((l) => l.statement), {
+            fileName: loaded.length === 1 ? `${party} — Statement.pdf` : `Ledgers (${loaded.length}) — Statements.pdf`,
+          });
+        }
+        cancelSelectMode();
+      };
+
       if (failed > 0) {
         Alert.alert(
           t('screens.tabsLedger.partialExport'),
-          t('screens.tabsLedger.partialExportMessage', { failed, total: ledgers.length, remaining: inputs.length }),
+          t('screens.tabsLedger.partialExportMessage', { failed, total: ledgers.length, remaining: loaded.length }),
           [
             { text: t('common.cancel'), style: 'cancel' },
             {
               text: t('screens.tabsLedger.sharePartial'),
               onPress: async () => {
+                setIsSharing(true);
                 try {
-                  const fileName = inputs.length === 1
-                    ? `${inputs[0].partyName || 'Ledger'} — Statement.pdf`
-                    : `Ledgers (${inputs.length}) — Statements.pdf`;
-                  await shareMultiStatementPdf(inputs, { fileName });
-                  cancelSelectMode();
+                  await sharePdf();
                 } catch (err: any) {
                   Alert.alert(t('common.error'), err?.message || t('screens.tabsLedger.pdfFailed'));
+                } finally {
+                  setIsSharing(false);
                 }
               },
             },
@@ -715,16 +782,12 @@ export default function LedgerScreen() {
         return;
       }
 
-      const fileName = inputs.length === 1
-        ? `${inputs[0].partyName || 'Ledger'} — Statement.pdf`
-        : `Ledgers (${inputs.length}) — Statements.pdf`;
-
-      await shareMultiStatementPdf(inputs, { fileName });
-      cancelSelectMode();
+      await sharePdf();
     } catch (err: any) {
       Alert.alert(t('common.error'), err?.message || t('screens.tabsLedger.pdfFailed'));
     } finally {
       setIsSharing(false);
+      setShareProgress(null);
     }
   };
 
@@ -1514,7 +1577,13 @@ export default function LedgerScreen() {
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="share-outline" size={16} color={COLORS.white} />
             }
-            <Text style={styles.shareActionTxt}>{isSharing ? t('screens.tabsLedger.preparing') : t('pdf.sharePdf')}</Text>
+            <Text style={styles.shareActionTxt}>
+              {!isSharing
+                ? t('pdf.sharePdf')
+                : shareProgress && shareProgress.total > 1
+                  ? t('screens.tabsLedger.preparingCount', { done: shareProgress.done, total: shareProgress.total })
+                  : t('screens.tabsLedger.preparing')}
+            </Text>
           </TouchableOpacity>
         </View>
       )}

@@ -4,7 +4,9 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
+  Linking,
   Modal,
   StyleSheet,
   Text,
@@ -20,7 +22,10 @@ import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../constants/colors';
-import { useVoiceSearch } from '../hooks/useVoiceSearch';
+import { useVoiceSearch, type VoiceFailure } from '../hooks/useVoiceSearch';
+
+/** An Alert raised while the listening Modal fades out is dropped on iOS; wait for it to close. */
+const AFTER_MODAL_MS = 400;
 
 type Props = {
   value: string;
@@ -53,12 +58,27 @@ export default function SearchBar({
   const {
     isListening: voiceListening,
     transcript: voiceTranscript,
-    error: voiceError,
+    failure: voiceFailure,
+    notice: voiceNotice,
     start: startVoice,
     stop: stopVoice,
     abort: abortVoice,
     getResultText,
   } = useVoiceSearch();
+
+  /** Permission refused for good: only Settings helps. No recognizer: say so, with how to get one. */
+  const showVoiceFailure = useCallback((failure: VoiceFailure) => {
+    if (failure.reason === 'blocked') {
+      Alert.alert(failure.message, failure.hint, [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('voiceSearch.openSettings'), onPress: () => { Linking.openSettings().catch(() => {}); } },
+      ]);
+    } else if (failure.reason === 'unavailable') {
+      Alert.alert(failure.message, failure.hint);
+    } else {
+      Toast.show({ type: 'error', text1: failure.message, text2: failure.hint });
+    }
+  }, [t]);
 
   const stopMicAnimation = useCallback(() => {
     micAnimRef.current?.stop();
@@ -94,10 +114,11 @@ export default function SearchBar({
     const text = getResultText();
     if (text) {
       onChangeText(text);
-    } else if (voiceError) {
-      Toast.show({ type: 'error', text1: voiceError });
+    } else if (voiceFailure) {
+      const failure = voiceFailure;
+      setTimeout(() => showVoiceFailure(failure), AFTER_MODAL_MS);
     }
-  }, [getResultText, onChangeText, stopMicAnimation, voiceError]);
+  }, [getResultText, onChangeText, stopMicAnimation, voiceFailure, showVoiceFailure]);
 
   const cancelVoiceModal = useCallback(() => {
     voiceStartedRef.current = false;
@@ -111,32 +132,31 @@ export default function SearchBar({
     if (voiceListening) wasListeningRef.current = true;
   }, [voiceListening]);
 
+  // Done listening, or failed before it began (e.g. no recognizer for the language, Dictation off on iPhone).
   useEffect(() => {
-    if (!showMicModal || voiceListening || !voiceStartedRef.current || !wasListeningRef.current) return;
+    if (!showMicModal || voiceListening || !voiceStartedRef.current) return;
+    if (!wasListeningRef.current && !voiceFailure) return;
     finishVoiceSession();
-  }, [voiceListening, showMicModal, finishVoiceSession]);
+  }, [voiceListening, showMicModal, voiceFailure, finishVoiceSession]);
 
   useEffect(() => () => {
     abortVoice();
     stopMicAnimation();
   }, [abortVoice, stopMicAnimation]);
 
+  // Permission prompts come first, so they never sit on top of the listening sheet.
   const handleMicPress = () => {
     Vibration.vibrate(80);
     setTimeout(async () => {
       wasListeningRef.current = false;
-      setShowMicModal(true);
-      startMicAnimation();
-      voiceStartedRef.current = true;
       const result = await startVoice();
       if (!result.ok) {
-        voiceStartedRef.current = false;
-        stopMicAnimation();
-        setShowMicModal(false);
-        if (result.error) {
-          Toast.show({ type: 'error', text1: result.error });
-        }
+        showVoiceFailure(result.failure);
+        return;
       }
+      voiceStartedRef.current = true;
+      setShowMicModal(true);
+      startMicAnimation();
     }, 100);
   };
 
@@ -182,8 +202,8 @@ export default function SearchBar({
                 </View>
               </View>
               <Text style={styles.micListeningText}>
-                {voiceError
-                  ? voiceError
+                {voiceFailure
+                  ? voiceFailure.message
                   : voiceListening
                     ? t('dashboard.listening', { defaultValue: 'Listening…' })
                     : t('dashboard.speakNow', { defaultValue: 'Speak now' })}
@@ -191,6 +211,7 @@ export default function SearchBar({
               <Text style={styles.micHint} numberOfLines={2}>
                 {voiceTranscript || (voiceListening ? t('dashboard.speakNow', { defaultValue: 'Speak now' }) : '')}
               </Text>
+              {voiceNotice ? <Text style={styles.micNotice}>{voiceNotice}</Text> : null}
               {voiceListening && (
                 <TouchableOpacity style={styles.micStopBtn} onPress={() => stopVoice()} activeOpacity={0.7}>
                   <Text style={styles.micStopText}>
@@ -276,6 +297,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     minHeight: 20,
+  },
+  micNotice: {
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.warning,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   micStopBtn: {
     marginTop: 8,

@@ -191,7 +191,7 @@ export default function GstSettingsScreen() {
       ) : loadState === 'error' ? (
         <ErrorState title={t('screens.settingsGst.loadFailed')} message={t('screens.settingsEinvoice.checkConnection')} onRetry={() => { setLoadState('loading'); refetch(); }} />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} />}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} />}>
           {notConfigured && (
             <View style={{ marginBottom: SPACING.md, marginTop: -SPACING.sm }}>
               <ComplianceCallout testID="gst-not-configured" icon="information-circle-outline" tone="info" text={t('screens.settingsGst.notConfigured')} />

@@ -15,7 +15,15 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import { shareStatementPdf } from '../../src/utils/voucherPdf';
-import { shareVouchersAsMultiPagePdf } from '../../src/utils/multiShare';
+import {
+  shareVouchersAsMultiPagePdf,
+  promptLedgerShareMode,
+  ledgerDetailsSheet,
+  withNarrationRows,
+  shareLedgerFullDetailsPdf,
+  type LedgerShareMode,
+} from '../../src/utils/multiShare';
+import type { StatementInput, StatementRow } from '../../src/utils/pdf/tallyLayout';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
@@ -322,6 +330,7 @@ export default function LedgerDetailScreen() {
             amount_raw: Math.abs(t.debit || t.credit || 0),
             isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
             particulars: t.restricted ? '' : (t.party_name || t.voucher_type || ''),
+            narration: t.restricted ? '' : (t.narration || ''),
             balance: t.balance,
             balance_type: t.balance_type,
             restricted: t.restricted === true,
@@ -372,40 +381,63 @@ export default function LedgerDetailScreen() {
   };
   const cancelTxnSelect = () => setSelectedTxns([]);
 
-  /** Footer Share PDF — full ledger statement (unchanged). */
-  const handleStatementShare = async () => {
+  /**
+   * Footer Share PDF — the whole statement for the date range. Dr/Cr and search only filter the
+   * list on screen; the PDF keeps every row so its opening and closing balances add up.
+   */
+  const shareLedgerPdf = async (mode: LedgerShareMode) => {
+    const companyBlock = {
+      name: company?.name,
+      address: (company as any)?.address,
+      gstin: (company as any)?.gstin,
+      state: (company as any)?.state,
+    };
+    const rows: StatementRow[] = SOURCE_TXNS.map((tx: any) => ({
+      date: tx.date,
+      particulars: tx.particulars || tx.type || '',
+      vchType: tx.type,
+      vchNo: tx.voucher,
+      debit: tx.isDebit ? tx.amount_raw : null,
+      credit: tx.isDebit ? null : tx.amount_raw,
+    }));
+    const statement: StatementInput = {
+      company: companyBlock,
+      title: t('screens.ledgerId.ledgerAccount'),
+      partyName: ledger?.name,
+      partyAddress: ledger?.address,
+      period: fromDate && toDate ? t('screens.ledgerId.periodRange', { from: formatDate(fromDate), to: formatDate(toDate) }) : undefined,
+      openingLabel: t('ledger.opening'),
+      openingAmount: Math.round(openingBal),
+      openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
+      rows: mode === 'full' ? withNarrationRows(rows, SOURCE_TXNS.map((tx: any) => tx.narration)) : rows,
+      closingLabel: t('ledger.closing'),
+      closingAmount: Math.round(closingBal),
+      closingSide: closingType === 'Cr' ? 'Cr' : 'Dr',
+    };
     try {
-      await shareStatementPdf({
-        company: {
-          name: company?.name,
-          address: (company as any)?.address,
-          gstin: (company as any)?.gstin,
-          state: (company as any)?.state,
-        },
-        title: t('screens.ledgerId.ledgerAccount'),
-        partyName: ledger?.name,
-        partyAddress: ledger?.address,
-        period: fromDate && toDate ? t('screens.ledgerId.periodRange', { from: formatDate(fromDate), to: formatDate(toDate) }) : undefined,
-        openingLabel: t('ledger.opening'),
-        openingAmount: Math.round(openingBal),
-        openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
-        rows: txns.map((t: any) => ({
-          date: t.date,
-          particulars: t.particulars || t.type || '',
-          vchType: t.type,
-          vchNo: t.voucher,
-          debit: t.isDebit ? t.amount_raw : null,
-          credit: t.isDebit ? null : t.amount_raw,
-        })),
-        closingLabel: t('ledger.closing'),
-        closingAmount: Math.round(closingBal),
-        closingSide: closingType === 'Cr' ? 'Cr' : 'Dr',
-      }, {
-        fileName: `${ledger?.name || 'Ledger'} — Statement.pdf`,
-      });
+      if (mode === 'full') {
+        await shareLedgerFullDetailsPdf([{
+          details: ledgerDetailsSheet(liveLedger, {
+            title: t('screens.ledgerId.ledgerDetails'),
+            name: ledger?.name,
+            opening: { amount: openingBal, side: openingType },
+          }),
+          statement,
+        }], companyBlock, {
+          fileName: `${ledger?.name || 'Ledger'} — Full Details.pdf`,
+        });
+      } else {
+        await shareStatementPdf(statement, {
+          fileName: `${ledger?.name || 'Ledger'} — Statement.pdf`,
+        });
+      }
     } catch {
       Alert.alert(t('common.error'), t('screens.ledgerId.pdfFailed'));
     }
+  };
+
+  const handleStatementShare = () => {
+    promptLedgerShareMode(t, (mode) => { shareLedgerPdf(mode); });
   };
 
   /** Multi-select vouchers → Spec PDFs in one multi-page share sheet. */

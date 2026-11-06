@@ -53,6 +53,13 @@ const b = StyleSheet.create({
   seg: { flex: 1, height: BAR_H, borderRadius: 0 },
 });
 
+/** Clock time the figures were loaded; the date is added once it is no longer today. */
+export function formatLoadedAt(d: Date, now: Date = new Date()): string {
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${time}`;
+}
+
 interface CashflowCardProps {
   netCash?: number;
   grossCash?: number;
@@ -60,7 +67,8 @@ interface CashflowCardProps {
   grossProfit?: number;
   netProfit?: number;
   incomePercentage?: number;
-  updatedAt?: string;
+  /** When Home last loaded these figures (the API's updated_at is always "just now"). */
+  asOf?: Date | null;
   totalIncome?: number;
   totalExpense?: number;
 }
@@ -70,7 +78,7 @@ export default function CashflowCard({
   grossProfit = 0,
   netProfit = 0,
   incomePercentage = 0,
-  updatedAt = 'just now',
+  asOf,
   totalIncome,
   totalExpense,
 }: CashflowCardProps) {
@@ -97,7 +105,11 @@ export default function CashflowCard({
             <Ionicons name="analytics-outline" size={14} color={COLORS.textSecondary} />
           </View>
           <Text style={s.title}>{t('dashboard.cashflow')}</Text>
-          <Text style={s.updated}>· {updatedAt || t('dashboard.justNow')}</Text>
+          {asOf ? (
+            <Text style={s.updated} numberOfLines={1}>
+              · {t('screens.cashflowReport.updated', { time: formatLoadedAt(asOf) })}
+            </Text>
+          ) : null}
         </View>
         <TouchableOpacity
           testID="cashflow-expand-btn"
@@ -186,10 +198,10 @@ const s = StyleSheet.create({
     borderColor: COLORS.borderDefault,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 4 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, marginRight: SPACING.sm },
   iconCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: 0.1 },
-  updated: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  updated: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, flexShrink: 1 },
   expandBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
   netRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 2 },
   netLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 3, fontWeight: '500' },

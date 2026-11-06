@@ -120,6 +120,7 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 |------|--------|
 | financial.tsx | P&L + Balance Sheet |
 | gst.tsx | GST report (Overview, IMS and deposits sheets on top; `?tab=ims|deposits`) |
+| gst-portal.tsx | Sales / Purchases on the GST portal matched to the books (`?kind=sales|purchases&source=2b|2a&freq=`); opened from the GST overview card and the GSTR-1 / 2A / 2B tabs |
 | compliance.tsx | Compliance overview |
 | audit-trail.tsx | Audit trail |
 | ai-insights.tsx | AI Insights |
@@ -147,10 +148,12 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 |------|--------|
 | index.tsx | Settings home |
 | profile.tsx | User profile |
+| devices.tsx | Signed-in devices (sessions, This device, Log out of all devices) |
 | company.tsx | Company info |
 | tally-sync.tsx | Tally sync settings |
-| approvals.tsx | Owner/Admin Hard Sync + restore approval |
-| invitations.tsx | Workspace invitations |
+| requests.tsx | Requests: "For this workspace" (Hard Sync + restore approvals; Owner / Admin / `tally.restore_replace` only) and "For you" (workspace invitations); `?tab=approvals|invitations`; one list without tabs when approvals do not apply. Lists: `src/components/requests/`; counts: `src/hooks/usePendingRequests.ts` (also the Home bell, banners, Settings row badge and the Notifications "Needs your action" card) |
+| approvals.tsx | Redirect → `/settings/requests?tab=approvals` (old links, push taps) |
+| invitations.tsx | Redirect → `/settings/requests?tab=invitations` |
 | payment-reminders.tsx | Payment reminders |
 | bank-feeds.tsx | Bank feeds |
 | security.tsx | Security / PIN / Biometric |
@@ -165,7 +168,7 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 | ewb.tsx | E-Way Bill settings |
 | gst.tsx | GST settings (portal connection, returns / IMS / deposits choices) |
 | barcodes.tsx | Barcode settings |
-| license.tsx | License info |
+| license.tsx | Billing & Credits |
 | about.tsx | About screen |
 | help.tsx | Help / FAQ |
 
