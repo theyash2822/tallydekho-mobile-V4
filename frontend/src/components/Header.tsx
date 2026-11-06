@@ -14,7 +14,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { HOME_POLL_MS, usePendingRequests } from '../hooks/usePendingRequests';
 import { getCompanies, getCompanyYears } from '../services/api';
 import { safePush } from '../utils/safeNavigation';
-import { filterCompaniesForPairing } from '../utils/isDemoCompany';
+import { filterCompaniesForPairing, isDemoCompany } from '../utils/isDemoCompany';
 import { fyEquals, fyInList, normalizeFy } from '../utils/fyIdentity';
 import { toAuthCompany, companyExternalId } from '../utils/companyIdentity';
 
@@ -34,7 +34,7 @@ interface HeaderProps {
 
 /**
  * Home header with company + FY dropdowns.
- * - Demo Mode: company switch disabled (Demo Company only).
+ * - Demo Mode: the same dropdown, listing only the demo company; never a live one.
  * - Each Modal is mounted only while open, and a company / FY change is applied only
  *   after its Modal has unmounted: either re-renders the whole app, and doing that while
  *   a Modal is closing is what froze Android under bottom-sheet.
@@ -57,7 +57,7 @@ const Header: React.FC<HeaderProps> = ({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { t } = useTranslation();
   const { company, setCompany, lastSyncAt, selectedFY: contextFY, setSelectedFY: setContextFY } = useAuth();
-  const { pairingStatus, filterScoped, demoMode } = useWorkspace();
+  const { workspaceId, pairingStatus, filterScoped, demoMode } = useWorkspace();
   // The bell also counts requests waiting for this user (approvals and invitations).
   const { counts: pendingRequests } = usePendingRequests({ pollMs: HOME_POLL_MS });
   const bellCount = notificationCount + pendingRequests.total;
@@ -87,13 +87,12 @@ const Header: React.FC<HeaderProps> = ({
     if (contextFY?.label) setSelectedFY(contextFY.label);
   }
 
+  // The demo and live lists never mix: a mode change drops the list until the refetch lands.
   const [prevDemoMode, setPrevDemoMode] = useState(demoMode);
   if (prevDemoMode !== demoMode) {
     setPrevDemoMode(demoMode);
-    if (demoMode) {
-      setCompanies([]);
-      setShowCompanyModal(false);
-    }
+    setCompanies([]);
+    setShowCompanyModal(false);
   }
 
   const fyLoadDeps = [company?.guid, lastSyncAt, demoMode, pairingStatus, setContextFY];
@@ -103,10 +102,11 @@ const Header: React.FC<HeaderProps> = ({
     if (company?.guid) setFyLoading(true);
   }
 
-  // Switchable live companies (Demo = never switchable)
+  // Companies the dropdown lists: the demo company in Demo Mode, the live ones otherwise.
+  // Not before the workspace is restored: the server would answer for another one.
   useEffect(() => {
     let cancelled = false;
-    if (demoMode) return;
+    if (!workspaceId) return;
     getCompanies()
       .then((res: any) => {
         if (cancelled) return;
@@ -118,7 +118,7 @@ const Header: React.FC<HeaderProps> = ({
         if (!cancelled) setCompanies([]);
       });
     return () => { cancelled = true; };
-  }, [pairingStatus, lastSyncAt, filterScoped, demoMode]);
+  }, [workspaceId, pairingStatus, lastSyncAt, filterScoped]);
 
   // Load FY years into Auth + local dropdown list
   const [liveFYObjects, setLiveFYObjects] = useState<FyObj[]>([]);
@@ -138,7 +138,9 @@ const Header: React.FC<HeaderProps> = ({
           startDate: r.begin_date || r.startDate,
           endDate: r.end_date || r.endDate,
           finYear: r.fin_year || r.finYear,
-        })).filter((f: FyObj | null): f is FyObj => !!f);
+        })).filter((f: FyObj | null): f is FyObj => !!f)
+          // Newest year first, as the web lists them, whatever order the server sends.
+          .sort((a: FyObj, b: FyObj) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
         const fyObjs = (demoMode || String(pairingStatus).toUpperCase() !== 'CONNECTED')
           ? mapped
           : (filterScoped(mapped, 'fys') as FyObj[]);
@@ -149,7 +151,7 @@ const Header: React.FC<HeaderProps> = ({
         setLiveFYObjects(fyObjs);
         const labels = fyObjs.map((f) => f.label);
         // Members limited to some years open on the latest one they may see.
-        const latest = [...fyObjs].sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')))[0];
+        const latest = fyObjs[0];
         setSelectedFY((prev) => (prev && labels.includes(prev) ? prev : latest.label));
         // A sync or heartbeat refetches the years; the chosen FY stays while it still exists.
         if (!fyInList(contextFyRef.current, fyObjs)) setContextFY(latest);
@@ -182,12 +184,16 @@ const Header: React.FC<HeaderProps> = ({
     onFYChange?.(fy.label);
   }, [showFYModal, setContextFY, onFYChange]);
 
-  const canSwitchCompany = !demoMode && companyCount > 1;
+  const activeGuid = companyExternalId(company);
+  const activeRow = companies.find((co) => companyExternalId(co) === activeGuid);
+  // Opens even on a single company, checked, as the web does; an empty list (loading or failed fetch)
+  // keeps the toast. Demo Mode also waits until the list holds the selected company: every workspace
+  // reads as unpaired until its context has loaded.
+  const canOpenCompanyList = demoMode ? !!activeRow : companyCount > 0;
   const dropdownTop = insets.top + 58;
 
   const openCompanySwitcher = useCallback(() => {
-    if (demoMode) return;
-    if (companyCount <= 1) {
+    if (!canOpenCompanyList) {
       Toast.show({
         type: 'info',
         text1: t('screens.componentsHeader.onlyOneCompany'),
@@ -198,11 +204,12 @@ const Header: React.FC<HeaderProps> = ({
     }
     setShowFYModal(false);
     setShowCompanyModal(true);
-  }, [demoMode, companyCount, t]);
+  }, [canOpenCompanyList, t]);
 
   const handleCompanySelect = useCallback((co: any) => {
     const guid = companyExternalId(co);
-    if (guid && guid !== companyExternalId(company) && !demoMode) pendingCompanyRef.current = co;
+    // Demo Mode never switches into a live company.
+    if (guid && guid !== companyExternalId(company) && (!demoMode || isDemoCompany(co))) pendingCompanyRef.current = co;
     setShowCompanyModal(false);
   }, [company, demoMode]);
 
@@ -235,10 +242,11 @@ const Header: React.FC<HeaderProps> = ({
     else safePush(router, '/settings' as any);
   };
 
-  const shortCompany = selectedCompany.length > 24
-    ? `${selectedCompany.substring(0, 22)}\u2026`
-    : selectedCompany;
-  const activeGuid = companyExternalId(company);
+  // The list carries the server's current name; the stored company can be an older copy.
+  const companyLabel: string = activeRow?.name || selectedCompany;
+  const shortCompany = companyLabel.length > 24
+    ? `${companyLabel.substring(0, 22)}\u2026`
+    : companyLabel;
 
   return (
     <>
@@ -247,14 +255,12 @@ const Header: React.FC<HeaderProps> = ({
           testID="company-selector"
           style={styles.leftSection}
           onPress={openCompanySwitcher}
-          activeOpacity={demoMode ? 1 : 0.7}
-          disabled={demoMode}
-          accessibilityState={{ disabled: demoMode }}
+          activeOpacity={0.7}
         >
           <View style={styles.companyBlock}>
             <View style={styles.companyRow}>
               <Text style={styles.companyName} numberOfLines={1}>{shortCompany}</Text>
-              {canSwitchCompany ? (
+              {canOpenCompanyList ? (
                 <Ionicons name="chevron-down" size={12} color={COLORS.brandPrimary} />
               ) : null}
             </View>

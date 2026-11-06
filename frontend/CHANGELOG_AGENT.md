@@ -1,5 +1,13 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-11-06 (10:25–11:55) — Home header company/FY dropdown parity with the web (branch `6-11-2026`, local only, not committed)
+
+- `src/components/Header.tsx`: in Demo Mode the company name is the same tappable dropdown as for paired users (chevron, Modal, checkmark) instead of a disabled label. It lists `GET /api/companies` through `filterCompaniesForPairing` — the demo company only, as the web does — and opens on that single company once the list holds the selected one (every workspace reads as unpaired until its context loads, so a paired user never gets the demo list at start-up). Fetched only after the workspace is restored; dropped on every Demo/paired change. The label shows the list's name for the selected company. A Demo user still cannot switch into a live company (`isDemoCompany` check); a change still applies only after the Modal has unmounted. Paired users with one live company also open the dropdown (checked row) instead of a toast; toast only when the list is empty. FY list is sorted newest-first client-side (same as web AppShell).
+- `src/context/WorkspaceContext.tsx` (`refreshContext`): a selected company still in the workspace's list takes the server's name when it changed under the same guid; before, a rename never reached the app (header, PDFs, Settings kept the stored name). `setCompany` already skips an unchanged name, so a rename costs one update.
+- No hard-coded "Demo company" text existed in the header or locales (the label showed the stored company name). No locale changes; Demo Mode banner unchanged.
+- **Tested:** tsc 0 errors; eslint no new problems vs HEAD (Header keeps its one existing warning); all 9 verify scripts; a node check of the Demo list / label / switch rules and the rename adoption (one write, then stable). Not run on a device.
+- 11:55 (owner: identical to the web): one client-side sort on the start date feeds the FY list, the default year and `fyInList(contextFyRef.current, fyObjs)` (verify W2); the selected FY stays checked and still applies after the Modal has unmounted; Demo Mode keeps its wait-for-the-selected-company rule. Re-tested: tsc 0 errors; eslint no new problems vs HEAD; all 9 verify scripts; node check (one paired company opens checked, empty list toasts, FY newest first from any server order and under member scopes).
+
 ## 2026-11-05 (19:20) — Demo: "+" opens Quick Actions with the actions off; sheet list fixed on web (branch `cursor`, local, not pushed)
 
 - `(tabs)/_layout.tsx`: "+" opens the Quick Actions sheet in every build again (Yash 18:31).

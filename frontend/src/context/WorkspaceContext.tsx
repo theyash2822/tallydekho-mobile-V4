@@ -365,11 +365,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (isStale(gen, forWorkspaceId)) return;
       await setCompanyRef.current((cur: any) => {
         if (visible.length) {
-          const stillValid =
-            !!cur &&
-            visible.some((c) => String(c.guid || '') === String(cur.guid || '') || String(c.id || '') === String(cur.guid || '')) &&
-            !(isLive && isDemoCompany(cur));
-          if (stillValid) return cur;
+          const row = cur
+            ? visible.find((c) => String(c.guid || '') === String(cur.guid || '') || String(c.id || '') === String(cur.guid || ''))
+            : undefined;
+          const stillValid = !!row && !(isLive && isDemoCompany(cur));
+          // A company renamed on the server keeps its guid: take the new name.
+          if (stillValid) return row.name && row.name !== cur.name ? { ...cur, name: String(row.name) } : cur;
           const pick = visible.find((c) => !isDemoCompany(c) && isLive)
             || visible.find((c) => isDemoCompany(c) && !isLive)
             || visible[0];
