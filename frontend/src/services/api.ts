@@ -22,6 +22,7 @@ import { beginSingleFlight } from '../utils/singleFlight';
 import { reportError } from './monitoring';
 import { DATA_REVISION_HEADER, companyGuidOf, noteRevision } from './dataRevision';
 import { CLIENT_HEADERS } from './clientIdentity';
+import { seg } from './apiPath';
 
 export {
   ApiError,
@@ -609,8 +610,8 @@ export const getTallySyncStatus = () => get<any>('/tally-sync/status');
 export const getCompanies     = () => get<any>('/companies');
 export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
 export const getCompanyProfile  = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
-export const uploadCompanyLogo  = (companyGuid: string, logo: string) => post<any>(`/company/${companyGuid}/logo`, { logo });
-export const getCompanyLogo     = (companyGuid: string) => get<any>(`/company/${companyGuid}/logo`);
+export const uploadCompanyLogo  = (companyGuid: string, logo: string) => post<any>(`/company/${seg(companyGuid)}/logo`, { logo });
+export const getCompanyLogo     = (companyGuid: string) => get<any>(`/company/${seg(companyGuid)}/logo`);
 
 export const getNotificationSettings  = () => get<any>('/notification-settings');
 export const updateNotificationSettings = (data: any) => patch<any>('/notification-settings', data);
@@ -721,7 +722,7 @@ export const createDebitNote       = (payload: any) => tallyPost<any>('/voucher/
 // ══════════════════════════════════════════════════════════════
 
 export const getVouchers       = (companyGuid?: string, type?: string, params?: any) => get<any>(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params }));
-export const getVoucherById    = (companyGuid?: string, guid?: string) => get<any>(withCompany(`/vouchers/${guid}`, companyGuid));
+export const getVoucherById    = (companyGuid?: string, guid?: string) => get<any>(withCompany(`/vouchers/${seg(guid)}`, companyGuid));
 export const createPaymentVoucher = (payload: any) => tallyPost<any>('/voucher/payment', payload, 'payment');
 export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/receipt', payload, 'receipt');
 
@@ -761,8 +762,8 @@ export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/c
 export const getLedgers        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ledgers', companyGuid, params));
 export const getBankLedgers    = (companyGuid?: string, type: 'bank' | 'cash' | 'all' = 'all') => get<any>(withCompany('/bank-ledgers', companyGuid, { type }));
 export const getLedgerFyBalances = (companyGuid?: string, fy?: string) => get<any>(withCompany('/ledgers/fy-balances', companyGuid, fy ? { fy } : {}));
-export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}`, companyGuid, params));
-export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));
+export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${seg(id)}`, companyGuid, params));
+export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${seg(id)}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));
 export const createLedger      = (payload: any) => tallyPost<any>('/master/party', payload, 'party');
 
 /** Master/ledger preview keyed by write_queue.id (not TDK ref). */
@@ -784,9 +785,9 @@ export const getMovementChart        = (companyGuid?: string, params?: any) => g
 export const getNegativeStock    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/negative-stock', companyGuid, params));
 export const getStockDashboard  = (companyGuid: string) =>
   get<any>(withCompany('/stocks/dashboard', companyGuid));
-export const getStockItem    = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid, params));
+export const getStockItem    = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${seg(id)}`, companyGuid, params));
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
-export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
+export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${seg(id)}`, companyGuid));
 export const getParties      = (companyGuid?: string, params?: any) => get<any>(withCompany('/parties', companyGuid, params));
 export const resolveEinvoiceQr = (companyGuid: string, params: { sellerGstin: string; irn: string }) =>
   get<any>(withCompany('/purchase/einvoice-qr-resolve', companyGuid, params));
@@ -1302,7 +1303,7 @@ export const verifyBillingRecharge = (payload: {
 // ══════════════════════════════════════════════════════════════
 
 export const getAuditTrail    = (companyGuid?: string) => tallyGet<any>(withCompany('/audit-trail', companyGuid));
-export const retryAuditEntry  = (id: string) => tallyPost<any>(`/audit-trail/${id}/retry`, {});
+export const retryAuditEntry  = (id: string) => tallyPost<any>(`/audit-trail/${seg(id)}/retry`, {});
 export const getMyEntries     = (companyGuid?: string, params?: any) =>
   _writeAsDemo ? listDemoEntries() : get<any>(withCompany('/vouchers/my-entries', companyGuid, params));
 
@@ -1318,7 +1319,7 @@ export const getAIWeeklyForecast = (companyGuid: string) =>
   get<any>(withCompany('/ai/ai-insights', companyGuid));
 
 export const getAIInsightsHistory = (companyGuid: string, financialYear: string) =>
-  get<any>(withCompany(`/ai/insights/history/${financialYear}`, companyGuid));
+  get<any>(withCompany(`/ai/insights/history/${seg(financialYear)}`, companyGuid));
 
 // ════════════════════════════════════════════════════════════
 // USER SETTINGS
@@ -1407,10 +1408,10 @@ export const getOtherTaxesLateChallans = (companyGuid?: string, params?: any) =>
   get<any>(withCompany('/reports/other-taxes/late-challans', companyGuid, params));
 
 export const getStockLedger   = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/ledger', companyGuid, params));
-export const getStockMovements = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}/movements`, companyGuid, params));
-export const getStockGodowns = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}/godowns`, companyGuid));
+export const getStockMovements = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${seg(id)}/movements`, companyGuid, params));
+export const getStockGodowns = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${seg(id)}/godowns`, companyGuid));
 export const retryMyEntry = (id: string, opts: { confirmOutcomeUnknown?: boolean } = {}) =>
-  post<any>(`/vouchers/my-entries/${id}/retry`, opts.confirmOutcomeUnknown ? { confirmOutcomeUnknown: true } : {});
+  post<any>(`/vouchers/my-entries/${seg(id)}/retry`, opts.confirmOutcomeUnknown ? { confirmOutcomeUnknown: true } : {});
 export const alterStockItem    = (payload: any) => tallyPost<any>('/master/stock-item-alter', payload);
 export const getStockGroups    = (companyGuid: string) => get<any>(`/stocks/groups?companyGuid=${companyGuid}`);
 export const getStockUnits     = (companyGuid: string) => get<any>(`/stocks/units?companyGuid=${companyGuid}`);
@@ -1556,8 +1557,8 @@ export const getActiveBulkBarcodeJob = (companyGuid: string) =>
   );
 
 // ── Compliance Config ──────────────────────────────────────────────────────────
-export const getComplianceConfig  = (guid: string) => get<any>(`/company/${guid}/compliance-config`);
-export const saveComplianceConfig = (guid: string, payload: any) => post<any>(`/company/${guid}/compliance-config`, payload);
+export const getComplianceConfig  = (guid: string) => get<any>(`/company/${seg(guid)}/compliance-config`);
+export const saveComplianceConfig = (guid: string, payload: any) => post<any>(`/company/${seg(guid)}/compliance-config`, payload);
 
 // ── Invoice Preview & Share PDF (Provisional/Final flow) ─────────────────────
 // GET /tally/invoice/:tdkRef/preview — returns VoucherDocument from app_vouchers snapshot
