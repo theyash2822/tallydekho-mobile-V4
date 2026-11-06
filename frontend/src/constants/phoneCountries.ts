@@ -1,4 +1,4 @@
-/** Phone countries TallyDekho accepts — the same list as the backend's utils/phone.js and web Login.jsx. */
+/** Phone countries Auditer accepts — the same list as the backend's utils/phone.js and web Login.jsx. */
 export type PhoneCountry = {
   name: string;
   flag: string;

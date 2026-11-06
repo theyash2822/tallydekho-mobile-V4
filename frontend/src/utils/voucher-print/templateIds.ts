@@ -1,6 +1,6 @@
 /**
  * Template IDs per Spec MASTER v1.
- * Thermal replaces former TallyDekho Ledger.
+ * Thermal replaces former Auditer Ledger.
  */
 
 export const VOUCHER_TEMPLATE_IDS = [

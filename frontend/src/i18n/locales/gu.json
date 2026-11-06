@@ -66,7 +66,8 @@
     "askOwnerForAccess": "જો આ કંપની માટે તમને આની જરૂર હોય તો વર્કસ્પેસ માલિકને પૂછો.",
     "limitedByAccess": "તમારી ડેટા ઍક્સેસને કારણે મર્યાદિત",
     "limitedByAccessHint": "તમારી ભૂમિકામાં આની પરવાનગી છે; પણ આ કંપની માટે તમારી ઍક્સેસમાં નથી. વર્કસ્પેસ માલિકને પૂછો.",
-    "permissionNeeded": "આ માટે એવી પરવાનગી જોઈએ જે તમારી ભૂમિકામાં નથી."
+    "permissionNeeded": "આ માટે એવી પરવાનગી જોઈએ જે તમારી ભૂમિકામાં નથી.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "ડેશબોર્ડ",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF પૂર્વાવલોકન",
       "useFormat": "આ ફોર્મેટ વાપરો",
       "saveAll": "બધી ગોઠવણી સાચવો",
-      "selectBankAccount": "બેંક ખાતું પસંદ કરો"
+      "selectBankAccount": "બેંક ખાતું પસંદ કરો",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "કોઈ અંતિમ બેલેન્સ નથી",

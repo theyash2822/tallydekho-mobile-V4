@@ -1,7 +1,7 @@
 # Forensic Investigation: Mobile Camera / Barcode Scanner Black Preview
 
 **Date:** 2026-09-25  
-**Product:** TallyDekho Mobile (`tallydekho-mobile-V4/frontend`)  
+**Product:** Auditer Mobile (`tallydekho-mobile-V4/frontend`)  
 **Audience:** CTO / engineering decision  
 **Status:** Open — permission works; live camera preview fails on tested Android (Expo Go)  
 **Author:** Agent investigation (session with Yash)
@@ -74,7 +74,7 @@ VirtualizedList: You have a large list that is slow to update...
 
 | Item | Value |
 |------|--------|
-| App | Expo Router app `auditor` / TallyDekho mobile |
+| App | Expo Router app `auditor` / Auditer mobile |
 | Runtime under test | **Expo Go** (confirmed by push log) |
 | Expo SDK (installed) | `expo@57.0.22` (package.json range `^57.0.17`) |
 | `expo-camera` (installed) | `57.0.5` (`~57.0.5`) |

@@ -1,4 +1,4 @@
-# Camera Scanner Standard (TallyDekho Mobile)
+# Camera Scanner Standard (Auditer Mobile)
 
 ## Ownership / mount condition
 

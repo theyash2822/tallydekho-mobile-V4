@@ -56,7 +56,7 @@ export function isEventForWorkspace(
   return eventWorkspaceId === activeWorkspaceId;
 }
 
-/** Events that mean a TallyDekho document was posted to (or converted in) Tally. */
+/** Events that mean an Auditer document was posted to (or converted in) Tally. */
 export const POSTING_EVENTS: readonly string[] = ['voucher:tallySynced', 'invoice_posting_updated', 'voucher:regularized'];
 
 export function postingEventRef(payload: any): string | null {

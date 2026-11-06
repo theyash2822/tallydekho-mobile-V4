@@ -1,6 +1,6 @@
 /**
  * Commercial template IDs per Spec MASTER v1.
- * Thermal replaces former TallyDekho Ledger commercial.
+ * Thermal replaces former Auditer Ledger commercial.
  */
 
 export const COMMERCIAL_TEMPLATE_IDS = [

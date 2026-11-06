@@ -1,5 +1,5 @@
 // ============================================================
-// TallyDekho API Service — V2
+// Auditer API Service — V2
 // Base: /api/* (new spec)
 // Auth: JWT Bearer token in Authorization header
 // STRICT RULE: No mock/fallback data. Throw errors — callers handle empty/error states.

@@ -1,5 +1,5 @@
 /**
- * TallyDekho Thermal — commercial PDF (td_thermal_commercial_v1).
+ * Auditer Thermal — commercial PDF (td_thermal_commercial_v1).
  * Spec §13: stacked reflow from CommercialPrintModel.
  */
 import { CommercialPrintModel } from '../CommercialPrintModel';

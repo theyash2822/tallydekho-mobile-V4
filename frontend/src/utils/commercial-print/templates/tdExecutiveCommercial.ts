@@ -192,7 +192,7 @@ function executiveClosing(model: CommercialPrintModel): string {
   </div>`;
 }
 
-/** TallyDekho Executive — Spec §14. Premium spacing, metadata strip. */
+/** Auditer Executive — Spec §14. Premium spacing, metadata strip. */
 export function renderTdExecutiveCommercial(model: CommercialPrintModel): string {
   const body = `
 ${executiveHeader(model)}

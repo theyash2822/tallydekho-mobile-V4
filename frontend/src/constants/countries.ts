@@ -1,5 +1,5 @@
 /**
- * Countries supported by TallyDekho.
+ * Countries supported by Auditer.
  * Names match Tally Prime canonical spellings — DO NOT change without verifying
  * against Tally's country master list (each Tally installation ships one).
  *

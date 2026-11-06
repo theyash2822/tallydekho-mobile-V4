@@ -2457,7 +2457,7 @@ export default function CreateSalesInvoiceScreen() {
                 ? t('screens.salesCreateInvoice.queuedSub')
                 : (isProforma ? t('screens.salesCreateInvoice.proformaSub') : correctGuid ? t('screens.salesCreateInvoice.correctedSub') : (convertProformaTdkRef ? t('screens.salesCreateInvoice.convertedSub') : t('screens.salesCreateInvoice.invoiceSub')))}
             </Text>
-            {/* TallyDekho Series: show invoice number immediately */}
+            {/* Auditer Series: show invoice number immediately */}
             {!!submitResult?.invoiceNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
                 <Text style={ss.refLabel}>{t('screens.salesCreateInvoice.invoiceNo')}</Text>
@@ -2498,7 +2498,7 @@ export default function CreateSalesInvoiceScreen() {
                 if (!submitResult?.tdkRef || !company?.guid) return;
                 setSharePdfLoading(true);
                 try {
-                  // TallyDekho Series: number is immediate — no wait needed
+                  // Auditer Series: number is immediate — no wait needed
                   // TallyPrime Series: wait up to 10s for Tally to assign the number
                   const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
                   const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);

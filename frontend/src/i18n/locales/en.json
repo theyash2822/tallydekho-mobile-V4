@@ -66,7 +66,8 @@
     "permissionNeeded": "This needs a permission your role does not have.",
     "hidden": "Hidden",
     "ownerAdminOnly": "Only the Workspace Owner or an Admin can change this.",
-    "askOwnerForAccess": "Ask the Workspace Owner if you need this for this company."
+    "askOwnerForAccess": "Ask the Workspace Owner if you need this for this company.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF Preview",
       "useFormat": "Use this format",
       "saveAll": "Save All Configurations",
-      "selectBankAccount": "Select Bank Account"
+      "selectBankAccount": "Select Bank Account",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "No closing balance",

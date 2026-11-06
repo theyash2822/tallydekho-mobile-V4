@@ -534,7 +534,7 @@ export default function OtherTaxesScreen() {
                 .map(t => `${t.voucher_number || '-'}  ${t.party_ledger_name || '-'}  ${fmt(t.tax_amount)}  ${t.transaction_nature || '-'}`);
               const { Share } = require('react-native');
               Share.share({
-                message: `Auditer — ${t('screens.reportsOtherTaxes.txnsTitle', { tax: activeLabel })}\n${lines.join('\n')}`,
+                message: `${t('common.appName')} — ${t('screens.reportsOtherTaxes.txnsTitle', { tax: activeLabel })}\n${lines.join('\n')}`,
                 title: t('screens.reportsOtherTaxes.exportTitle', { tax: activeLabel }),
               }).catch(() => {});
               clearSelect();

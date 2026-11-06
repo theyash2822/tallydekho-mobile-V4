@@ -1,5 +1,5 @@
 /**
- * format.ts — Shared formatting utilities for TallyDekho
+ * format.ts — Shared formatting utilities for Auditer
  *
  * Use these functions directly when outside a React component (e.g. PDF/HTML export, share).
  * Inside components, prefer useSettings() which sources settings from context automatically.

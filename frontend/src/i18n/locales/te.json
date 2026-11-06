@@ -66,7 +66,8 @@
     "askOwnerForAccess": "ఈ కంపెనీకి ఇది అవసరమైతే వర్క్‌స్పేస్ యజమానిని అడగండి.",
     "limitedByAccess": "మీ డేటా యాక్సెస్ వల్ల పరిమితం",
     "limitedByAccessHint": "మీ పాత్ర దీన్ని అనుమతిస్తుంది; కానీ ఈ కంపెనీకి మీ యాక్సెస్ అనుమతించదు. వర్క్‌స్పేస్ యజమానిని అడగండి.",
-    "permissionNeeded": "దీనికి మీ పాత్రకు లేని అనుమతి అవసరం."
+    "permissionNeeded": "దీనికి మీ పాత్రకు లేని అనుమతి అవసరం.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "డాష్‌బోర్డ్",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF ప్రివ్యూ",
       "useFormat": "ఈ ఫార్మాట్ వాడండి",
       "saveAll": "అన్ని కాన్ఫిగరేషన్‌లను సేవ్ చేయండి",
-      "selectBankAccount": "బ్యాంక్ ఖాతాను ఎంచుకోండి"
+      "selectBankAccount": "బ్యాంక్ ఖాతాను ఎంచుకోండి",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "క్లోజింగ్ బ్యాలెన్స్ లేదు",

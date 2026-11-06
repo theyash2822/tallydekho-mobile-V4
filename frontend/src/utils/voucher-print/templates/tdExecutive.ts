@@ -2,7 +2,7 @@ import { VoucherPrintModel } from '../VoucherPrintModel';
 import { addressParagraph, esc, formatInr, wrapHtmlDocument } from '../shared';
 import { voucherTitle } from '../VoucherPrintModelAdapter';
 
-/** TallyDekho Executive — MD §8. Compact premium share layout. */
+/** Auditer Executive — MD §8. Compact premium share layout. */
 export function renderTallyDekhoExecutive(model: VoucherPrintModel): string {
   const body =
     model.layoutMode === 'debit-credit'

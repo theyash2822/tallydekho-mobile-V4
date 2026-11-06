@@ -1,5 +1,5 @@
 /**
- * TallyDekho Thermal — voucher PDF (td_thermal_v1).
+ * Auditer Thermal — voucher PDF (td_thermal_v1).
  * Spec §7: narrow reflow, same VoucherPrintModel as Classic/Executive.
  */
 import { VoucherPrintModel } from '../VoucherPrintModel';

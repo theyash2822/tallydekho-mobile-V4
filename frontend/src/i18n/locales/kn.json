@@ -66,7 +66,8 @@
     "askOwnerForAccess": "ಈ ಕಂಪನಿಗೆ ಇದು ಬೇಕಿದ್ದರೆ ವರ್ಕ್‌ಸ್ಪೇಸ್ ಮಾಲೀಕರನ್ನು ಕೇಳಿ.",
     "limitedByAccess": "ನಿಮ್ಮ ಡೇಟಾ ಪ್ರವೇಶದಿಂದ ಸೀಮಿತವಾಗಿದೆ",
     "limitedByAccessHint": "ನಿಮ್ಮ ಪಾತ್ರ ಇದನ್ನು ಅನುಮತಿಸುತ್ತದೆ; ಆದರೆ ಈ ಕಂಪನಿಗೆ ನಿಮ್ಮ ಪ್ರವೇಶ ಅನುಮತಿಸುವುದಿಲ್ಲ. ವರ್ಕ್‌ಸ್ಪೇಸ್ ಮಾಲೀಕರನ್ನು ಕೇಳಿ.",
-    "permissionNeeded": "ಇದಕ್ಕೆ ನಿಮ್ಮ ಪಾತ್ರಕ್ಕೆ ಇಲ್ಲದ ಅನುಮತಿ ಬೇಕು."
+    "permissionNeeded": "ಇದಕ್ಕೆ ನಿಮ್ಮ ಪಾತ್ರಕ್ಕೆ ಇಲ್ಲದ ಅನುಮತಿ ಬೇಕು.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF ಪೂರ್ವವೀಕ್ಷಣೆ",
       "useFormat": "ಈ ಸ್ವರೂಪ ಬಳಸಿ",
       "saveAll": "ಎಲ್ಲಾ ಕಾನ್ಫಿಗರೇಶನ್‌ಗಳನ್ನು ಉಳಿಸಿ",
-      "selectBankAccount": "ಬ್ಯಾಂಕ್ ಖಾತೆ ಆಯ್ಕೆಮಾಡಿ"
+      "selectBankAccount": "ಬ್ಯಾಂಕ್ ಖಾತೆ ಆಯ್ಕೆಮಾಡಿ",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "ಅಂತಿಮ ಬಾಕಿ ಇಲ್ಲ",

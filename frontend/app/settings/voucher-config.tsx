@@ -114,10 +114,11 @@ const makeDefault = (id: string): VConfig => ({
   qrUpiId: '',
 });
 
-const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
-  { id: 'tally_classic_v1', label: 'Tally Classic' },
-  { id: 'td_thermal_v1',    label: 'Auditer Thermal' },
-  { id: 'td_executive_v1',  label: 'Auditer Executive' },
+/** Template ids are frozen; labels come from i18n. */
+const FORMAT_OPTIONS: Array<{ id: DocumentFormat; labelKey: string }> = [
+  { id: 'tally_classic_v1', labelKey: 'screens.settingsVoucherConfig.formatTallyClassic' },
+  { id: 'td_thermal_v1',    labelKey: 'screens.settingsVoucherConfig.formatAuditerThermal' },
+  { id: 'td_executive_v1',  labelKey: 'screens.settingsVoucherConfig.formatAuditerExecutive' },
 ];
 
 /** Live QR preview when Generate from UPI is selected and UPI ID is filled. */
@@ -479,7 +480,8 @@ export default function VoucherConfigScreen() {
       await writeLocalVoucherConfig(updated);
       await updateUserSettings({ voucher_config: updated }).catch(() => {});
       clearVoucherConfigCache();
-      const formatLabel = FORMAT_OPTIONS.find(f => f.id === format)?.label || format;
+      const formatKey = FORMAT_OPTIONS.find(f => f.id === format)?.labelKey;
+      const formatLabel = formatKey ? t(formatKey) : format;
       Toast.show({ type: 'success', text1: t('screens.settingsVoucherConfig.labelUpdated', { label }), text2: t('screens.settingsVoucherConfig.formatApplied', { format: formatLabel }) });
     } catch {
       Toast.show({ type: 'error', text1: t('screens.settingsVoucherConfig.saveFailed'), text2: t('screens.settingsVoucherConfig.formatSaveFailed') });
@@ -757,7 +759,7 @@ export default function VoucherConfigScreen() {
                           )}
                           <FormatThumb type={opt.id} />
                           <Text style={[s.formatLbl, active && s.formatLblActive]}>
-                            {opt.label}{opt.id === 'tally_classic_v1' ? ` ${t('screens.settingsVoucherConfig.defaultSuffix')}` : ''}
+                            {t(opt.labelKey)}{opt.id === 'tally_classic_v1' ? ` ${t('screens.settingsVoucherConfig.defaultSuffix')}` : ''}
                           </Text>
                         </TouchableOpacity>
                         );

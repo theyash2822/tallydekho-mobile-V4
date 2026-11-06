@@ -140,7 +140,7 @@ await check('compliance alert links (push data.link) open the matching app scree
     ['/settings/einvoice', '/settings/einvoice'],
     ['/settings/gst', '/settings/gst'],
     ['/settings/tally-sync', '/settings/tally-sync'],
-    ['https://app.auditer.in/compliance/gst?tab=ims', '/reports/gst?tab=ims'],
+    ['https://app.auditer.com/compliance/gst?tab=ims', '/reports/gst?tab=ims'],
   ];
   for (const [link, route] of cases) assert.equal(complianceLinkRoute(link), route, link);
   assert.equal(complianceLinkRoute('/settings/unknown'), null);

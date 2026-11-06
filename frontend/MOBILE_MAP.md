@@ -45,12 +45,12 @@ All files here are screens. See NAVIGATION_MAP.md for full screen list.
 |------|---------|
 | colors.ts | App color palette — cream theme (#F5F4EF base) |
 
-### src/data/ (MOCK DATA — do NOT use for live display)
+### src/data/
 | File | Notes |
 |------|-------|
-| mockData.ts | Legacy mock — do not use after pairing |
-| mockDocuments.ts | Legacy mock documents |
 | stockData.ts | May still be used in some stock screens — audit needed |
+
+(`mockData.ts` / `mockDocuments.ts` were deleted — never recreate mock data for live display.)
 
 ### src/types/
 | File | Purpose |

@@ -66,7 +66,8 @@
     "askOwnerForAccess": "ଏହି କମ୍ପାନୀ ପାଇଁ ଏହା ଆବଶ୍ୟକ ହେଲେ ୱର୍କସ୍ପେସ ମାଲିକଙ୍କୁ ପଚାରନ୍ତୁ।",
     "limitedByAccess": "ଆପଣଙ୍କ ଡାଟା ଆକ୍ସେସ୍ ଅନୁସାରେ ସୀମିତ",
     "limitedByAccessHint": "ଆପଣଙ୍କ ଭୂମିକାରେ ଏହାର ଅନୁମତି ଅଛି; କିନ୍ତୁ ଏହି କମ୍ପାନୀ ପାଇଁ ଆପଣଙ୍କ ଆକ୍ସେସ୍‌ରେ ନାହିଁ। ୱର୍କସ୍ପେସ୍ ମାଲିକଙ୍କୁ ପଚାରନ୍ତୁ।",
-    "permissionNeeded": "ଏଥିପାଇଁ ଏପରି ଅନୁମତି ଦରକାର ଯାହା ଆପଣଙ୍କ ଭୂମିକାରେ ନାହିଁ।"
+    "permissionNeeded": "ଏଥିପାଇଁ ଏପରି ଅନୁମତି ଦରକାର ଯାହା ଆପଣଙ୍କ ଭୂମିକାରେ ନାହିଁ।",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "ଡ୍ୟାଶ୍‌ବୋର୍ଡ",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF ପ୍ରିଭ୍ୟୁ",
       "useFormat": "ଏହି ଫର୍ମାଟ୍ ବ୍ୟବହାର କରନ୍ତୁ",
       "saveAll": "ସମସ୍ତ କନଫିଗରେସନ୍ ସେଭ୍ କରନ୍ତୁ",
-      "selectBankAccount": "ବ୍ୟାଙ୍କ ଖାତା ବାଛନ୍ତୁ"
+      "selectBankAccount": "ବ୍ୟାଙ୍କ ଖାତା ବାଛନ୍ତୁ",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "କୌଣସି ଅନ୍ତିମ ବାଲାନ୍ସ ନାହିଁ",

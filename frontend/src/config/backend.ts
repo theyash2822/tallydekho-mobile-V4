@@ -11,10 +11,12 @@
 
 export type AppEnv = 'production' | 'staging' | 'development';
 
-export const PRODUCTION_BACKEND_URL = 'https://api.tallydekho.com';
+/** Production API host — defined once; URL and host guard both derive from it. */
+export const PRODUCTION_API_HOST = 'api.tallydekho.com';
+export const PRODUCTION_BACKEND_URL = `https://${PRODUCTION_API_HOST}`;
 const DEV_LAN_BACKEND_URL = 'http://192.168.29.245:3001';
 
-const PRODUCTION_HOST_PATTERN = /^api\.tallydekho\.com$/i;
+const PRODUCTION_HOST_PATTERN = new RegExp(`^${PRODUCTION_API_HOST.replace(/\./g, '\\.')}$`, 'i');
 
 export function resolveAppEnv(
   env: Record<string, string | undefined> = process.env as never,

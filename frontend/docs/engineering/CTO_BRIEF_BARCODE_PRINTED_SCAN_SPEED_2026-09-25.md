@@ -1,7 +1,7 @@
 # CTO Brief — Barcode Scanner: Printed Label Speed (iOS + Android)
 
 **Date:** 2026-09-25  
-**Product:** TallyDekho Mobile (Expo Go / SDK 57, `expo-camera` CameraView)  
+**Product:** Auditer Mobile (Expo Go / SDK 57, `expo-camera` CameraView)  
 **Surfaces:** Stocks Jun 11 scanner (`/stocks/barcode-scanner`), Sales product scanner (`/sales/product-scanner`)  
 **Status:** Layout + in-bracket filter largely correct; **printed barcode time-to-first-success still too slow** on iOS (and now also felt slow on Android).  
 **Ask:** CTO decision on next investment path (app-only mitigations vs native module / vendor / process).

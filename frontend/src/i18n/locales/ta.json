@@ -66,7 +66,8 @@
     "askOwnerForAccess": "இந்த நிறுவனத்திற்கு இது தேவைப்பட்டால் பணியிட உரிமையாளரிடம் கேளுங்கள்.",
     "limitedByAccess": "உங்கள் தரவு அணுகலால் வரம்பிடப்பட்டது",
     "limitedByAccessHint": "உங்கள் பங்கு இதை அனுமதிக்கிறது; ஆனால் இந்த நிறுவனத்துக்கான உங்கள் அணுகல் அனுமதிக்கவில்லை. பணியிட உரிமையாளரிடம் கேளுங்கள்.",
-    "permissionNeeded": "இதற்கு உங்கள் பங்கிற்கு இல்லாத ஒரு அனுமதி தேவை."
+    "permissionNeeded": "இதற்கு உங்கள் பங்கிற்கு இல்லாத ஒரு அனுமதி தேவை.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "டாஷ்போர்டு",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF முன்னோட்டம்",
       "useFormat": "இந்த வடிவத்தைப் பயன்படுத்து",
       "saveAll": "அனைத்து அமைப்புகளையும் சேமி",
-      "selectBankAccount": "வங்கிக் கணக்கைத் தேர்ந்தெடு"
+      "selectBankAccount": "வங்கிக் கணக்கைத் தேர்ந்தெடு",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "இறுதி இருப்பு இல்லை",

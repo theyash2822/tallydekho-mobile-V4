@@ -1,4 +1,4 @@
-// TallyDekho Color System
+// Auditer Color System
 // All green Figma accents → #1A1A1A (brandPrimary)
 // Light green active states → #E8E7E1 (activeBg)
 // Positive % indicators KEEP green → #2D7D46

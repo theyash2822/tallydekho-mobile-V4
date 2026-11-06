@@ -93,6 +93,7 @@ function SwipeAction({ icon, label, bg }: { icon: IconName; label: string; bg: s
 // ─────────────────────────────────────────────────────────────────────────────
 
 function WelcomeMock({ active }: MockProps) {
+  const { t } = useTranslation();
   const rise = useState(() => new Animated.Value(1))[0];
   useEffect(() => {
     if (!active) return;
@@ -122,7 +123,7 @@ function WelcomeMock({ active }: MockProps) {
         <Ionicons name="sync-outline" size={16} color={COLORS.positive} />
         <View style={m.flowPill}>
           <Ionicons name="phone-portrait-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={m.flowTxt}>Auditer</Text>
+          <Text style={m.flowTxt}>{t('onboarding.brand')}</Text>
         </View>
       </View>
     </View>

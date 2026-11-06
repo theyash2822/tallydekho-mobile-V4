@@ -157,6 +157,4 @@ Read:
 - .expo/cache/
 - dist/
 - assets/
-- src/data/mockData.ts (never use for live display)
-- src/data/mockDocuments.ts
 - Sibling repos (td-backend, td-web-portal, td-source, td-website)

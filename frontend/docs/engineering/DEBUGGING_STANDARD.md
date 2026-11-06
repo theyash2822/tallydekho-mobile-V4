@@ -1,4 +1,4 @@
-# Debugging Standard (TallyDekho Mobile)
+# Debugging Standard (Auditer Mobile)
 
 Use this method for non-trivial bugs. Keep it proportional: small defects need a short evidence/fix/check note; cross-layer failures need a fuller investigation.
 

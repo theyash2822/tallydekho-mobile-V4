@@ -66,7 +66,8 @@
     "askOwnerForAccess": "ഈ കമ്പനിക്കായി ഇത് ആവശ്യമെങ്കിൽ വർക്ക്‌സ്‌പേസ് ഉടമയോട് ചോദിക്കുക.",
     "limitedByAccess": "നിങ്ങളുടെ ഡേറ്റ ആക്സസ് കാരണം പരിമിതം",
     "limitedByAccessHint": "നിങ്ങളുടെ റോൾ ഇത് അനുവദിക്കുന്നു; എന്നാൽ ഈ കമ്പനിക്കുള്ള നിങ്ങളുടെ ആക്സസ് അനുവദിക്കുന്നില്ല. വർക്ക്‌സ്‌പേസ് ഉടമയോട് ചോദിക്കുക.",
-    "permissionNeeded": "ഇതിന് നിങ്ങളുടെ റോളിന് ഇല്ലാത്ത ഒരു അനുമതി ആവശ്യമാണ്."
+    "permissionNeeded": "ഇതിന് നിങ്ങളുടെ റോളിന് ഇല്ലാത്ത ഒരു അനുമതി ആവശ്യമാണ്.",
+    "appName": "Auditer"
   },
   "nav": {
     "dashboard": "ഡാഷ്‌ബോർഡ്",
@@ -3712,7 +3713,10 @@
       "pdfPreview": "PDF പ്രിവ്യൂ",
       "useFormat": "ഈ ഫോർമാറ്റ് ഉപയോഗിക്കുക",
       "saveAll": "എല്ലാ കോൺഫിഗറേഷനുകളും സംരക്ഷിക്കുക",
-      "selectBankAccount": "ബാങ്ക് അക്കൗണ്ട് തിരഞ്ഞെടുക്കുക"
+      "selectBankAccount": "ബാങ്ക് അക്കൗണ്ട് തിരഞ്ഞെടുക്കുക",
+      "formatTallyClassic": "Tally Classic",
+      "formatAuditerThermal": "Auditer Thermal",
+      "formatAuditerExecutive": "Auditer Executive"
     },
     "voucherCreateJournal": {
       "noClosingBalance": "ക്ലോസിംഗ് ബാലൻസ് ഇല്ല",
