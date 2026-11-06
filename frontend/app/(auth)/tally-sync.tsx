@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import type { FC } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,

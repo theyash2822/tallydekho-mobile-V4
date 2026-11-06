@@ -124,7 +124,7 @@ function metaLabels(type: DocumentType): string[] {
  * Resolve a metadata label to a value. Labels repeat (`Dated` appears twice, once
  * for the document and once for the buyer's order), so position decides meaning.
  */
-function metaValues(doc: VoucherDocument, labels: string[]): Array<{ label: string; value: string }> {
+function metaValues(doc: VoucherDocument, labels: string[]): { label: string; value: string }[] {
   const meta = (doc.tallyMeta || {}) as Record<string, any>;
   const legacy = (doc.metadata || {}) as Record<string, any>;
   const dispatch = (doc.dispatchDetails || {}) as Record<string, any>;

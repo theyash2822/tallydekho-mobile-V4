@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "पुढील नूतनीकरण",
       "footnoteWeb": "क्रेडिट रिचार्ज आणि सीटचे व्यवस्थापन वेब पोर्टल app.auditer.com वर करा."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ग्राहक",
-      "vendor": "विक्रेता",
-      "nameRequired": "{{label}} चे नाव आवश्यक आहे.",
-      "addNew": "नवीन {{label}} जोडा",
-      "name": "नाव",
-      "namePlaceholder": "{{label}} चे नाव",
-      "contactNumber": "संपर्क क्रमांक",
-      "tenDigitNumber": "10-अंकी नंबर",
-      "billingAddress": "बिलिंग पत्ता",
-      "fullAddress": "पूर्ण पत्ता",
-      "shippingSameAsBilling": "शिपिंग पत्ता बिलिंगप्रमाणेच",
-      "shippingAddress": "शिपिंग पत्ता",
-      "shippingAddressPlaceholder": "शिपिंग पत्ता",
-      "gstinPlaceholder": "ऐच्छिक • 15-अंकी GSTIN",
-      "saveOnly": "फक्त सेव्ह करा",
-      "saveAndUse": "सेव्ह करा व वापरा"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "नुकसान",
       "shortage": "तूट",

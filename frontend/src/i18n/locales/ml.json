@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "അടുത്ത പുതുക്കൽ",
       "footnoteWeb": "ക്രെഡിറ്റ് റീചാർജും സീറ്റ് നിയന്ത്രണവും വെബ് പോർട്ടലായ app.auditer.com-ൽ ചെയ്യുക."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ഉപഭോക്താവ്",
-      "vendor": "വെണ്ടർ",
-      "nameRequired": "{{label}} പേര് ആവശ്യമാണ്.",
-      "addNew": "പുതിയ {{label}} ചേർക്കുക",
-      "name": "പേര്",
-      "namePlaceholder": "{{label}} പേര്",
-      "contactNumber": "ബന്ധപ്പെടാനുള്ള നമ്പർ",
-      "tenDigitNumber": "10 അക്ക നമ്പർ",
-      "billingAddress": "ബില്ലിംഗ് വിലാസം",
-      "fullAddress": "പൂർണ്ണ വിലാസം",
-      "shippingSameAsBilling": "ഷിപ്പിംഗ് വിലാസം ബില്ലിംഗ് വിലാസം തന്നെ",
-      "shippingAddress": "ഷിപ്പിംഗ് വിലാസം",
-      "shippingAddressPlaceholder": "ഷിപ്പിംഗ് വിലാസം",
-      "gstinPlaceholder": "ഐച്ഛികം • 15 അക്ക GSTIN",
-      "saveOnly": "സംരക്ഷിക്കുക മാത്രം",
-      "saveAndUse": "സംരക്ഷിച്ച് ഉപയോഗിക്കുക"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "കേടുപാട്",
       "shortage": "കുറവ്",

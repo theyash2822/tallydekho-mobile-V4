@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "அடுத்த புதுப்பிப்பு",
       "footnoteWeb": "கிரெடிட் ரீசார்ஜ் மற்றும் இருக்கைகளை Web Portal app.auditer.com-இல் நிர்வகிக்கவும்."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "வாடிக்கையாளர்",
-      "vendor": "விற்பனையாளர்",
-      "nameRequired": "{{label}} பெயர் தேவை.",
-      "addNew": "புதிய {{label}}-ஐச் சேர்",
-      "name": "பெயர்",
-      "namePlaceholder": "{{label}} பெயர்",
-      "contactNumber": "தொடர்பு எண்",
-      "tenDigitNumber": "10 இலக்க எண்",
-      "billingAddress": "பில்லிங் முகவரி",
-      "fullAddress": "முழு முகவரி",
-      "shippingSameAsBilling": "அனுப்பும் முகவரி பில்லிங் முகவரியே",
-      "shippingAddress": "அனுப்பும் முகவரி",
-      "shippingAddressPlaceholder": "அனுப்பும் முகவரி",
-      "gstinPlaceholder": "விருப்பம் • 15 இலக்க GSTIN",
-      "saveOnly": "சேமி மட்டும்",
-      "saveAndUse": "சேமித்துப் பயன்படுத்து"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "சேதம்",
       "shortage": "பற்றாக்குறை",

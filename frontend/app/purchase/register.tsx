@@ -68,14 +68,14 @@ type MonthGroup = { id: string; label: string; invoices: PurchaseInvoice[] };
 
 export default function PurchaseRegisterScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [docTypes, setDocTypes] = useState<string[]>([]);
   const [partyGroups, setPartyGroups] = useState<string[]>([]);
   const [showTypeFilter, setShowTypeFilter] = useState(false);

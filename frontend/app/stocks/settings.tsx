@@ -252,7 +252,7 @@ function StockSettingsScreenContent() {
     setSaving(true);
     try {
       // Flush numeric drafts into settings snapshot
-      const numKeys: Array<keyof Settings> = [
+      const numKeys: (keyof Settings)[] = [
         'purchase_buffer_days', 'default_low_stock_level',
         'fast_moving_top_pct', 'slow_moving_no_movement_days', 'dead_stock_no_movement_days',
       ];

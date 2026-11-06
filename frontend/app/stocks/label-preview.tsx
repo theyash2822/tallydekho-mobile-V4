@@ -15,7 +15,6 @@ import { getBarcodesByGuids } from '../../src/services/api';
 import { encodeCode128B } from '../../src/utils/barcode';
 import { buildLabelHTML, computeGrid, getLabelDims, type PrintItem } from '../../src/utils/labelPrint';
 
-const AMBER = '#A89060';
 
 // PreviewItem = PrintItem (shared type from labelPrint.ts)
 type PreviewItem = PrintItem;

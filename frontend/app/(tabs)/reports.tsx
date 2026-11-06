@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
-  Path, Circle, Line, G, Text as SvgText, Rect,
+  Path, Circle, Line, G, Text as SvgText,
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -31,7 +31,6 @@ const CONTENT_W = CARD_W - SPACING.md * 2;
 
 // ── Chart palette ─────────────────────────────────────────────────────────────
 const C_GREEN  = '#2D7D46';
-const C_GOLD   = '#D97706';
 const C_GREY   = '#E0DED6';
 const C_GRID   = '#E8E7E1';
 
@@ -873,7 +872,7 @@ const sc = StyleSheet.create({
 export default function ReportsScreen() {
   const tabAccess = useTabAccess('financials.view');
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmountCompact } = useSettings();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { workspaceId, hasCapability } = useWorkspace();

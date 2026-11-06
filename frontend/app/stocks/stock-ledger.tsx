@@ -22,7 +22,6 @@ import FilterBottomSheet, {
 } from '../../src/components/FilterBottomSheet';
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
-import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockLedger } from '../../src/services/api';
 import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
@@ -34,7 +33,6 @@ type ViewMode = 'chronological' | 'byItem' | 'byDocument';
 type TxnType  = 'Sales' | 'Purchase' | 'Transfer' | 'Adjustment' | 'Opening';
 // VoucherType is now a plain string — actual types come dynamically from the API
 // (Tally companies use custom names like 'Sales GST', 'Purchase GST', not always 'Sales Invoice')
-type VoucherType = string;
 
 interface TxEntry {
   id: string; sku: string; item: string; batch: string;
@@ -270,7 +268,6 @@ function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function StockLedgerScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
 

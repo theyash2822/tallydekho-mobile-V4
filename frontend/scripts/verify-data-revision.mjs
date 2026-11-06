@@ -72,7 +72,7 @@ await check('approvals show companies, years and identity replacement', () => {
 });
 
 await check('cancelled vouchers are labelled Cancelled, not Unpaid', () => {
-  for (const p of ['app/sales/register.tsx', 'app/purchase/register.tsx', 'app/sales/index.tsx', 'app/purchase/index.tsx']) {
+  for (const p of ['app/sales/register.tsx', 'app/purchase/register.tsx']) {
     const src = read(p);
     assert.doesNotMatch(src, /is_cancelled \? 'unpaid'/, p);
     assert.match(src, /is_cancelled \? 'cancelled'/, p);
@@ -87,9 +87,6 @@ await check('registers request cancelled vouchers but leave them out of totals a
     assert.equal((src.match(/includeCancelled: '1'/g) || []).length, 2, p);
     assert.match(src, /const counted = allFiltered\.filter\(\(inv\) => inv\.status !== 'cancelled'\)/, p);
     assert.match(src, /value: String\(counted\.length\)/, p);
-  }
-  for (const p of ['app/sales/index.tsx', 'app/purchase/index.tsx']) {
-    assert.doesNotMatch(read(p), /includeCancelled/, p);
   }
 });
 

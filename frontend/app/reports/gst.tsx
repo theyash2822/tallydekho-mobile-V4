@@ -154,7 +154,7 @@ export default function GSTScreen() {
   }, []);
 
   // ── Collapsible GSTR-1 sections ───────────────────────────────────────────
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const toggleSection = useCallback((sec: string) => {
     setCollapsedSections(prev => {

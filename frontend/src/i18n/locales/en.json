@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "Next renewal",
       "footnoteWeb": "Recharge credits and manage seats on the web portal at app.auditer.com."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "Customer",
-      "vendor": "Vendor",
-      "nameRequired": "{{label}} name is required.",
-      "addNew": "Add New {{label}}",
-      "name": "Name",
-      "namePlaceholder": "{{label}} name",
-      "contactNumber": "Contact Number",
-      "tenDigitNumber": "10-digit number",
-      "billingAddress": "Billing Address",
-      "fullAddress": "Full address",
-      "shippingSameAsBilling": "Shipping same as Billing",
-      "shippingAddress": "Shipping Address",
-      "shippingAddressPlaceholder": "Shipping address",
-      "gstinPlaceholder": "Optional • 15-digit GSTIN",
-      "saveOnly": "Save Only",
-      "saveAndUse": "Save & Use"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "Damage",
       "shortage": "Shortage",

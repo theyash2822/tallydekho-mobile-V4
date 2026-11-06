@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Pressable, PanResponder, Dimensions,
+  Pressable, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,10 +13,8 @@ import { getAlerts } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 
-const W = Dimensions.get('window').width;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTILITY — auto-dismiss tooltip helper
@@ -186,7 +184,6 @@ function Divider() { return <View style={s.divider} />; }
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceHubScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
 
@@ -222,8 +219,6 @@ export default function ComplianceHubScreen() {
   const ewbGenerated    = alerts?.ewbGeneratedCount ?? 0;
   const irnGenerated    = alerts?.irnGeneratedCount ?? 0;
   const unmatchedGST    = alerts?.unmatchedGSTCount ?? 0;
-  const gstPercent      = alerts?.gstPercent        ?? 0;
-  const gstStatus       = alerts?.gstStatus         ?? 'Pending';
   const otherTaxCount   = alerts?.otherTaxCount     ?? 0;
   const otherTaxTotal   = alerts?.otherTaxTotal     ?? 0;
   const otherTaxTopType = alerts?.otherTaxTopType   ?? null;
@@ -251,7 +246,6 @@ export default function ComplianceHubScreen() {
 
   // GST tooltips
   const pendingTip  = useToggleTip();
-  const unmatchedTip = useToggleTip();
 
   // E-Way Bill — expand one legend row at a time
   const [activeEwb, setActiveEwb] = useState<number | null>(null);

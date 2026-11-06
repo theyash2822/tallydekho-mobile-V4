@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Alert, ActivityIndicator,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +34,6 @@ import {
   dayBookRowFromListItem,
 } from '../../src/utils/multiShare';
 
-const { width: SW } = Dimensions.get('window');
 
 const STATUS_LABEL: Record<string, string> = {
   paid:   'Paid',
@@ -48,14 +47,13 @@ type ExpenseItem = {
   time: string; amount: string; status: string; type: 'direct' | 'indirect';
   voucherType?: string;
 };
-type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 
 // ─── Month-grouped data ──────────────────────────────────────────────────
 // Legacy MONTH_GROUPS removed — using live data
 
 export default function ExpenseRegisterScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { selectedFY, company } = useAuth();

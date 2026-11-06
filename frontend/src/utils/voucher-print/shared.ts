@@ -14,7 +14,7 @@ type AddressPiece = string | null | undefined;
  * Address pieces as one comma-separated paragraph that wraps over 2–3 lines instead of one piece
  * per line; a piece that repeats (e.g. the state twice) appears once. Plain text — escape it.
  */
-export function addressParagraph(...pieces: Array<AddressPiece | AddressPiece[]>): string {
+export function addressParagraph(...pieces: (AddressPiece | AddressPiece[])[]): string {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const piece of pieces.flat()) {

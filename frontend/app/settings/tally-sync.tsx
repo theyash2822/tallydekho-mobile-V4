@@ -8,7 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -260,10 +259,8 @@ export default function TallySyncScreen() {
       .catch(() => {});
   }, [workspacePaired, workspaceId]);
 
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
   const [code, setCode]           = useState<string[]>(Array(6).fill(''));
-  const [syncing, setSyncing]     = useState(false);
+  const [syncing]                 = useState(false);
   const [showHelp,       setShowHelp]       = useState(false);
   const [showDisconnect, setShowDisconnect] = useState(false);
 
@@ -329,7 +326,7 @@ export default function TallySyncScreen() {
     }
     try {
       if (workspaceId) await unpairWorkspaceTally(workspaceId);
-    } catch (_) { /* best-effort */ }
+    } catch { /* best-effort */ }
     setPairState('idle');
     setCode(Array(6).fill(''));
     setShowDisconnect(false);

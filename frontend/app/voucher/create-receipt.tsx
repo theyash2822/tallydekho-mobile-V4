@@ -188,7 +188,7 @@ export default function CreateReceiptVoucher() {
         });
         setBills(rows);
         setTotalPending(parseFloat(res?.data?.totalPending) || 0);
-      } catch (e) {
+      } catch {
         if (!cancelled) { setBills([]); setTotalPending(0); }
       } finally {
         if (!cancelled) setBillsLoading(false);

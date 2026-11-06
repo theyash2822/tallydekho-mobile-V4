@@ -24,7 +24,7 @@ export function EditStockModal({
   const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [, setIsSubmitting] = useState(false);
 
   const [hsnCode,      setHsnCode]      = useState('');
   const [hsnHint,      setHsnHint]      = useState<string | null>(null);

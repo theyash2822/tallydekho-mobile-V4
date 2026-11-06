@@ -154,7 +154,7 @@ export default function CreatePaymentVoucher() {
           data: p,
         }));
         setParties(list);
-      } catch (e) { /* silent */ }
+      } catch { /* silent */ }
     }
     loadParties();
   }, [company?.guid, partyFilter, scopeParties]);
@@ -198,7 +198,7 @@ export default function CreatePaymentVoucher() {
         });
         setBills(rows);
         setTotalPending(parseFloat(res?.data?.totalPending) || 0);
-      } catch (e) {
+      } catch {
         if (!cancelled) { setBills([]); setTotalPending(0); }
       } finally {
         if (!cancelled) setBillsLoading(false);
@@ -260,7 +260,7 @@ export default function CreatePaymentVoucher() {
           data: l,
         }));
         setLedgerOptions(list);
-      } catch (e) {
+      } catch {
         setLedgerOptions([]);
       } finally { setLedgerLoading(false); }
     }

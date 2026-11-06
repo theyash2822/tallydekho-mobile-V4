@@ -33,7 +33,7 @@ Do NOT read: auth, stocks, compliance, settings
 ## Sales Screen Bug
 Read:
 - AGENTS.md, BLUEPRINT.md
-- app/sales/index.tsx or app/sales/register.tsx
+- app/sales/register.tsx (the old sales/index home screen was removed 2026-11-06)
 - app/sales/create-invoice.tsx (if create form issue)
 - src/services/api.ts (sales section)
 - src/components/forms/ (if form component issue)
@@ -45,7 +45,7 @@ Do NOT read: auth, stocks, reports, settings
 ## Purchase Screen Bug
 Read:
 - AGENTS.md, BLUEPRINT.md
-- app/purchase/index.tsx or app/purchase/register.tsx
+- app/purchase/register.tsx (the old purchase/index home screen was removed 2026-11-06)
 - src/services/api.ts (purchase section)
 
 Do NOT read: auth, stocks, reports, settings

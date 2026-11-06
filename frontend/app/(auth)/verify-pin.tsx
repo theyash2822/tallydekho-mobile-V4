@@ -65,8 +65,6 @@ export default function VerifyPinScreen() {
   const [focusedIdx, setFocused]       = useState(0);
   const [loading, setLoading]          = useState(false);
   const [error, setError]              = useState('');
-  const [mode, setMode]                = useState<'verify' | 'reset_otp' | 'reset_pin'>('verify');
-  const [resetOtp, setResetOtp]        = useState('');
   const [preAuthToken, setPreAuthTokenState] = useState('');
   const preAuthTokenRef = useRef('');
   const [biometricAvail, setBioAvail]   = useState(false);

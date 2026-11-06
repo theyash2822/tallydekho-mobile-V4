@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "తదుపరి పునరుద్ధరణ",
       "footnoteWeb": "క్రెడిట్ రీఛార్జ్, సీట్ల నిర్వహణ వెబ్ పోర్టల్ app.auditer.com లో చేయండి."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "కస్టమర్",
-      "vendor": "వెండర్",
-      "nameRequired": "{{label}} పేరు తప్పనిసరి.",
-      "addNew": "కొత్త {{label}} జోడించండి",
-      "name": "పేరు",
-      "namePlaceholder": "{{label}} పేరు",
-      "contactNumber": "సంప్రదింపు నంబర్",
-      "tenDigitNumber": "10 అంకెల నంబర్",
-      "billingAddress": "బిల్లింగ్ చిరునామా",
-      "fullAddress": "పూర్తి చిరునామా",
-      "shippingSameAsBilling": "షిప్పింగ్ చిరునామా బిల్లింగ్ లాగానే",
-      "shippingAddress": "షిప్పింగ్ చిరునామా",
-      "shippingAddressPlaceholder": "షిప్పింగ్ చిరునామా",
-      "gstinPlaceholder": "ఐచ్ఛికం • 15 అంకెల GSTIN",
-      "saveOnly": "సేవ్ మాత్రమే",
-      "saveAndUse": "సేవ్ చేసి వాడండి"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "నష్టం",
       "shortage": "కొరత",

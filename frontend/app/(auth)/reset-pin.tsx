@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { setPreAuthToken, getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
-import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
+import { verifyOTP, resetPin } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { BlinkingCaret } from '../../src/components/BlinkingCaret';

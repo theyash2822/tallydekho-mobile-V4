@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "পরবর্তী নবীকরণ",
       "footnoteWeb": "ক্রেডিট রিচার্জ ও সিট পরিচালনা ওয়েব পোর্টাল app.auditer.com-এ করুন।"
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "গ্রাহক",
-      "vendor": "বিক্রেতা",
-      "nameRequired": "{{label}}-এর নাম আবশ্যক।",
-      "addNew": "নতুন {{label}} যোগ করুন",
-      "name": "নাম",
-      "namePlaceholder": "{{label}}-এর নাম",
-      "contactNumber": "যোগাযোগ নম্বর",
-      "tenDigitNumber": "10-অঙ্কের নম্বর",
-      "billingAddress": "বিলিং ঠিকানা",
-      "fullAddress": "সম্পূর্ণ ঠিকানা",
-      "shippingSameAsBilling": "শিপিং ঠিকানা বিলিংয়ের মতোই",
-      "shippingAddress": "শিপিং ঠিকানা",
-      "shippingAddressPlaceholder": "শিপিং ঠিকানা",
-      "gstinPlaceholder": "ঐচ্ছিক • 15-অঙ্কের GSTIN",
-      "saveOnly": "শুধু সংরক্ষণ করুন",
-      "saveAndUse": "সংরক্ষণ করে ব্যবহার করুন"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "ক্ষতিগ্রস্ত",
       "shortage": "ঘাটতি",

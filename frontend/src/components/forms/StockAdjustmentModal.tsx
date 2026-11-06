@@ -156,7 +156,7 @@ export function StockAdjustmentModal({
           ? t('screens.componentsFormsStockAdjustmentModal.savedWillPush')
           : t('screens.componentsFormsStockAdjustmentModal.adjustedInTally', { itemName }),
       });
-    } catch (err: any) {
+    } catch {
       // Entry may already be in write_queue; show warning not error
       Toast.show({ type: 'info', text1: t('screens.componentsFormsStockAdjustmentModal.adjustmentSaved'), text2: t('screens.componentsFormsStockAdjustmentModal.willPush') });
     }

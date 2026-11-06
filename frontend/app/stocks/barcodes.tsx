@@ -36,11 +36,10 @@ import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/vou
 import Toast from 'react-native-toast-message';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
-import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   getBarcodeList, getBarcodeSettings, saveBarcodeSettings, pushPendingBarcodes, downloadBarcodeTemplate,
-  generateBarcode, generateBulkBarcodes, linkBarcode, lookupBarcode,
+  generateBarcode, generateBulkBarcodes, linkBarcode,
   bulkImportBarcodes, BarcodeItem, BarcodeSettings,
   startBulkBarcodeJob, getBulkBarcodeJobStatus, getActiveBulkBarcodeJob,
   BulkBarcodeJobStatus,

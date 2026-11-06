@@ -115,7 +115,7 @@ const makeDefault = (id: string): VConfig => ({
 });
 
 /** Template ids are frozen; labels come from i18n. */
-const FORMAT_OPTIONS: Array<{ id: DocumentFormat; labelKey: string }> = [
+const FORMAT_OPTIONS: { id: DocumentFormat; labelKey: string }[] = [
   { id: 'tally_classic_v1', labelKey: 'screens.settingsVoucherConfig.formatTallyClassic' },
   { id: 'td_thermal_v1',    labelKey: 'screens.settingsVoucherConfig.formatAuditerThermal' },
   { id: 'td_executive_v1',  labelKey: 'screens.settingsVoucherConfig.formatAuditerExecutive' },
@@ -617,7 +617,7 @@ export default function VoucherConfigScreen() {
       } else {
         Toast.show({ type: 'info', text1: t('screens.settingsVoucherConfig.pdfGenerated'), text2: t('screens.settingsVoucherConfig.sharingUnavailable') });
       }
-    } catch (err) {
+    } catch {
       Toast.show({ type: 'error', text1: t('screens.settingsVoucherConfig.pdfError'), text2: t('screens.settingsVoucherConfig.previewFailed') });
     } finally {
       setPreviewLoading(null);

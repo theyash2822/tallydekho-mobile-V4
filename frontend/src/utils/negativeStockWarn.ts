@@ -8,7 +8,7 @@ import { getInventorySettings } from '../services/api';
 export async function confirmIfNegativeStockRisk(opts: {
   companyGuid?: string | null;
   /** Lines that will reduce stock */
-  lines: Array<{ name: string; qty: number; available?: number }>;
+  lines: { name: string; qty: number; available?: number }[];
 }): Promise<boolean> {
   const { companyGuid, lines } = opts;
   if (!companyGuid || !lines.length) return true;

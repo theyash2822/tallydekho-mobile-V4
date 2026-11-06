@@ -3,7 +3,7 @@
  * Brand beige tones: #F5F4EF → #E9E8E3 → #E0DED6
  * Usage: import { ShimmerBox, HomeScreenSkeleton, LedgerListSkeleton, ... } from './Skeleton'
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS } from '../constants/colors';
@@ -233,7 +233,6 @@ export function SalesRegisterSkeleton() {
 
 // ── Financial Chart (InteractiveLineChart area) ────────────────────────────────
 export function FinancialChartSkeleton() {
-  const chartW = W - SPACING.md * 4;
   return (
     <View style={{ paddingVertical: 8 }}>
       {/* Y-axis + chart area */}

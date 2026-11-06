@@ -11,7 +11,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getWarehouseDetail, getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
-import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../src/i18n';
@@ -36,7 +35,6 @@ export default function WarehouseDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const { company } = useAuth();
-  const { formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
 
   const [wh, setWh]             = useState<any>(null);

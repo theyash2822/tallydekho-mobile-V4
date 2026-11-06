@@ -47,7 +47,7 @@ export default function InvoicePreviewScreen() {
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProvisional, setIsProvisional] = useState(false);
-  const [postingTag, setPostingTag] = useState('Not Posted');
+  const [, setPostingTag] = useState('Not Posted');
   const [canConvertProforma, setCanConvertProforma] = useState(false);
   const [converting, setConverting] = useState(false);
   const [rawData, setRawData] = useState<any>(null);

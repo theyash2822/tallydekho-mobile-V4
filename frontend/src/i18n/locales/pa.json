@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "ਅਗਲਾ ਨਵੀਨੀਕਰਨ",
       "footnoteWeb": "ਕ੍ਰੈਡਿਟ ਰੀਚਾਰਜ ਅਤੇ ਸੀਟਾਂ ਦਾ ਪ੍ਰਬੰਧ ਵੈੱਬ ਪੋਰਟਲ app.auditer.com 'ਤੇ ਕਰੋ।"
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ਗਾਹਕ",
-      "vendor": "ਵਿਕਰੇਤਾ",
-      "nameRequired": "{{label}} ਦਾ ਨਾਮ ਲੋੜੀਂਦਾ ਹੈ।",
-      "addNew": "ਨਵਾਂ {{label}} ਜੋੜੋ",
-      "name": "ਨਾਮ",
-      "namePlaceholder": "{{label}} ਦਾ ਨਾਮ",
-      "contactNumber": "ਸੰਪਰਕ ਨੰਬਰ",
-      "tenDigitNumber": "10-ਅੰਕਾਂ ਦਾ ਨੰਬਰ",
-      "billingAddress": "ਬਿਲਿੰਗ ਪਤਾ",
-      "fullAddress": "ਪੂਰਾ ਪਤਾ",
-      "shippingSameAsBilling": "ਸ਼ਿਪਿੰਗ ਪਤਾ ਬਿਲਿੰਗ ਵਾਲਾ ਹੀ",
-      "shippingAddress": "ਸ਼ਿਪਿੰਗ ਪਤਾ",
-      "shippingAddressPlaceholder": "ਸ਼ਿਪਿੰਗ ਪਤਾ",
-      "gstinPlaceholder": "ਵਿਕਲਪਿਕ • 15-ਅੰਕਾਂ ਦਾ GSTIN",
-      "saveOnly": "ਸਿਰਫ਼ ਸੇਵ ਕਰੋ",
-      "saveAndUse": "ਸੇਵ ਕਰੋ ਅਤੇ ਵਰਤੋ"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "ਨੁਕਸਾਨ",
       "shortage": "ਘਾਟ",

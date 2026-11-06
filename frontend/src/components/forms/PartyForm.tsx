@@ -51,12 +51,6 @@ export interface PartyFormData {
   vatTin: string;
   cstNo: string;
   formCApplicable: boolean;
-  bankEnabled: boolean;
-  bankBeneficiaryName: string;
-  bankName: string;
-  bankAccountNo: string;
-  bankIfsc: string;
-  bankBranch: string;
 }
 
 export interface PartyFormRef {
@@ -70,7 +64,6 @@ export const defaultPartyFormData: PartyFormData = {
   country: 'India', state: '', pincode: '',
   pan: '', gstRegType: 'Regular', gstin: '',
   vatEnabled: false, vatDealerType: '', vatTin: '', cstNo: '', formCApplicable: false,
-  bankEnabled: false, bankBeneficiaryName: '', bankName: '', bankAccountNo: '', bankIfsc: '', bankBranch: '',
 };
 
 interface PartyInputProps extends TextInputProps {
@@ -139,12 +132,6 @@ const PartyForm = forwardRef<PartyFormRef, {
   const [cstNo,           setCstNo]           = useState(d.cstNo);
   const [formCApplicable, setFormCApplicable] = useState(d.formCApplicable);
 
-  const [bankEnabled,         setBankEnabled]         = useState(d.bankEnabled);
-  const [bankBeneficiaryName, setBankBeneficiaryName] = useState(d.bankBeneficiaryName);
-  const [bankName,            setBankName]            = useState(d.bankName);
-  const [bankAccountNo,       setBankAccountNo]       = useState(d.bankAccountNo);
-  const [bankIfsc,            setBankIfsc]            = useState(d.bankIfsc);
-  const [bankBranch,          setBankBranch]          = useState(d.bankBranch);
 
   const [countryOptions, setCountryOptions] = useState<{ label: string; value: string }[]>(
     [{ label: DEFAULT_COUNTRY, value: DEFAULT_COUNTRY }]
@@ -270,7 +257,6 @@ const PartyForm = forwardRef<PartyFormRef, {
       vatTin: isIndia ? vatTin : '',
       cstNo: isIndia ? cstNo : '',
       formCApplicable: isIndia ? formCApplicable : false,
-      bankEnabled, bankBeneficiaryName, bankName, bankAccountNo, bankIfsc, bankBranch,
     }),
     reset: () => {
       setPhone(''); setEmail(''); setWebsite('');
@@ -278,7 +264,6 @@ const PartyForm = forwardRef<PartyFormRef, {
       setCountry(DEFAULT_COUNTRY); setState(''); setPincode('');
       setPan(''); setGstRegType('Regular'); setGstin('');
       setVatEnabled(false); setVatDealerType(''); setVatTin(''); setCstNo(''); setFormCApplicable(false);
-      setBankEnabled(false); setBankBeneficiaryName(''); setBankName(''); setBankAccountNo(''); setBankIfsc(''); setBankBranch('');
     },
   }));
 
@@ -461,9 +446,8 @@ const PartyForm = forwardRef<PartyFormRef, {
 
       {/* Bank Details section removed 2026-07-06 — not required on customer
           ledgers; if Tally has bank details we still READ them on sync into
-          our DB, we just don't WRITE from mobile. Interface + state fields
-          kept so callers/refs don't break; bankEnabled stays false so payload
-          bankDetails is always undefined. */}
+          our DB, we just don't WRITE from mobile. The dead bank* fields/state
+          were dropped 2026-11-06. */}
     </View>
   );
 });

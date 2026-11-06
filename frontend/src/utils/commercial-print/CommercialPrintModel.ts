@@ -57,7 +57,7 @@ export type CommercialPrintModel = {
     extraPrintLines?: string[];
   };
 
-  parties: Array<{
+  parties: {
     role: string;
     label: string;
     name: string;
@@ -71,7 +71,7 @@ export type CommercialPrintModel = {
     pan?: string | null;
     email?: string | null;
     phone?: string | null;
-  }>;
+  }[];
 
   references: {
     eWayBillNo?: string | null;
@@ -96,7 +96,7 @@ export type CommercialPrintModel = {
     expectedDeliveryDate?: string | null;
     validUntil?: string | null;
     reasonForNote?: string | null;
-    extra?: Array<{ label: string; value: string }>;
+    extra?: { label: string; value: string }[];
   };
 
   /**
@@ -114,7 +114,7 @@ export type CommercialPrintModel = {
     eWayBillValidTill?: string | null;
   } | null;
 
-  items: Array<{
+  items: {
     sequence: number;
     itemGuid?: string | null;
     description: string;
@@ -130,11 +130,11 @@ export type CommercialPrintModel = {
     discountAmount?: Money | null;
     taxableAmount?: Money | null;
     amount: Money;
-  }>;
+  }[];
 
   charges: CommercialChargeLine[];
 
-  taxSummary: Array<{
+  taxSummary: {
     sequence: number;
     hsnSac: string;
     taxableValue: Money;
@@ -147,7 +147,7 @@ export type CommercialPrintModel = {
     cessRate?: Money | null;
     cessAmount?: Money | null;
     totalTaxAmount?: Money | null;
-  }>;
+  }[];
 
   totals: {
     primaryQuantity?: Money | null;

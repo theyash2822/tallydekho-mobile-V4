@@ -15,9 +15,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
-
-const { width: SW } = Dimensions.get('window');
+import { KPICardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 import Header from '../../src/components/Header';
 import SearchBar from '../../src/components/SearchBar';
 import CashflowCard from '../../src/components/CashflowCard';
@@ -48,6 +46,8 @@ import { tKpiLabel } from '../../src/i18n/labelMap';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 import { useScopeLabel, LockedScreen } from '../../src/components/LockedOverlay';
 import { useTabAccess } from '../../src/components/RequireCapability';
+
+const { width: SW } = Dimensions.get('window');
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -102,7 +102,7 @@ export default function HomeScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   // KPI Carousel — driven by SettingsContext (no AsyncStorage race condition)
-  const { settings, formatAmount, formatAmountCompact } = useSettings();
+  const { settings, formatAmountCompact } = useSettings();
   const autoScrollCarousel = settings.kpi_autoscroll;
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);

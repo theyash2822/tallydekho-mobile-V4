@@ -366,7 +366,7 @@ function mapStockRows(
 
 export default function TotalStockScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount } = useSettings();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;

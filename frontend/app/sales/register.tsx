@@ -62,7 +62,7 @@ type MonthGroup = { id: string; label: string; invoices: Invoice[] };
 
 export default function SalesRegisterScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();

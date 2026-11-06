@@ -783,7 +783,6 @@ export default function ProfileScreen() {
   // Security — loaded from API
   const [biometric, setBiometricState] = useState(false);
   const [twoFA,     setTwoFA]          = useState(false);
-  const [pinForDisable, setPinForDisable] = useState('');
   const [showDisable2FA, setShowDisable2FA] = useState(false);
 
   // Load 2FA status on mount

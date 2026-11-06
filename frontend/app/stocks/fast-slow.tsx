@@ -11,7 +11,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getStockFastSlow } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
@@ -44,7 +43,6 @@ interface StockItem {
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function FastSlowMovingScreen() {
   const { t } = useTranslation();
-  const { formatAmount } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();

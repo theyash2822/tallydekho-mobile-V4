@@ -42,7 +42,7 @@ const REQUEST_TIMEOUT_MS = 25_000;
 /** Active Workspace for X-Workspace-Id — set by WorkspaceContext. */
 let _activeWorkspaceId: string | null = null;
 
-let _workspaceWaiters: Array<() => void> = [];
+let _workspaceWaiters: (() => void)[] = [];
 
 export function setActiveWorkspaceId(id: string | null) {
   _activeWorkspaceId = id ? String(id) : null;

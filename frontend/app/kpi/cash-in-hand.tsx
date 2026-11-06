@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
-  Dimensions, NativeSyntheticEvent, NativeScrollEvent,
+  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +26,6 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 
-const { width: SW } = Dimensions.get('window');
 const YAXIS_W = 48;
 const DAY_W = 36;
 const CHART_H = 190;

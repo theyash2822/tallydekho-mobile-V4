@@ -836,7 +836,7 @@ export default function LedgerScreen() {
         if (Array.isArray(parsed)) {
           name = parsed.filter((x) => typeof x === 'string' && x.trim()).join(' / ') || name;
         }
-      } catch (_) { /* keep raw */ }
+      } catch { /* keep raw */ }
     }
     name = name == null ? '' : String(name);
     return {

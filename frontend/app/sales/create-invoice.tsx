@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Pressable,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
@@ -17,7 +17,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   getParties, createSalesInvoice, createProformaInvoice, convertProformaInvoice, getStocks, getWarehouses,
-  getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
+  getSalesLedgerAccounts, getTaxLedgers, createTallyParty,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
   invoiceSharePdf, getCompanyProfile, getVoucherById, correctSalesInvoice,
 } from '../../src/services/api';
@@ -153,16 +153,6 @@ const VEHICLE_TYPE_MAP: Record<string, LocalizedOption[]> = {
   ],
 };
 
-const GST_TYPES = ['Regular', 'Composition', 'Unregistered/Consumer', 'Consumer', 'SEZ', 'Overseas'];
-const INVOICE_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
-  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
-];
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StockItem {
   id?: number;
@@ -253,53 +243,6 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
           {idx < STEPS.length - 1 && <View style={[si.line, step > st.num && si.lineDone]} />}
         </React.Fragment>
       ))}
-    </View>
-  );
-}
-
-// ─── StateAutocomplete ────────────────────────────────────────────────────────
-function StateAutocomplete({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
-  const { t } = useTranslation();
-  const [text, setText] = useState(value);
-  const [showSugg, setShowSugg] = useState(false);
-
-  const [prevValue, setPrevValue] = useState(value);
-  if (prevValue !== value) {
-    setPrevValue(value);
-    setText(value);
-  }
-
-  const suggestions = text.trim()
-    ? INVOICE_STATES.filter(s => s.toLowerCase().includes(text.toLowerCase()))
-    : INVOICE_STATES;
-
-  return (
-    <View>
-      <BottomSheetTextInput
-        style={[acd.input, showSugg && acd.inputFocused] as any}
-        placeholder={t('screens.salesCreateInvoice.searchStatePlaceholder')}
-        placeholderTextColor={COLORS.textTertiary}
-        value={text}
-        onChangeText={v => { setText(v); setShowSugg(true); }}
-        onFocus={() => setShowSugg(true)}
-      />
-      {showSugg && suggestions.length > 0 && (
-        <View style={[acd.dropList, { maxHeight: 220 }]}>
-          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {suggestions.slice(0, 7).map((st, idx) => (
-              <TouchableOpacity
-                key={st}
-                style={[acd.dropItem, idx === Math.min(suggestions.length, 7) - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => { onSelect(st); setText(st); setShowSugg(false); }}
-                activeOpacity={0.7}
-              >
-                <Text style={[acd.dropTxt, value === st && acd.dropTxtActive]}>{st}</Text>
-                {value === st && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 }
@@ -593,7 +536,6 @@ function ItemRow({
       : [];
   // Always render the dropdown picker when a product is selected so user can see/change warehouse
   const needsWarehouseDropdown = item.product ? warehouseOpts.length >= 1 : false;
-  const singleWarehouseName = null; // No longer use chip — always use picker
 
   return (
     <View style={ir.card}>
@@ -836,8 +778,8 @@ export default function CreateSalesInvoiceScreen() {
 
   // Compliance state
   const [ewbRequired, setEwbRequired] = useState(false);
-  const [ewbApplicable, setEwbApplicable] = useState(false);
-  const [eInvoiceApplicable, setEInvoiceApplicable] = useState(false);
+  const [, setEwbApplicable] = useState(false);
+  const [, setEInvoiceApplicable] = useState(false);
   const [complianceCfg, setComplianceCfg] = useState<Record<string, any> | null>(null);
 
   const addCustomerRef = useRef<AddCustomerDrawerMethods>(null);
@@ -1477,10 +1419,6 @@ export default function CreateSalesInvoiceScreen() {
   const closeModal = useCallback(() => setActiveModal(null), []);
 
   // ── Computed ─────────────────────────────────────────────────────────────────
-  const logisticsTotal = useMemo(
-    () => calcLogisticsTotal(logEntries, parseFloat(roundOffAmount) || 0),
-    [logEntries, roundOffAmount]
-  );
 
   const totals = useMemo(() => {
     let gross = 0, discTotal = 0, taxTotal = 0;

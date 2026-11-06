@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ScrollViewInstance,
-  View, Text, TouchableOpacity, ScrollView, TextInput,
+  View, Text, TouchableOpacity, TextInput,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';

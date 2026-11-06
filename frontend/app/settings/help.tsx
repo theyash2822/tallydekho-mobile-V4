@@ -19,7 +19,6 @@ import i18n from '../../src/i18n';
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHAT_TTL_MS    = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_HISTORY    = 8;                      // messages to send to LLM
-const AMBER          = '#F5A623';
 
 // ─── Safe URL opener ─────────────────────────────────────────────────────────
 const openLink = async (url: string, fallbackMsg?: string) => {

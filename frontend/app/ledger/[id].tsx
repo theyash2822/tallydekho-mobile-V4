@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
-  Dimensions, Alert, Keyboard, Pressable, ActivityIndicator,
+  Alert, Keyboard, Pressable, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +31,6 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
-const SCREEN_W = Dimensions.get('window').width;
 
 // ── Chart colours — lighter theme-matched shades ─────────────────────────────
 const CHART_DR = '#D9534F'; // softer coral-red  (Dr)

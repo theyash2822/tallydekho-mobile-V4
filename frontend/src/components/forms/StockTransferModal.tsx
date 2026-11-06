@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {ScrollViewInstance, ScrollView, Keyboard } from 'react-native';
+import { ScrollViewInstance, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useTranslation } from 'react-i18next';
 import { StockItem } from '../../data/stockData';

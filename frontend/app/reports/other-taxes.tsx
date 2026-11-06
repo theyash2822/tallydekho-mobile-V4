@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator,
@@ -86,7 +86,7 @@ function fmtDate(d: string | null | undefined): string {
 }
 
 /** Group flat TaxTxn array into [{month, items}] sorted newest first */
-function groupByMonth(txns: TaxTxn[]): Array<{ month: string; items: TaxTxn[] }> {
+function groupByMonth(txns: TaxTxn[]): { month: string; items: TaxTxn[] }[] {
   const map = new Map<string, TaxTxn[]>();
   for (const txn of txns) {
     const raw = txn.voucher_date ? String(txn.voucher_date).replace(/T.*/, '') : '';

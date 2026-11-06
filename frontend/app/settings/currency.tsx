@@ -194,7 +194,7 @@ export default function CurrencyScreen() {
   const { settings, updateSettings } = useSettings();
   const [currency,  setCurrency]  = useState(settings.currency || 'INR');
   const [dateStyle, setDateStyle] = useState(DATE_FROM_CONTEXT[settings.date_format] || 'dmy');
-  const [isDirty, setIsDirty] = useState(false);
+  const [, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [timeStyle, setTimeStyle] = useState('24h');
   const [thousands, setThousands] = useState(settings.number_format === 'International' ? 'int' : 'in');

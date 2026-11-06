@@ -13,7 +13,6 @@ import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockSnapshot } from '../../src/services/api';
 import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
-const AMBER    = '#A89060';
 const AMBER_BG = '#A8906018';
 
 type ValuationType = 'Average' | 'Opening' | 'Closing' | 'Peak';
@@ -54,7 +53,7 @@ interface ApiSummary {
 
 export default function StockSnapshotScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmountCompact } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();

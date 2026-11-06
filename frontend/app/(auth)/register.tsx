@@ -13,7 +13,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { registerUser, storeSessionTokens, sendSignupEmailCode, verifySignupEmailCode } from '../../src/services/api';
-import { useAuth } from '../../src/context/AuthContext';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 import { canProceedRegister, isValidWorkspaceName, WORKSPACE_NAME_MAX } from '../../src/utils/registerForm';
 
@@ -23,8 +22,7 @@ const CODE_LENGTH = 6;
 export default function RegisterScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { phone, token } = useLocalSearchParams<{ phone: string; token: string }>();
-  const { signIn } = useAuth();
+  const { token } = useLocalSearchParams<{ phone: string; token: string }>();
   const [name, setName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceNameTouched, setWorkspaceNameTouched] = useState(false);

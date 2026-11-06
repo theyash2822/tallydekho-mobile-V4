@@ -43,7 +43,7 @@ export type VoucherPrintModel = {
 
   layoutMode: VoucherLayoutMode;
 
-  lines: Array<{
+  lines: {
     sequence: number;
     ledgerGuid?: string | null;
     ledgerName: string;
@@ -52,14 +52,14 @@ export type VoucherPrintModel = {
     debit?: Money | null;
     credit?: Money | null;
     amount?: Money | null;
-    allocations?: Array<{
+    allocations?: {
       sequence: number;
       type: string;
       reference?: string | null;
       amount: Money;
       drCr?: 'Dr' | 'Cr' | null;
-    }>;
-  }>;
+    }[];
+  }[];
 
   account?: {
     ledgerGuid?: string | null;

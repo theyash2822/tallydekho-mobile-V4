@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator, Vibration,
@@ -42,7 +41,7 @@ interface BankFormData {
   accountType: AccountType;
 }
 
-const CARD_GRADIENTS: ReadonlyArray<readonly [string, string]> = [
+const CARD_GRADIENTS: readonly (readonly [string, string])[] = [
   ['#1B5E40', '#0D3B2E'],
   ['#1B3A5E', '#0D2040'],
   ['#1B4A55', '#0D2C35'],
@@ -119,8 +118,6 @@ function BankFormSheet({
   const { t } = useTranslation();
   const [form, setForm]           = useState<BankFormData>(initialData || EMPTY_FORM);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
 
   const [prevVisible, setPrevVisible] = useState(false);
   if (visible !== prevVisible) {

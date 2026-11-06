@@ -16,6 +16,40 @@ import { File as FsFile } from 'expo-file-system';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { cameraDiag } from '../../src/utils/cameraDiag';
 import { useCameraMountId, useCameraOwnerGate } from '../../src/hooks/useCameraOwnerGate';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
+import {
+  getParties, createPurchaseInvoice, getStocks, getWarehouses,
+  getPurchaseLedgerAccounts, getTaxLedgers, createTallyParty,
+  getChargeLedgers, getStockGodowns, getBankLedgers,
+  invoiceSharePdf, resolveEinvoiceQr, uploadPurchaseBillAttachment, analyzePurchaseBill,
+} from '../../src/services/api';
+import { parseEinvoiceQr, einvoiceDateToFormDate, EINVOICE_TOTAL_TOLERANCE, type EinvoiceQrSummary } from '../../src/utils/einvoiceQr';
+import EinvoiceQrPreviewSheet, { type EinvoiceResolveState, type EinvoiceVendorMatch } from '../../src/components/forms/EinvoiceQrPreviewSheet';
+import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
+import { shareVoucherPdf } from '../../src/utils/voucherPdf';
+import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
+import FormField from '../../src/components/forms/FormField';
+import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
+import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
+import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
+import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
+import {
+  BottomSheetModal,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+  BottomSheetBackdrop,
+} from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { useTranslation } from 'react-i18next';
+import { todayLocalISO } from '../../src/utils/periodDates';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 /** Purchase Invoice e-Invoice QR scan window (locked square). */
 const QR_FRAME = 260;
@@ -65,40 +99,6 @@ async function findEinvoiceQrInImage(uri: string): Promise<EinvoiceQrSummary | n
   }
   return null;
 }
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useAuth } from '../../src/context/AuthContext';
-import { currentTenantKey, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
-import {
-  getParties, createPurchaseInvoice, getStocks, getWarehouses,
-  getPurchaseLedgerAccounts, getTaxLedgers, createTallyParty,
-  getChargeLedgers, getStockGodowns, getBankLedgers,
-  invoiceSharePdf, resolveEinvoiceQr, uploadPurchaseBillAttachment, analyzePurchaseBill,
-} from '../../src/services/api';
-import { parseEinvoiceQr, einvoiceDateToFormDate, EINVOICE_TOTAL_TOLERANCE, type EinvoiceQrSummary } from '../../src/utils/einvoiceQr';
-import EinvoiceQrPreviewSheet, { type EinvoiceResolveState, type EinvoiceVendorMatch } from '../../src/components/forms/EinvoiceQrPreviewSheet';
-import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
-import { shareVoucherPdf } from '../../src/utils/voucherPdf';
-import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
-import BrandSwitch from '../../src/components/forms/BrandSwitch';
-import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
-import FormField from '../../src/components/forms/FormField';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
-import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
-import { useRbasCreate } from '../../src/hooks/useRbasCreate';
-import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
-import DatePickerModal from '../../src/components/forms/DatePickerModal';
-import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
-import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
-import {
-  BottomSheetModal,
-  BottomSheetScrollView,
-  BottomSheetTextInput,
-  BottomSheetBackdrop,
-} from '@gorhom/bottom-sheet';
-import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
-import { useTranslation } from 'react-i18next';
-import { todayLocalISO } from '../../src/utils/periodDates';
-import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {

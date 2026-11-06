@@ -540,7 +540,7 @@ function renderTallyPrimeMeta(model: CommercialPrintModel): string {
   }
 }
 
-function aggregateTaxLines(model: CommercialPrintModel): Array<{ label: string; rate?: string | null; amount: string }> {
+function aggregateTaxLines(model: CommercialPrintModel): { label: string; rate?: string | null; amount: string }[] {
   let cgst = 0;
   let sgst = 0;
   let igst = 0;
@@ -561,7 +561,7 @@ function aggregateTaxLines(model: CommercialPrintModel): Array<{ label: string; 
       igstRate = t.igstRate || igstRate;
     }
   }
-  const out: Array<{ label: string; rate?: string | null; amount: string }> = [];
+  const out: { label: string; rate?: string | null; amount: string }[] = [];
   if (cgst) out.push({ label: 'CGST', rate: cgstRate, amount: moneyFromNumber(cgst) });
   if (sgst) out.push({ label: 'SGST', rate: sgstRate, amount: moneyFromNumber(sgst) });
   if (igst) out.push({ label: 'IGST', rate: igstRate, amount: moneyFromNumber(igst) });

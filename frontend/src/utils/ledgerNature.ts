@@ -2,7 +2,7 @@
  * Client-side fallback when API returns blank nature
  * (mirrors td-backend/src/utils/ledgerNature.js reserved-group map).
  */
-const RULES: Array<{ nature: 'Assets' | 'Liabilities' | 'Income' | 'Expense'; keys: string[] }> = [
+const RULES: { nature: 'Assets' | 'Liabilities' | 'Income' | 'Expense'; keys: string[] }[] = [
   {
     nature: 'Assets',
     keys: [

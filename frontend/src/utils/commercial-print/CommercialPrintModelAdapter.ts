@@ -218,7 +218,7 @@ function mapReferences(
   const meta = doc.metadata || {};
   const tally = doc.tallyMeta || {};
   const dispatch = doc.dispatchDetails || {};
-  const extra: Array<{ label: string; value: string }> = [];
+  const extra: { label: string; value: string }[] = [];
 
   const placeOfSupply = meta.placeOfSupply || (tally as any).placeOfSupply;
   if (placeOfSupply) extra.push({ label: 'Place of Supply', value: String(placeOfSupply) });

@@ -42,7 +42,6 @@ import {
   dayBookRowFromListItem,
 } from '../../src/utils/multiShare';
 
-const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -468,7 +467,7 @@ export default function AuditTrailScreen() {
   const { isOwnerOrAdmin, hasCapability } = useWorkspace();
   // The Day Book follows the Day Book report access (Owner decision, 29 Oct 2026).
   const dayBookLocked = !hasCapability('daybook.view');
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const router  = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const insets  = useSafeAreaInsets();

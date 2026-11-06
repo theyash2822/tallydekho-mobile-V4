@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, ActivityIndicator, Alert,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -354,7 +354,7 @@ const dn = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AIInsightsScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();

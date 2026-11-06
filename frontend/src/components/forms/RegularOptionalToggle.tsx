@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { COLORS, TYPOGRAPHY, RADIUS } from '../../constants/colors';
+import { COLORS, RADIUS } from '../../constants/colors';
 
 export type EntryType = 'regular' | 'optional';
 // NONE: a member setting that conflicts with the role — neither kind is allowed (the server refuses both).

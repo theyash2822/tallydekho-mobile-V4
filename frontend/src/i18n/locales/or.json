@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "ପରବର୍ତ୍ତୀ ନବୀକରଣ",
       "footnoteWeb": "କ୍ରେଡିଟ୍ ରିଚାର୍ଜ ଓ ସିଟ୍ ପରିଚାଳନା Web Portal app.auditer.com ରେ କରନ୍ତୁ।"
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ଗ୍ରାହକ",
-      "vendor": "ବିକ୍ରେତା",
-      "nameRequired": "{{label}} ନାମ ଆବଶ୍ୟକ।",
-      "addNew": "ନୂଆ {{label}} ଯୋଡନ୍ତୁ",
-      "name": "ନାମ",
-      "namePlaceholder": "{{label}} ନାମ",
-      "contactNumber": "ଯୋଗାଯୋଗ ନମ୍ବର",
-      "tenDigitNumber": "10-ଅଙ୍କ ନମ୍ବର",
-      "billingAddress": "ବିଲିଂ ଠିକଣା",
-      "fullAddress": "ସମ୍ପୂର୍ଣ୍ଣ ଠିକଣା",
-      "shippingSameAsBilling": "ସିପିଂ ଠିକଣା ବିଲିଂ ସହ ସମାନ",
-      "shippingAddress": "ସିପିଂ ଠିକଣା",
-      "shippingAddressPlaceholder": "ସିପିଂ ଠିକଣା",
-      "gstinPlaceholder": "ଇଚ୍ଛାଧୀନ • 15-ଅଙ୍କ GSTIN",
-      "saveOnly": "କେବଳ ସେଭ୍ କରନ୍ତୁ",
-      "saveAndUse": "ସେଭ୍ କରି ବ୍ୟବହାର କରନ୍ତୁ"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "କ୍ଷତି",
       "shortage": "ଅଭାବ",

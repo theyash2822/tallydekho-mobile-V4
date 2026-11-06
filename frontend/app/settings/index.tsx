@@ -224,7 +224,7 @@ const ls = StyleSheet.create({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { signOut, user, company } = useAuth();
+  const { signOut, user } = useAuth();
   const { settings, updateSettings } = useSettings();
   const {
     workspaces,

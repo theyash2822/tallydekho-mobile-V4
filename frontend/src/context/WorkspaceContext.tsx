@@ -27,12 +27,12 @@ import {
 } from '../services/api';
 import { socketService, isEventForActiveWorkspace } from '../services/socketService';
 import Toast from 'react-native-toast-message';
-import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
+import { wsFyKey } from '../utils/workspaceStorage';
 import { setWorkspaceGeneration } from '../utils/workspaceGeneration';
 import { isDemoCompany, isDemoMode, filterCompaniesForPairing } from '../utils/isDemoCompany';
 import { effectiveCapabilities, toMobileEntryMode, type EntryScope } from '../utils/entryScope';
 import { toAuthCompany } from '../utils/companyIdentity';
-import { tenantKey, companySelectionFeature, fyFeature, setTenantKeyContext } from '../utils/tenantStorage';
+import { setTenantKeyContext } from '../utils/tenantStorage';
 import { normalizeScopes, filterByScopeGuidsOrNames, type ScopeBag } from '../utils/rbasScope';
 import { toastRbasError } from '../utils/rbasErrors';
 import { setRbasCapabilityChecker, setTallyConnectedChecker } from '../utils/rbasGate';

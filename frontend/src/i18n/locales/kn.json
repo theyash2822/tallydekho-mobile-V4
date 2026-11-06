@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "ಮುಂದಿನ ನವೀಕರಣ",
       "footnoteWeb": "ಕ್ರೆಡಿಟ್ ರೀಚಾರ್ಜ್ ಮತ್ತು ಸೀಟುಗಳ ನಿರ್ವಹಣೆಯನ್ನು ವೆಬ್ ಪೋರ್ಟಲ್ app.auditer.com ನಲ್ಲಿ ಮಾಡಿ."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ಗ್ರಾಹಕ",
-      "vendor": "ಮಾರಾಟಗಾರ",
-      "nameRequired": "{{label}} ಹೆಸರು ಅಗತ್ಯವಿದೆ.",
-      "addNew": "ಹೊಸ {{label}} ಸೇರಿಸಿ",
-      "name": "ಹೆಸರು",
-      "namePlaceholder": "{{label}} ಹೆಸರು",
-      "contactNumber": "ಸಂಪರ್ಕ ಸಂಖ್ಯೆ",
-      "tenDigitNumber": "10-ಅಂಕಿಯ ಸಂಖ್ಯೆ",
-      "billingAddress": "ಬಿಲ್ಲಿಂಗ್ ವಿಳಾಸ",
-      "fullAddress": "ಪೂರ್ಣ ವಿಳಾಸ",
-      "shippingSameAsBilling": "ಶಿಪ್ಪಿಂಗ್ ಬಿಲ್ಲಿಂಗ್‌ನಂತೆಯೇ",
-      "shippingAddress": "ಶಿಪ್ಪಿಂಗ್ ವಿಳಾಸ",
-      "shippingAddressPlaceholder": "ಶಿಪ್ಪಿಂಗ್ ವಿಳಾಸ",
-      "gstinPlaceholder": "ಐಚ್ಛಿಕ • 15-ಅಂಕಿಯ GSTIN",
-      "saveOnly": "ಉಳಿಸಿ ಮಾತ್ರ",
-      "saveAndUse": "ಉಳಿಸಿ ಮತ್ತು ಬಳಸಿ"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "ಹಾನಿ",
       "shortage": "ಕೊರತೆ",

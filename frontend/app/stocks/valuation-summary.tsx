@@ -11,7 +11,7 @@ import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
-import ShimmerPlaceholder, { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
 import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
@@ -27,7 +27,7 @@ interface GroupSummary {
 
 export default function ValuationSummaryScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmountCompact } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();

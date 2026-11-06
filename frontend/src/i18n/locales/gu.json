@@ -4334,24 +4334,6 @@
       "nextRenewalLabel": "આગામી નવીકરણ",
       "footnoteWeb": "ક્રેડિટ રિચાર્જ અને સીટનું સંચાલન વેબ પોર્ટલ app.auditer.com પર કરો."
     },
-    "componentsFormsAddPartyModal": {
-      "customer": "ગ્રાહક",
-      "vendor": "વેન્ડર",
-      "nameRequired": "{{label}} નામ જરૂરી છે.",
-      "addNew": "નવો {{label}} ઉમેરો",
-      "name": "નામ",
-      "namePlaceholder": "{{label}} નામ",
-      "contactNumber": "સંપર્ક નંબર",
-      "tenDigitNumber": "10-અંકનો નંબર",
-      "billingAddress": "બિલિંગ સરનામું",
-      "fullAddress": "પૂરું સરનામું",
-      "shippingSameAsBilling": "શિપિંગ સરનામું બિલિંગ જેવું જ",
-      "shippingAddress": "શિપિંગ સરનામું",
-      "shippingAddressPlaceholder": "શિપિંગ સરનામું",
-      "gstinPlaceholder": "વૈકલ્પિક • 15-અંકનો GSTIN",
-      "saveOnly": "ફક્ત સાચવો",
-      "saveAndUse": "સાચવો અને વાપરો"
-    },
     "componentsFormsStockAdjustmentModal": {
       "damage": "નુકસાન",
       "shortage": "ઘટ",
