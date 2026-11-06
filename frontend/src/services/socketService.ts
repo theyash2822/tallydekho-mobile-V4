@@ -116,8 +116,10 @@ export const socketService = {
       // RN often fails pure websocket on flaky LAN — allow polling fallback
       transports: ['websocket', 'polling'],
       path: '/socket.io',
+      // The token travels only in the handshake `auth` payload (request body), never in the
+      // query string, where it would land in proxy / CDN access logs (SEC-030). The server
+      // authenticates on the `register` event, not the handshake.
       auth: { token },
-      query: { token },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
