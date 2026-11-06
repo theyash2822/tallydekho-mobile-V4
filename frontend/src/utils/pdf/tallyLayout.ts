@@ -4,7 +4,7 @@
 // Monochrome, ruled, no brand colour. Every metadata label renders even when the
 // value is blank, because Tally never collapses those cells.
 
-import { DocumentType, VoucherDocument, ItemLine, LedgerEntry } from '../../types/document';
+import type { DocumentType, VoucherDocument, ItemLine, LedgerEntry } from '../../types/document';
 import { tallyWords } from './words';
 import { addressParagraph } from '../voucher-print/shared';
 

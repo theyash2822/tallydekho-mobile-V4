@@ -1,4 +1,4 @@
-import { Money } from './VoucherPrintModel';
+import type { Money } from './VoucherPrintModel';
 
 export function esc(s: string | null | undefined): string {
   return String(s ?? '')
