@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView, Platform, Modal,
   ScrollView, ActivityIndicator
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,7 +22,6 @@ const CODE_LENGTH = 6;
 export default function RegisterScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { token } = useLocalSearchParams<{ phone: string; token: string }>();
   const [name, setName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceNameTouched, setWorkspaceNameTouched] = useState(false);
@@ -41,12 +40,8 @@ export default function RegisterScreen() {
   const canProceed = canProceedRegister({ name, email, workspaceName, termsAccepted });
   const workspaceNameError = workspaceNameTouched && !isValidWorkspaceName(workspaceName);
 
-  // Store the token from OTP verify so register can call authenticated endpoint
-  useEffect(() => {
-    if (token) {
-      AsyncStorage.setItem('auth_token', token);
-    }
-  }, [token]);
+  // The OTP step already stored this sign-in's tokens (storeSessionTokens) before
+  // navigating here, so the register request is authenticated without a token in the URL.
 
   useEffect(() => {
     if (resendIn <= 0) return;

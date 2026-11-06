@@ -67,6 +67,12 @@ await check('older alerts without a target still open the right list', () => {
   assert.equal(notificationRoute({ route: '/stocks/negative-stock' }), '/stocks/negative-stock');
   assert.equal(notificationRoute({ route: 'https://x' }), null);
   assert.equal(notificationRoute({}), null);
+  // A push `route` may only open a known top-level route group (never auth/onboarding or outside the app).
+  assert.equal(notificationRoute({ route: '/(auth)/register?token=x' }), null);
+  assert.equal(notificationRoute({ route: '/onboarding' }), null);
+  assert.equal(notificationRoute({ route: '//evil.example/x' }), null);
+  assert.equal(notificationRoute({ route: '/reports/../(auth)' }), null);
+  assert.equal(notificationRoute({ route: '/settings/notifications?tab=alerts' }), '/settings/notifications?tab=alerts');
 });
 
 await check('alerts are grouped Today / Yesterday / Earlier and graded by severity', () => {

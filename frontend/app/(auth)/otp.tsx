@@ -8,7 +8,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { verifyOTP, sendOTP } from '../../src/services/api';
+import { verifyOTP, sendOTP, storeSessionTokens } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
@@ -181,7 +181,9 @@ export default function OTPScreen() {
         await clearPreAuthToken();
         const { access_token, refresh_token, is_new_user, user, company } = data;
         if (is_new_user) {
-          router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });
+          // Keep the tokens here; the register screen reads them from storage (never from the URL).
+          await storeSessionTokens({ access_token, refresh_token });
+          router.replace({ pathname: '/(auth)/register', params: { phone } });
         } else {
           await signIn(
             access_token || '',

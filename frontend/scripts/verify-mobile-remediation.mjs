@@ -324,10 +324,17 @@ await check('switch-fy unused route deleted', () => {
   assert.equal(fs.existsSync(path.join(root, 'app/switch-fy.tsx')), false);
 });
 
-await check('production ATS arbitrary loads disabled', () => {
+await check('production ATS arbitrary loads disabled; local networking only outside production', () => {
   const app = read('app.json');
   assert.match(app, /"NSAllowsArbitraryLoads":\s*false/);
-  assert.match(app, /"NSAllowsLocalNetworking":\s*true/);
+  // NSAllowsLocalNetworking moved to app.config.ts, which adds it only when
+  // EXPO_PUBLIC_APP_ENV !== 'production'.
+  assert.doesNotMatch(app, /NSAllowsLocalNetworking/);
+  const cfg = read('app.config.ts');
+  assert.match(cfg, /EXPO_PUBLIC_APP_ENV === 'production'/);
+  assert.match(cfg, /if \(isProduction\) delete ats\.NSAllowsLocalNetworking/);
+  assert.match(cfg, /else ats\.NSAllowsLocalNetworking = true/);
+  assert.match(app, /"allowBackup":\s*false/);
 });
 
 // ── TD-FIX-2026-10-08 P6 ────────────────────────────────────────────────────

@@ -6,11 +6,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { listMyWorkspaces, pairWorkspaceTally } from '../../src/services/api';
+import { listMyWorkspaces, pairWorkspaceTally, getStoredAccessToken } from '../../src/services/api';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { AuditerMark, AuditerWordmark } from '../../src/components/AuditerLogo';
 
@@ -46,8 +45,8 @@ export default function TallySyncScreen() {
     setError('');
     setProgress(20);
     try {
-      // Ensure token is in AsyncStorage before making the call
-      const storedToken = await AsyncStorage.getItem('auth_token');
+      // Ensure a session token is stored before making the call
+      const storedToken = await getStoredAccessToken();
       if (__DEV__) console.log('[TallySync] Token present:', !!storedToken);
       if (!storedToken) {
         setStep('input');
@@ -68,7 +67,7 @@ export default function TallySyncScreen() {
           await setCompany({ guid: res.data.company.guid, name: res.data.company.name, gstin: res.data.company.gstin ?? undefined });
         }
         // Now mark as authenticated — this triggers _layout to go to (tabs)
-        const token = await AsyncStorage.getItem('auth_token');
+        const token = await getStoredAccessToken();
         if (token) await signIn(token);
         setProgress(100);
         await new Promise(r => setTimeout(r, 400));
@@ -91,7 +90,7 @@ export default function TallySyncScreen() {
   };
 
   const handleSkip = async () => {
-    const token = await AsyncStorage.getItem('auth_token');
+    const token = await getStoredAccessToken();
     if (token) await signIn(token);
     // Nothing to unset: the new workspace reports UNPAIRED on its own.
     await navigateAfterAuth(router);

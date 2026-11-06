@@ -11,7 +11,7 @@ can own an unpaired workspace and be a member of a paired one at the same time.
 ## Storage Keys (AsyncStorage)
 | Key | Type | Content |
 |-----|------|---------|
-| auth_token | string | JWT access token (15 min) |
+| auth_token | string | Legacy location of the JWT access token (web only now; on native it moved to SecureStore `td_access_token` on 2026-11-06 — `src/utils/accessToken.ts` migrates the old value on first read) |
 | user_data | string (JSON) | {id, name, phone, email, language} |
 | company_data | string (JSON) | {guid, name, gstin} |
 | user_info | string (JSON) | Additional user info |
@@ -38,7 +38,7 @@ On web (Expo Web), storage uses `window.localStorage` with same keys as fallback
    - If 2FA enabled → returns `pre_auth_token` + `requires_2fa: true`
    - If no 2FA → returns `access_token` directly
 3. If 2FA: verify PIN → POST /api/auth/verify-pin (with pre_auth_token)
-4. Store `access_token` in AsyncStorage as `auth_token`, `refresh_token` in SecureStore
+4. Store `access_token` in SecureStore as `td_access_token` (web: `localStorage.auth_token`), `refresh_token` in SecureStore `td_refresh_token` — both through `storeSessionTokens()`; the sign-up flow stores them in `otp.tsx` before opening `register.tsx` (no token in route params)
 5. All subsequent requests use: `Authorization: Bearer <token>`
 6. On 401, `api.ts` refreshes once via POST /api/auth/refresh and replays the
    request. Only a rejected refresh signs the user out; 403 never does.

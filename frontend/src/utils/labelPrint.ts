@@ -8,6 +8,7 @@
  */
 
 import { barcodeDataURI } from './barcode';
+import { esc } from './voucher-print/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface PrintItem {
@@ -115,11 +116,11 @@ export function buildLabelHTML(items: PrintItem[], opts: BuildOpts): string {
         overflow:hidden;page-break-inside:avoid">
         <div style="font-weight:700;font-size:${nameFS};text-align:center;
           max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-          margin-bottom:0.8mm">${item.displayName}</div>
+          margin-bottom:0.8mm">${esc(item.displayName)}</div>
         ${bcImg}
         <div style="font-size:${codeFS};letter-spacing:1.5pt;color:#333;
-          margin:0.4mm 0">${item.barcode ?? '—'}</div>
-        ${showSku && item.sku   ? `<div style="font-size:${fieldFS};color:#555">SKU: ${item.sku}</div>`       : ''}
+          margin:0.4mm 0">${esc(item.barcode ?? '—')}</div>
+        ${showSku && item.sku   ? `<div style="font-size:${fieldFS};color:#555">SKU: ${esc(item.sku)}</div>`       : ''}
         ${showPrice && price    ? `<div style="font-size:${fieldFS};color:#555">${price}</div>`                  : ''}
         ${showBatch             ? `<div style="font-size:${fieldFS};color:#555">Batch/Exp: ___________</div>`    : ''}
       </div>`;

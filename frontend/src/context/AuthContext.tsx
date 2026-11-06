@@ -27,24 +27,24 @@ import { getStoredPushToken } from '../services/pushNotifications';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
+import { readAccessToken, writeAccessToken, deleteAccessToken } from '../utils/accessToken';
 
 // ── Storage helpers ──────────────────────────────────────────
+// The access token lives in the keychain on native (see utils/accessToken.ts);
+// api.ts reads the same place, so every request and this context agree.
 const storeToken = async (token: string) => {
-  if (Platform.OS === 'web') { try { window.localStorage.setItem('auth_token', token); } catch {} }
-  await AsyncStorage.setItem('auth_token', token);
+  await writeAccessToken(token);
 };
 
 const removeToken = async () => {
   await sweepTenantAsyncStorage();
+  await deleteAccessToken();
   await clearPreAuthToken();
   await clearRefreshToken();
 };
 
 const getToken = async (): Promise<string | null> => {
-  if (Platform.OS === 'web') {
-    try { const t = window.localStorage.getItem('auth_token'); if (t) return t; } catch {}
-  }
-  return AsyncStorage.getItem('auth_token');
+  return readAccessToken();
 };
 
 // ── Types ────────────────────────────────────────────────────
@@ -178,10 +178,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     (async () => {
       try {
-        const [token, userJson, wsIdPair] = await AsyncStorage.multiGet([
-          'auth_token', 'user_info', 'active_workspace_id',
+        const [tok, [userJson, wsIdPair]] = await Promise.all([
+          getToken(),
+          AsyncStorage.multiGet(['user_info', 'active_workspace_id']),
         ]);
-        const tok = token[1];
         if (tok) {
           isAuthenticatedRef.current = true;
           setIsAuthenticated(true);

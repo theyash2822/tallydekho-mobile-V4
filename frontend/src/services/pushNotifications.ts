@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
 import { getActiveWorkspaceId, registerPushToken } from './api';
 import { getDeviceId } from './clientIdentity';
 import { safePush } from '../utils/safeNavigation';
-import { complianceLinkRoute, isComplianceAlert, notificationRoute } from '../utils/notificationLinks';
+import { complianceLinkRoute, isAllowedPushRoute, isComplianceAlert, notificationRoute } from '../utils/notificationLinks';
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
@@ -151,10 +151,11 @@ export function setupNotificationHandlers(router: any) {
     if (eventWs && active && String(eventWs) !== String(active)) return;
 
     // Compliance alerts name the web page they are about (`data.link`); open the matching app screen.
+    // Only known in-app route groups may be opened from a notification payload.
     const linked = isComplianceAlert(data)
       ? (complianceLinkRoute(data.link) || '/reports/compliance')
       : notificationRoute({ target: data.target, route: data.route });
-    if (linked) {
+    if (linked && isAllowedPushRoute(linked)) {
       safePush(router, linked);
       return;
     }

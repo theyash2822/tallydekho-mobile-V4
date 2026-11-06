@@ -5,9 +5,8 @@
 // STRICT RULE: No mock/fallback data. Throw errors — callers handle empty/error states.
 // ============================================================
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { readAccessToken, writeAccessToken } from '../utils/accessToken';
 import {
   ApiError,
   kindFromStatus,
@@ -57,17 +56,10 @@ export function getActiveWorkspaceId(): string | null {
   return _activeWorkspaceId;
 }
 
-// ── Token helpers (must match AuthContext storage keys) ──────
+// ── Token helpers (shared with AuthContext via utils/accessToken) ──────
 const getToken = async (): Promise<string | null> => {
   try {
-    // Web: AuthContext also writes window.localStorage — prefer that first
-    if (Platform.OS === 'web') {
-      try {
-        const t = window.localStorage.getItem('auth_token');
-        if (t) return t;
-      } catch { /* fall through to AsyncStorage */ }
-    }
-    return await AsyncStorage.getItem('auth_token');
+    return await readAccessToken();
   } catch {
     return null;
   }
@@ -86,10 +78,7 @@ export function subscribeAccessTokenRefreshed(cb: TokenListener): () => void {
 }
 
 const storeAccessToken = async (token: string) => {
-  if (Platform.OS === 'web') {
-    try { window.localStorage.setItem('auth_token', token); } catch { /* private mode */ }
-  }
-  await AsyncStorage.setItem('auth_token', token);
+  await writeAccessToken(token);
   _tokenListeners.forEach((cb) => {
     try { cb(token); } catch { /* ignore */ }
   });

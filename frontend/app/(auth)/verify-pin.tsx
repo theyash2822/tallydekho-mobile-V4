@@ -83,7 +83,7 @@ export default function VerifyPinScreen() {
 
       if (result.success) {
         // Retrieve stored PIN from secure storage
-        const storedPin = await getBiometricPin(phone);
+        const storedPin = await getBiometricPin(phone, t('screens.authVerifyPin.bioPrompt'));
         const token = preAuthTokenRef.current;
         if (storedPin && token) {
           await doVerify(storedPin, true);

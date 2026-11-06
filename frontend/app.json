@@ -16,8 +16,7 @@
         "NSMicrophoneUsageDescription": "Auditer uses the microphone for voice search, so you can find invoices, parties and items by speaking.",
         "NSSpeechRecognitionUsageDescription": "Auditer turns what you say into search text for voice search, so you can find invoices, parties and items by speaking.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSAllowsLocalNetworking": true
+          "NSAllowsArbitraryLoads": false
         },
         "NSFaceIDUsageDescription": "Use Face ID to unlock Auditer quickly and securely"
       },
@@ -33,6 +32,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
+      "allowBackup": false,
       "package": "com.tallydekho.app"
     },
     "web": {
