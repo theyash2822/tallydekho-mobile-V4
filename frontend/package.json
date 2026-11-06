@@ -17,7 +17,8 @@
     "verify:search-notifications": "node --experimental-strip-types --no-warnings scripts/verify-search-notifications.mjs",
     "verify:account-access": "node --experimental-strip-types --no-warnings scripts/verify-account-access.mjs",
     "verify:compliance-v2": "node --experimental-strip-types --no-warnings scripts/verify-compliance-v2.mjs",
-    "test": "npm run verify:config && npm run verify:isolation && npm run verify:remediation && npm run verify:scope-refresh && npm run verify:einvoice && npm run verify:data-revision && npm run verify:search-notifications && npm run verify:account-access && npm run verify:compliance-v2"
+    "verify:security": "node --experimental-strip-types --no-warnings scripts/verify-security-2026-11-06.mjs",
+    "test": "npm run verify:config && npm run verify:isolation && npm run verify:remediation && npm run verify:scope-refresh && npm run verify:einvoice && npm run verify:data-revision && npm run verify:search-notifications && npm run verify:account-access && npm run verify:compliance-v2 && npm run verify:security"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",
