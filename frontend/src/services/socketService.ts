@@ -9,6 +9,7 @@ import { getActiveWorkspaceId, getStoredAccessToken, subscribeAccessTokenRefresh
 import { isEventForWorkspace, workspaceIdFromPayload, POSTING_EVENTS } from './workspaceEventScope';
 import { isRemovalSync, notifyScopeRemoved } from './scopeRefresh';
 import { noteRevision, onNewerRevision, isFreshSync } from './dataRevision';
+import { DEMO_MODE } from '../demo/config';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -97,6 +98,8 @@ function emitWorkspaceEvent(event: string, payload?: any) {
 
 export const socketService = {
   connect(baseUrl: string, token: string) {
+    // The website demo has no live server to listen to.
+    if (DEMO_MODE) return;
     // Already connected to same server with same token — skip
     if (socket?.connected && currentBaseUrl === baseUrl && currentToken === token) return;
 

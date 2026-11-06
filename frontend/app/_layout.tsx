@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, LogBox } from 'react-native';
 import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -27,8 +27,13 @@ import { COLORS } from '../src/constants/colors';
 import ServerReachabilityBanner from '../src/components/ServerReachabilityBanner';
 import { ErrorState } from '../src/components/ApiStateViews';
 import { initMonitoring, reportError } from '../src/services/monitoring';
+import { DEMO_MODE } from '../src/demo/config';
+import { startDemo } from '../src/demo/demoData';
 // Initialize i18n before anything renders
 import '../src/i18n';
+
+// Demo build: answer the backend from recorded data before any screen asks for it.
+const demoStarted = startDemo();
 
 // Dev-only noise: Expo CLI tunnel + transient socket reconnects must not block HR UX
 if (__DEV__) {
@@ -163,6 +168,11 @@ export default function RootLayout() {
     ...Ionicons.font,
     ...FontAwesome5.font,
   });
+  const [demoReady, setDemoReady] = useState(!DEMO_MODE);
+
+  useEffect(() => {
+    if (DEMO_MODE) demoStarted.finally(() => setDemoReady(true));
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -170,7 +180,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !demoReady) {
     return null;
   }
 

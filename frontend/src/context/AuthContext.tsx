@@ -28,6 +28,8 @@ import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 import { clearPreAuthToken } from '../utils/preAuthToken';
 import { readAccessToken, writeAccessToken, deleteAccessToken } from '../utils/accessToken';
+import { DEMO_MODE } from '../demo/config';
+import { showDemoNotice } from '../demo/demoData';
 
 // ── Storage helpers ──────────────────────────────────────────
 // The access token lives in the keychain on native (see utils/accessToken.ts);
@@ -142,7 +144,8 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
+  // The website demo shows a connected office PC from the first frame; the recorded status confirms it on the first poll.
+  const [isDesktopOnline, setIsDesktopOnlineState] = useState(DEMO_MODE);
   const [lastSyncAt, setLastSyncAt] = useState(0);
   const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);
@@ -243,6 +246,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const expectedSignOutUntilRef = useRef(0);
 
   const signOut = useCallback(async ({ server = true, notice = null }: SignOutOptions = {}) => {
+    // The website demo stays signed in: signing out would leave a sign-in screen that cannot be used.
+    if (DEMO_MODE) { showDemoNotice(); return; }
     if (signingOutRef.current) return;
     signingOutRef.current = true;
     try {

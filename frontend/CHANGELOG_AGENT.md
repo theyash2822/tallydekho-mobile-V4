@@ -1,5 +1,21 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-11-05 (19:20) — Demo: "+" opens Quick Actions with the actions off; sheet list fixed on web (branch `cursor`, local, not pushed)
+
+- `(tabs)/_layout.tsx`: "+" opens the Quick Actions sheet in every build again (Yash 18:31).
+- `QuickActionsModal`: in the demo, a line under the title ("Creating entries is turned off in the demo.") and every action shown at 45 % opacity and disabled; sections still expand.
+- `QuickActionsModal` list style: `flexBasis: 'auto'` instead of `flex: 0`. On web, react-native-web turned `flex: 0` into a 0 % basis and the list collapsed to nothing (the sheet showed only its title); native layout is unchanged.
+
+## 2026-11-05 (17:00) — Website demo mode (branch `cursor` = `28-10-2026` + this, local, not pushed)
+
+For the live app inside the phone on auditer.com (Yash 15:37: browse the app, creating disabled).
+
+- `src/demo/` (new): `EXPO_PUBLIC_DEMO_MODE=1` (web only) loads the recorded sample data (`EXPO_PUBLIC_DEMO_DATA_URL`, default `/demo/data.json`) before the app renders, seeds the signed-in storage keys, answers every backend GET from it (path + stable query; date ranges ignored; closest recorded parameters otherwise; empty list when nothing was recorded) and refuses every write with "Not available in the demo".
+- `app/_layout.tsx` waits for the demo data; `(tabs)/_layout.tsx` "+" shows the demo notice; `socketService.connect` does nothing in the demo; `AuthContext` starts the desktop as online in the demo (the recorded status confirms it on the first poll).
+- `metro.config.js`: web builds resolve tslib 1.x to `tslib.es6.js` (its ESM wrapper crashed the web bundle at start-up). `app.config.js` (new): the demo export is a single-page app under `/demo`; other builds unchanged.
+- Build: `EXPO_PUBLIC_DEMO_MODE=1 EXPO_PUBLIC_BACKEND_URL=https://demo-api.auditer.invalid npx expo export --platform web --output-dir dist-demo` (ignored), installed by auditer-website `scripts/build-demo.mjs`; data recorded read-only by `scripts/record-demo.mjs`. Normal builds: flag unset, no behaviour change. tsc: no errors in the changed files.
+- 18:15 (Yash 17:23): in the demo, Log Out (AuthContext `signOut`) shows the demo notice and stays signed in; before, it left a sign-in screen that could not be used.
+
 ## 2026-11-06 — Production cleanup: rebrand residue, prune, security (branch `6-11-2026`, local only)
 
 Three commits (rebrand / prune / security) from `audits/production_cleanup/2026-11-06-mobile-inventory.md`. Frozen and untouched: `com.tallydekho.app`, slug/scheme `auditor`, `tallydekho_series`, `source:'tallydekho'`, `td_*`/`tdk_*` storage keys, `TDK-` prefixes, template ids, i18n keys, `renderTallyDekho*` names, env var names, API hosts.
